@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>홈판 벤치마킹 블로거 리스트</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+  }
+  header {
+    background: #fff;
+    padding: 16px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  h1 { font-size: 18px; margin: 0; }
+  main {
+    padding: 16px;
+    max-width: 980px;
+    margin: 0 auto 60px auto;
+  }
+  .note {
+    background: #fff8e1;
+    border: 1px solid #ffe08a;
+    color: #7a5c00;
+    font-size: 13px;
+    padding: 12px 14px;
+    margin: 16px 0;
+    border-radius: 6px;
+    line-height: 1.7;
+  }
+  .note b { color: #5c4300; }
+  h2.section-title {
+    font-size: 16px;
+    margin: 28px 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  p.section-desc {
+    font-size: 12.5px;
+    color: #888;
+    margin: -4px 0 12px 0;
+  }
+  details.cat {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+  }
+  details.cat > summary {
+    font-size: 14.5px;
+    font-weight: bold;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  details.cat > summary::-webkit-details-marker { display: none; }
+  details.cat > summary::before {
+    content: "▶";
+    font-size: 10px;
+    color: #999;
+    transition: transform 0.15s;
+  }
+  details.cat[open] > summary::before { transform: rotate(90deg); }
+  .cat-desc {
+    font-size: 12.5px;
+    color: #777;
+    margin: 8px 0 12px 0;
+    line-height: 1.6;
+  }
+  .table-wrap { overflow-x: auto; }
+  table.bench {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+    min-width: 560px;
+  }
+  table.bench th, table.bench td {
+    border: 1px solid #eee;
+    padding: 7px 9px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.bench th {
+    background: #fafafa;
+    color: #555;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  table.bench td.visitors { white-space: nowrap; color: #444; }
+  table.bench td.points { color: #03c75a; font-size: 11.5px; }
+  table.bench td.points.empty { color: #ccc; }
+  table.bench a { color: #4a4de0; text-decoration: none; }
+  table.bench a:hover { text-decoration: underline; }
+  .plain-link-text { color: #888; }
+  .site-list { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px 16px; }
+  .site-list .site-cat-title { font-weight: bold; font-size: 13.5px; margin-bottom: 8px; }
+  .site-list ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 2; }
+  .site-list a { color: #4a4de0; }
+  .top100-wrap { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+  .top100-wrap img { max-width: 100%; border: 1px solid #eee; border-radius: 4px; display: block; margin-top: 8px; }
+  .top100-wrap .missing { font-size: 13px; color: #aaa; padding: 20px 0; text-align: center; border: 1px dashed #ddd; border-radius: 6px; margin-top: 8px; }
+  a.back { font-size: 13px; color: #888; text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/">← 홈으로</a>
+  <h1>📕 8월 4기 홈판 벤치마킹 블로거 리스트</h1>
+</header>
+<main>
+  <div class="note">
+    카테고리별로 벤치마킹할 만한 블로거를 정리한 페이지입니다. 글 발행 전에 비슷한 주제 다루는 블로거 글을 참고하면 후킹 패턴과 톤을 익히는 데 도움됩니다.
+  </div>
+  <div class="note">
+    ⚠️ <b>정직하게 밝혀둘 점</b>: 이 페이지는 사용자님이 보내주신 13장의 참고 스크린샷(노션 페이지)을 보고 그대로 옮겨 만든 정적 페이지입니다. 실시간으로 블로그 방문자 수나 순위를 다시 조회하는 기능은 없어요(스크린샷 속 숫자를 그대로 옮겼을 뿐, 지금 시점 데이터가 아닙니다). 또한 "링크" 칸 중 화면에 <b>blog.naver.com</b>처럼 텍스트만 보이고 실제 주소가 하이퍼링크 뒤에 가려져 있던 항목은, 스크린샷만으로는 정확한 블로그 아이디를 알 수 없어서 <b>클릭 안 되는 텍스트</b>로만 표시했습니다(추측해서 없는 주소를 지어 넣지 않았어요). 원본 노션 페이지에서 실제 주소를 확인해서 알려주시면 다음 업데이트 때 정확한 링크로 채워드릴게요.
+  </div>
+
+  <h2 class="section-title">📁 홈판 챌린지 벤치마킹 블로거 리스트</h2>
+  <p class="section-desc">카테고리를 눌러 펼쳐보세요.</p>
+
+  <div id="categories"></div>
+
+  <h2 class="section-title">📁 홈판 벤치마킹 사이트 리스트</h2>
+  <div class="site-list">
+    <div class="site-cat-title">▼ 포털, 언론사, 커뮤니티 트렌드</div>
+    <ul id="siteList"></ul>
+  </div>
+
+  <h2 class="section-title">📁 네이버 블로그 방문자 랭킹 TOP 100</h2>
+  <p class="section-desc">
+    이 표는 노션에 CSV 데이터베이스로 박혀 있어서, 작은 글씨로 된 셀을 100개 넘게 옮겨적다 보면 오타·오독 위험이 커요. 그래서 정확도를 위해 <b>보내주신 스크린샷 원본 이미지를 그대로 붙여넣었습니다</b>(직접 옮겨 적지 않았어요) — 정확한 순위·닉네임·블로그 주소는 아래 이미지를 확인해 주세요. 다만 스크린샷 자체가 "더 불러오기" 전 화면이라 100개 중 일부(약 45~50개)만 보이고, <b>26년 6월 랭킹은 스크린샷을 받지 못해서 이 페이지에는 없습니다.</b>
+  </p>
+
+  <div class="top100-wrap">
+    <div class="site-cat-title">🏆 방문자 랭킹 TOP 100 (26년6월)</div>
+    <div class="missing">6~8월이 합쳐진 스크린샷 한 장을 받긴 했는데, 이 세션에서는 대화창에 바로 붙여넣은 이미지를 파일로 저장하는 기능이 없어서 페이지에 넣지 못했어요. 죄송하지만 그 이미지를 채팅에 "파일 첨부"로 다시 한번 보내주시면(붙여넣기 말고 첨부 버튼으로) 7월·8월처럼 그대로 옮겨드릴게요.</div>
+  </div>
+  <div class="top100-wrap">
+    <div class="site-cat-title">🏆 방문자 랭킹 TOP 100 (26년7월) — 스크린샷에 보이던 부분까지</div>
+    <img src="/benchmark-assets/top100-2607.png" alt="네이버 블로그 방문자 랭킹 TOP 100 (26년 7월) 스크린샷" />
+  </div>
+  <div class="top100-wrap">
+    <div class="site-cat-title">🏆 방문자 랭킹 TOP 100 (26년8월) — 스크린샷에 보이던 부분까지</div>
+    <img src="/benchmark-assets/top100-2608.png" alt="네이버 블로그 방문자 랭킹 TOP 100 (26년 8월) 스크린샷" />
+  </div>
+
+</main>
+
+<script>
+  function escapeHtml(str) {
+    return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // linkText: 화면에 보이던 그대로의 링크 표시 텍스트. href가 있으면 실제로 클릭 가능한 링크,
+  // 없으면(=스크린샷에서 실제 주소를 확인할 수 없었던 경우) 클릭 안 되는 회색 텍스트로 표시합니다.
+  function linkCell(linkText, href) {
+    if (href) return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(linkText)}</a>`;
+    return `<span class="plain-link-text">${escapeHtml(linkText)}</span>`;
+  }
+
+  function pointsCell(points) {
+    if (!points) return `<td class="points empty">—</td>`;
+    return `<td class="points">${escapeHtml(points)}</td>`;
+  }
+
+  const CATEGORIES = [
+    {
+      emoji: "🚗",
+      title: "IT / 자동차 벤치마킹",
+      desc: "IT 신상·자동차 신차 리뷰 등을 다루는 블로거. 후킹 제목과 정보 정리 방식을 참고해주세요.",
+      rows: [
+        ["새벽리더", "blog.naver.com", null, "2만+@", "IT인플,피메4기"],
+        ["어씨IT", "브랜드 마케팅 전문가 어씨 : 네이버 블로그", null, "2만+@", "IT인플"],
+        ["차가치", "blog.naver.com", null, "4만+@", "자동차 인플"],
+        ["무크", "무크의 리뷰일상 : 네이버 블로그", null, "4만+@", "자동차 인플"],
+        ["DAKI", "blog.naver.com", null, "3만+@", "인플아님"],
+        ["범범", "blog.naver.com", null, "2만+@", "자동차 인플,피메4기"],
+        ["토픽트리", "blog.naver.com", null, "5만+@", "인플아님"],
+        ["그남자 원동욱", "blog.naver.com", null, "6만+@", "IT인플"],
+        ["바퀴붕어", "blog.naver.com", null, "3만+@", "피메4기"],
+        ["곰도라", "blog.naver.com", null, "6만+@", "IT인플,피메4기"],
+        ["아워오토", "blog.naver.com", null, "5만+@", "인플아님,피메아님"],
+        ["차쟁이개발자", "blog.naver.com", null, "3만+@", "자동차인플,피메아님"],
+        ["로드로", "blog.naver.com", null, "10만+@", "인플아님,피메아님"],
+        ["테크티노", "blog.naver.com", null, "1만+@", "IT인플,피메4기"],
+        ["유현태", "blog.naver.com", null, "2만+@", "인플아님,일달블,올해블"],
+        ["연결고리", "에디터 연결고리 : 네이버 블로그", null, "3만+@", ""],
+        ["청비대재", "blog.naver.com", null, "2만+@", "IT인플,피메아님"],
+        ["테크티카", "blog.naver.com", null, "2만+@", "IT인플,피메4기"],
+        ["보배드림", "bobaedream.co.kr/list?code=cnews", "https://www.bobaedream.co.kr/list?code=cnews", "", "자동차 커뮤니티"],
+        ["오토스파이넷", "autospy.net", "https://www.autospy.net/", "", "자동차 커뮤니티"],
+        ["카텔러 CarTelle", "Instagram @carteller.official", null, "", "자동차 인스타"],
+        ["모터위켄드", "Instagram @motorweekend_kr", null, "", "자동차 인스타"],
+        ["이종민", "Instagram @papajongs_", null, "", "자동차 인스타"],
+        ["BRANDYCLASSIC", "Instagram @brandyclassic", null, "", "자동차 인스타"],
+        ["자동차 매거진 보마", "Instagram @studio.voma", null, "", "자동차 인스타"],
+        ["테크천재", "Instagram @tech_jenius_", null, "", "자동차 인스타"],
+        ["카집", "Instagram @carzip.kr", null, "", "자동차 인스타"],
+        ["차덕생", "Instagram @chaduck_life", null, "", "자동차 인스타"],
+        ["신차열전", "Instagram @newcarstory_official", null, "", "자동차 인스타"],
+        ["아우토하우스", "Instagram @autohausmag", null, "", "자동차 인스타"],
+        ["차사노", "Instagram @carsanovakr", null, "", "자동차 인스타"],
+        ["SHORTS CAR", "Instagram @shorts_car", null, "", "자동차 인스타"],
+        ["남차카페", "Instagram @motorsjason", null, "", "자동차 인스타"],
+      ],
+    },
+    {
+      emoji: "💰",
+      title: "재테크 라이프 벤치마킹",
+      desc: "주식·부동산·재테크 정보를 다루는 블로거. 고수 빙의 톤과 법적 안전 표현(투자 권유 회피)을 참고해주세요.",
+      rows: [
+        ["스크랩유미", "blog.naver.com", null, "6만+@", "인플"],
+        ["방구석청년", "blog.naver.com", null, "2만+@", "이달블"],
+        ["머니파수꾼", "blog.naver.com", null, "8만+@", ""],
+        ["삐옥", "blog.naver.com", null, "1만+@", ""],
+        ["대주", "STOCK 스톡커 : 네이버 블로그", null, "1만+@", ""],
+        ["일롱", "blog.naver.com", null, "3만+@", "이달블"],
+        ["달스경제", "달스의 투자학개론 : 네이버 블로그", null, "2만+@", "이달블"],
+        ["건우빠빠", "건우빠빠의 경제 노트 : 네이버 블로그", null, "2만+@", ""],
+        ["주니대디", "blog.naver.com", null, "3만+@", ""],
+        ["지엘", "blog.naver.com", null, "4만+@", "인플"],
+        ["아이엠그레이트", "blog.naver.com", null, "7만+@", ""],
+        ["방구석 어학연수", "방구석 어학연수 : 네이버 블로그", null, "7만+@", ""],
+        ["경제,정치,가십 속보", "네이버 뉴스", null, "", ""],
+        ["메르", "메르의 블로그 : 네이버 블로그", null, "10만+@", ""],
+      ],
+    },
+    {
+      emoji: "⭐",
+      title: "연예인 가십 벤치마킹",
+      desc: "연예인 결혼·이혼·열애·SNS 화제 등을 다루는 블로거. 출처 명시 표현과 사생활 침해 회피 방식을 참고해주세요.",
+      note: "⚠️ 이 표의 '추천 포인트' 칸은 스크린샷 오른쪽 끝이 화면 밖으로 잘려 나와 있지 않아요.",
+      rows: [
+        ["리블리여사", "blog.naver.com", null, "10만+@", null],
+        ["이미닛", "매일 매일 기록 : 네이버 블로그", null, "7만+@", null],
+        ["효니", "blog.naver.com", null, "4만+@", null],
+        ["정자니", "blog.naver.com", null, "5만+@", null],
+        ["머니파수꾼", "매일 적립하는 부자 습관 : 네이버 블로그", null, "10만+@", null],
+        ["꿀떡", "꿀떡 : 네이버 블로그", null, "6만+@", null],
+        ["달콤한레슬리", "레슬리's 웰니스매거진 : 네이버 블로그", null, "8만+@", null],
+        ["스밀라", "스밀라의 휘게 라이프 : 네이버 블로그", null, "3만+@", null],
+        ["리브노아", "리브노아의 패션뷰티 이슈로그 : 네이버 블로그", null, "3만+@", null],
+        ["짱구", "비카요모조모 : 네이버 블로그", null, "4만+@", null],
+        ["방송,연예인 가십 최신 뉴스 속보", "다음연예ㅣ최신 뉴스", null, "", null],
+        ["커뮤니티 베스트글 모음", "IssueLink 커뮤니티 베스트 모아보기", null, "", null],
+        ["연예인 가십 뉴스", "네이트뉴스 연예", null, "", null],
+        ["해적왕", "해적왕의 여행 일상 이야기 : 네이버 블로그", null, "10만+@", null],
+        ["홍기자", "홍기자 : 네이버 블로그", null, "6만+@", null],
+        ["Tom편집장", "오늘의 추천아이템 : 네이버 블로그", null, "6만+@", null],
+        ["제씨킴", "패션 디자이너의 Closet : 네이버 블로그", null, "2만+@", null],
+        ["또또", "또또들 : 네이버 블로그", null, "8만+@", null],
+        ["힐스터K", "힐스터K랑 오늘은 이거 볼래? : 네이버 블로그", null, "3만+@", null],
+        ["Aping트롱", "Aping랑 트롱, 2026 : 네이버 블로그", null, "4만+@", null],
+        ["Dow듀듀", "듀듀의 블로그 : 네이버 블로그", "https://m.blog.naver.com/tnwjd955", "6만+@", null],
+      ],
+    },
+    {
+      emoji: "💄",
+      title: "연예인 패션 벤치마킹",
+      desc: "공항 포착·방송·레드카펫 패션을 다루는 블로거. 짧은 호흡(800~1000자)과 브랜드·가격 정보 결합 방식을 참고해주세요.",
+      note: "⚠️ 이 표의 '추천 포인트' 칸도 스크린샷 오른쪽 끝이 잘려 나와 있지 않아요. (닉네임 2곳은 사용자님이 나중에 알려주신 정확한 주소 목록과 대조해 오탈자를 바로잡았어요: 이잼챙→이잼잼, 페님→쪠님)",
+      rows: [
+        ["이잼잼", "blog.naver.com", "https://m.blog.naver.com/luckyjaemin?tab=1", "5만+@", null],
+        ["오월이", "blog.naver.com", "https://m.blog.naver.com/viva-a?tab=1", "2만+@", null],
+        ["쭈잉", "blog.naver.com", "https://m.blog.naver.com/yeonju_hhh?tab=1", "2만+@", null],
+        ["멜희", "blog.naver.com", "https://m.blog.naver.com/maryjane1440?tab=1", "2만+@", null],
+        ["화장품읽어주는남자", "화장품읽어주는남자 : 네이버 블로그", "https://m.blog.naver.com/cosreader", "10만+@", null],
+        ["꾸리", "blog.naver.com", null, "4만+@", null],
+        ["보노", "blog.naver.com", null, "2만+@", null],
+        ["제인", "blog.naver.com", "https://m.blog.naver.com/jayuyu?tab=1", "6만+@", null],
+        ["매거진파리", "blog.naver.com", "https://m.blog.naver.com/cocoleenice?tab=1", "4만+@", null],
+        ["By Jade", "blog.naver.com", "https://m.blog.naver.com/qkrdmsdhr95?tab=1", "2만+@", null],
+        ["쪠님", "blog.naver.com", "https://m.blog.naver.com/goodlucky1215?tab=1", "", null],
+        ["nao", "彼女のドレスルーム(나오클로젯) : 네이버 블로그", "https://m.blog.naver.com/keita_hitomi?tab=1", "4만+@", null],
+        ["매콤양", "blog.naver.com", "https://m.blog.naver.com/jollini152?tab=1", "1만+@", null],
+        ["이소소", "소소의 패션 log : 네이버 블로그", "https://m.blog.naver.com/sso965?tab=1", "10만+@", null],
+      ],
+    },
+    {
+      emoji: "📺",
+      title: "방송 이슈 벤치마킹",
+      desc: "나는솔로·런닝맨·흑백요리사 등 예능·드라마 시청 후기 글을 쓰는 블로거. 시청자 시각 톤과 명예훼손 회피 표현을 참고해주세요.",
+      rows: [
+        ["또봄", "blog.naver.com", null, "1만+@", "인플,피메4기"],
+        ["임씨", "blog.naver.com", null, "3만+@", "피메4기"],
+        ["폴리안", "폴리안나's drama : 네이버 블로그", null, "2만+@", ""],
+        ["히뎀언니", "blog.naver.com", null, "10만+@", ""],
+        ["북커크", "blog.naver.com", null, "", ""],
+        ["일일우일신", "❤어더행덕합니다❤ : 네이버 블로그", null, "5만+@", ""],
+        ["하늘쪽배", "마음 가는대로_하늘쪽배 : 네이버 블로그", null, "2만+@", ""],
+        ["찌뚱", "보는 사랑 : 네이버 블로그", null, "3만+@", ""],
+        ["양천구 권우성", "양천구 권우성 : 네이버 블로그", null, "2만+@", ""],
+        ["힐스터K", "오늘은 이거 볼래? : 네이버 블로그", null, "2만+@", ""],
+        ["방송,연예인 가십 최신 뉴스 속보", "다음연예ㅣ최신 뉴스", null, "", ""],
+        ["디할", "더할 나위 없는 : 네이버 블로그", null, "10만+@", ""],
+        ["나무처럼", "나무처럼 : 네이버 블로그", null, "10만+@", ""],
+      ],
+    },
+    {
+      emoji: "🏠",
+      title: "리빙 라이프 벤치마킹",
+      desc: "다이소·코스트코·인테리어·살림 노하우 글을 쓰는 블로거. 옆집 언니 경험담 톤과 본인 사진 활용 방식을 참고해주세요.",
+      rows: [
+        ["루나흠", "blog.naver.com", null, "7천+@", ""],
+        ["몽몽", "blog.naver.com", null, "8천+@", "이달블,올해블"],
+        ["날라리엄마", "날라리엄마의 365일 : 네이버 블로그", null, "2만+@", ""],
+        ["토순맘", "blog.naver.com", null, "3만+@", "인플"],
+        ["설수맘", "blog.naver.com", null, "3만+@", ""],
+        ["담또아", "blog.naver.com", null, "1만+@", ""],
+        ["비바쵸니", "blog.naver.com", null, "1만+@", ""],
+        ["길돌이기", "blog.naver.com", null, "2만+@", ""],
+        ["둘째음미", "blog.naver.com", null, "1만+@", ""],
+        ["소니하나", "blog.naver.com", null, "2만+@", ""],
+      ],
+    },
+    {
+      emoji: "🩺",
+      title: "건강 상식 벤치마킹",
+      desc: "질병·증상·식단·영양제 정보를 다루는 블로거. 의료법 안전 표현과 전문가 상담 권장 멘트 활용을 참고해주세요.",
+      rows: [
+        ["또또들", "blog.naver.com", null, "2만+@", ""],
+        ["초록뱀", "초록뱀의하루일기 : 네이버 블로그", null, "1만+@", ""],
+        ["연치코치", "Get on the box : 네이버 블로그", null, "4만+@", ""],
+        ["류애", "류애의 알쓸신잡 : 네이버 블로그", null, "3만+@", ""],
+        ["이람님", "blog.naver.com", null, "5만+@", ""],
+        ["달콤한레슬리", "레슬리's 웰니스매거진 : 네이버 블로그", null, "10만+@", ""],
+        ["이제핏", "blog.naver.com", null, "1만+@", ""],
+        ["건강탐구생활", "건강탐구생활 : 네이버 블로그", null, "3만+@", ""],
+        ["쓸스마미", "blog.naver.com", null, "3만+@", ""],
+        ["오분서가", "blog.naver.com", null, "2만+@", ""],
+      ],
+    },
+    {
+      emoji: "⚽",
+      title: "스포츠 벤치마킹",
+      desc: "한국 선수 활약·해외 빅매치 분석 글을 쓰는 블로거. 팬 시각 + 분석 톤과 통계 인용 패턴을 참고해주세요.",
+      rows: [
+        ["Smiin", "스포츠에미친인간 : 네이버 블로그", null, "3만+@", ""],
+        ["제이덥", "축잘알을 향하여 : 네이버 블로그", null, "10만+@", ""],
+        ["빠게등", "blog.naver.com", null, "4만+@", ""],
+        ["크보리", "크보리사 KBO Chef : 네이버 블로그", null, "6만+@", ""],
+        ["미실초이", "두 아들 아빠의 야마추어 선수 도전기 : 네이버 블로그", null, "7만+@", ""],
+        ["이과장", "blog.naver.com", null, "2만+@", ""],
+        ["연치코치", "Get on the box : 네이버 블로그", null, "4만+@", ""],
+        ["더해피라이프", "더 해피라이프 : 네이버 블로그", null, "2만+@", ""],
+        ["아포짓", "blog.naver.com", null, "2만+@", ""],
+        ["PEP47", "Miracle Sports Corporation : 네이버 블로그", null, "", ""],
+      ],
+    },
+    {
+      emoji: "🎓",
+      title: "교육/지식/심리 벤치마킹",
+      desc: "어학, 교육, 지식, 교양, 심리, 책, 마인드셋 등의 콘텐츠가 지식 판에서 노출이 잘되는 편입니다.",
+      rows: [
+        ["요매거진", "요매거진 : 네이버 블로그", null, "10만+@", ""],
+        ["방구석 어학연수", "방구석 어학연수 : 네이버 블로그", null, "10만+@", ""],
+        ["부크", "부크럼 출판사 공식 블로그 : 네이버 블로그", null, "3만+@", ""],
+        ["청림출판사", "blog.naver.com/chungrimpub", "https://blog.naver.com/chungrimpub", "2만+@", ""],
+        ["W입니다", "blog.naver.com", null, "3천+@", ""],
+        ["더블북", "m.blog.naver.com/doublebook", "https://m.blog.naver.com/doublebook", "5천+@", ""],
+        ["상상스퀘어", "blog.naver.com", null, "1만+@", ""],
+        ["무명작", "blog.naver.com", null, "1만+@", ""],
+        ["온별맘", "blog.naver.com/ays3258", "https://blog.naver.com/ays3258", "1만+@", ""],
+        ["월북", "m.blog.naver.com", null, "2만+@", ""],
+        ["오분서가", "오분서가, 마음의 허기를 채워주는 5분 지식 만찬 : 네이버 블로그", null, "2만+@", ""],
+      ],
+    },
+    {
+      emoji: "💅",
+      title: "8월 메이트 뷰티 벤치마킹 블로거",
+      desc: "뷰티(화장품·헤어·시술) 콘텐츠를 다루는 블로거. 사용자님이 직접 정리해서 알려주신 정확한 블로그 주소예요.",
+      rows: [
+        ["꾸로", "m.blog.naver.com/1hello2", "https://m.blog.naver.com/1hello2", "", ""],
+        ["혜자빈", "m.blog.naver.com/sunnyya314", "https://m.blog.naver.com/sunnyya314", "", ""],
+        ["이람님", "m.blog.naver.com/qmfosej", "https://m.blog.naver.com/qmfosej", "", ""],
+        ["녜지니", "m.blog.naver.com/kiddy28", "https://m.blog.naver.com/kiddy28", "", ""],
+        ["Dow듀듀", "m.blog.naver.com/tnwjd955", "https://m.blog.naver.com/tnwjd955", "", ""],
+        ["뷰티한세경", "m.blog.naver.com/yazeyazasu", "https://m.blog.naver.com/yazeyazasu", "", ""],
+        ["은비", "m.blog.naver.com/yangeunb", "https://m.blog.naver.com/yangeunb", "", ""],
+        ["화장품읽어주는남자", "m.blog.naver.com/cosreader", "https://m.blog.naver.com/cosreader", "", ""],
+      ],
+    },
+    {
+      emoji: "👗",
+      title: "패션 벤치마킹 블로그",
+      desc: "패션(착용·코디) 콘텐츠를 다루는 블로거. 사용자님이 직접 정리해서 알려주신 정확한 블로그 주소예요.",
+      rows: [
+        ["이잼잼", "m.blog.naver.com/luckyjaemin", "https://m.blog.naver.com/luckyjaemin?tab=1", "", ""],
+        ["오월이", "m.blog.naver.com/viva-a", "https://m.blog.naver.com/viva-a?tab=1", "", ""],
+        ["쭈잉", "m.blog.naver.com/yeonju_hhh", "https://m.blog.naver.com/yeonju_hhh?tab=1", "", ""],
+        ["멜희", "m.blog.naver.com/maryjane1440", "https://m.blog.naver.com/maryjane1440?tab=1", "", ""],
+        ["one's favorite fashion", "m.blog.naver.com/somethingthatilove", "https://m.blog.naver.com/somethingthatilove?tab=1", "", ""],
+        ["제인", "m.blog.naver.com/jayuyu", "https://m.blog.naver.com/jayuyu?tab=1", "", ""],
+        ["매거진파리", "m.blog.naver.com/cocoleenice", "https://m.blog.naver.com/cocoleenice?tab=1", "", ""],
+        ["BY Jade", "m.blog.naver.com/qkrdmsdhr95", "https://m.blog.naver.com/qkrdmsdhr95?tab=1", "", ""],
+        ["쪠님", "m.blog.naver.com/goodlucky1215", "https://m.blog.naver.com/goodlucky1215?tab=1", "", ""],
+        ["nao", "m.blog.naver.com/keita_hitomi", "https://m.blog.naver.com/keita_hitomi?tab=1", "", ""],
+        ["매콤양", "m.blog.naver.com/jollini152", "https://m.blog.naver.com/jollini152?tab=1", "", ""],
+        ["이소소", "m.blog.naver.com/sso965", "https://m.blog.naver.com/sso965?tab=1", "", ""],
+      ],
+    },
+    {
+      emoji: "🧥",
+      title: "8월 메이트 패션 블로거 주소",
+      desc: "패션 콘텐츠를 다루는 블로거. 사용자님이 직접 정리해서 알려주신 정확한 블로그 주소예요.",
+      rows: [
+        ["시아의 룩북", "blog.naver.com/goodface0863", "https://blog.naver.com/goodface0863", "", ""],
+        ["스타일노하우", "blog.naver.com/styleknowhow_seoj", "https://blog.naver.com/styleknowhow_seoj", "", ""],
+        ["걸스픽", "blog.naver.com/gguu1029", "https://blog.naver.com/gguu1029", "", ""],
+        ["서울살프로젝트", "blog.naver.com/kims718", "https://blog.naver.com/kims718", "", ""],
+        ["김미의 패션n쇼핑", "blog.naver.com/mira841213", "https://blog.naver.com/mira841213", "", ""],
+        ["서리의 소년살이", "blog.naver.com/ruddyluna", "https://blog.naver.com/ruddyluna", "", ""],
+        ["백수잡채 패션블로그", "blog.naver.com/tjthdus94", "https://blog.naver.com/tjthdus94", "", ""],
+        ["듀듀의 블로그", "blog.naver.com/tnwjd955", "https://blog.naver.com/tnwjd955", "", ""],
+        ["예뚱이 블로그", "blog.naver.com/ohye1991", "https://blog.naver.com/ohye1991", "", ""],
+        ["다곰", "m.blog.naver.com/dasoms2s2", "https://m.blog.naver.com/dasoms2s2", "", ""],
+        ["유갱", "m.blog.naver.com/longtimeknowsee", "https://m.blog.naver.com/longtimeknowsee", "", ""],
+      ],
+    },
+  ];
+
+  const SITES = [
+    ["네이버 랭킹 뉴스", "https://news.naver.com/main/ranking/popularDay.naver"],
+    ["네이버 엔터 뉴스 랭킹", "https://m.entertain.naver.com/ranking"],
+    ["각 언론사 이슈 (조선일보 예시)", "https://www.chosun.com/entertainments/"],
+    ["다음", "https://www.daum.net/"],
+    ["다음연예", "https://entertain.daum.net/news"],
+    ["네이트", "https://news.nate.com/rank/emoticon?cate=ent"],
+    ["뉴스1", "https://www.news1.kr/entertain"],
+    ["sbs뉴스", "https://ent.sbs.co.kr/news/menulist.do?code_category=SS04&plink=GNB&cooper=SBSENTERNEWS"],
+    ["커뮤니티 베스트 모아보기", "https://www.issuelink.co.kr/community/listview/all/24/comment/_blank"],
+    ["오늘의 검색어", "https://rank.ezme.net/diff/"],
+  ];
+
+  document.getElementById("categories").innerHTML = CATEGORIES.map((cat) => `
+    <details class="cat">
+      <summary>${cat.emoji} ${escapeHtml(cat.title)}</summary>
+      <div class="cat-desc">${escapeHtml(cat.desc)}${cat.note ? `<br>${escapeHtml(cat.note)}` : ""}</div>
+      <div class="table-wrap">
+        <table class="bench">
+          <thead><tr><th>닉네임</th><th>링크</th><th>일평균 방문자</th><th>추천 포인트</th></tr></thead>
+          <tbody>
+            ${cat.rows.map(([nickname, linkText, href, visitors, points]) => `
+              <tr>
+                <td>${escapeHtml(nickname)}</td>
+                <td>${linkCell(linkText, href)}</td>
+                <td class="visitors">${escapeHtml(visitors || "—")}</td>
+                ${pointsCell(points)}
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  `).join("");
+
+  document.getElementById("siteList").innerHTML = SITES.map(
+    ([name, url]) => `<li>${escapeHtml(name)} — <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></li>`
+  ).join("");
+</script>
+</body>
+</html>

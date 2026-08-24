@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>맞춤형 글쓰기 프롬프트 데모</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+  }
+  header {
+    background: #fff;
+    padding: 16px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  h1 { font-size: 18px; margin: 0; }
+  main {
+    padding: 16px;
+    max-width: 900px;
+    margin: 0 auto 60px auto;
+  }
+  .note {
+    background: #fff8e1;
+    border: 1px solid #ffe08a;
+    color: #7a5c00;
+    font-size: 13px;
+    padding: 12px 14px;
+    margin: 16px 0;
+    border-radius: 6px;
+    line-height: 1.6;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .tool-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    display: flex;
+    flex-direction: column;
+  }
+  .badge {
+    display: inline-block;
+    align-self: flex-start;
+    font-size: 11px;
+    font-weight: bold;
+    background: #eafaf1;
+    color: #03c75a;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+  .tool-title { font-size: 15px; font-weight: bold; margin-bottom: 4px; color: #222; }
+  .tool-desc { font-size: 12.5px; color: #777; line-height: 1.5; margin-bottom: 10px; flex: 1; }
+  .tool-bullets { font-size: 11.5px; color: #999; line-height: 1.7; margin: 0 0 12px 0; padding-left: 16px; }
+  button.use-btn {
+    padding: 10px;
+    background: #ffb300;
+    color: #3a2a00;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  button.use-btn:hover { background: #ffa000; }
+  .flow-link-btn {
+    display: block;
+    text-align: center;
+    margin-top: 6px;
+    padding: 9px;
+    background: #eef0ff;
+    color: #4a4de0;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: bold;
+    text-decoration: none;
+  }
+  .flow-link-btn:hover { background: #e2e5ff; }
+  .claude-app-btn {
+    display: block;
+    text-align: center;
+    margin-top: 6px;
+    padding: 9px;
+    background: #2b2b2b;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: bold;
+    text-decoration: none;
+  }
+  .claude-app-btn:hover { background: #1a1a1a; }
+  .modal-header-actions { display: flex; align-items: center; gap: 8px; }
+  .modal-header-actions .claude-app-btn { margin-top: 0; padding: 6px 10px; white-space: nowrap; }
+
+  .modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 50;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: #fff;
+    width: 100%;
+    max-width: 640px;
+    max-height: 88vh;
+    border-radius: 14px 14px 0 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  @media (min-width: 700px) {
+    .modal-backdrop { align-items: center; }
+    .modal { border-radius: 14px; max-height: 80vh; }
+  }
+  .modal-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal-header .modal-title { font-size: 15px; font-weight: bold; }
+  .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #999; }
+  .modal-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
+  .chat-msg { margin-bottom: 14px; }
+  .chat-msg.user .chat-bubble { background: #eafaf1; margin-left: auto; }
+  .chat-msg.assistant .chat-bubble { background: #f3f3f5; }
+  .chat-bubble {
+    display: inline-block;
+    max-width: 90%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .chat-msg.user { text-align: right; }
+  .chat-msg.assistant { text-align: left; }
+  .chat-actions { margin-top: 4px; }
+  .chat-actions button {
+    font-size: 11px;
+    padding: 3px 8px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    color: #555;
+  }
+  .modal-footer {
+    padding: 12px 16px;
+    border-top: 1px solid #eee;
+  }
+  .modal-footer textarea {
+    width: 100%;
+    min-height: 70px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 8px;
+  }
+  .modal-footer .send-row { display: flex; gap: 8px; }
+  .modal-footer button.send-btn {
+    flex: 1;
+    padding: 12px;
+    background: #03c75a;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .modal-footer button.send-btn:disabled { background: #bcbcbc; }
+  .status { text-align: center; color: #999; font-size: 13px; padding: 20px 0; }
+  .error-text { color: #d33; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a>
+  <h1>우수리미 · 맞춤형 글쓰기 프롬프트 (데모)</h1>
+</header>
+<main>
+  <div class="note">
+카드를 고르고 <b>챗봇 사용하기</b>를 누르면, 그 역할에 맞게 미리 짜둔 프롬프트로 이 서버에 연동된 <b>Claude API</b>와 바로 대화할 수 있어요(카드마다 별도 가입이나 키 발급이 필요 없어요). <b>이미지 프롬프트 생성기</b> 카드는 프롬프트를 만들어준 뒤 "🎬 Google Flow에서 이미지 만들기" 버튼으로 프롬프트를 복사하고 구글 Flow(labs.google 공식 사이트)를 새 창으로 열어드려요 — 거기서 붙여넣으면 실제 이미지가 만들어져요(구글 Flow는 공개 개발자 API가 없어서, 계정 정보를 넘기지 않는 이 방식이 가장 안전해요). 썸네일/카드뉴스 카드는 문구만 만들어줘요. "메인키워드+연관키워드 추출기"만 Claude가 아니라 <b>실제 네이버 검색광고 키워드도구 데이터</b>를 그대로 보여줘요(AI 추측이 아닌 진짜 검색량입니다).
+  </div>
+  <div class="note">
+🖥️ <b>클로드 앱에서 열기</b> 버튼은 데스크톱에 설치된 클로드 앱을 새 대화창으로 열어드려요(claude://claude.ai/new 딥링크, 데스크톱 앱 전용 — 모바일/웹에서는 동작하지 않을 수 있어요). 짧은 프롬프트 카드는 지침 전체를 미리 채워서 전달하고, 방송이슈·연예인 가십·연예인 패션·패션 후기·연예인 뷰티·뷰티 후기처럼 원본 스킬이 아주 긴 카드는 전체 지침을 다 채워 넣을 수 없어서 짧은 트리거 문구만 전달해요 — 그 스킬이 실제로 클로드 계정에 저장되어 있어야 의도대로 동작해요. 프리필만 될 뿐 자동 전송은 되지 않으니, 열린 채팅창에서 직접 전송을 눌러주세요.
+  </div>
+  <div id="writerStatusNote"></div>
+
+  <div class="grid" id="toolGrid"><div class="status">불러오는 중...</div></div>
+</main>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle"></div>
+      <div class="modal-header-actions">
+        <a class="claude-app-btn" id="modalClaudeAppBtn" href="#" style="display:none;">🖥️ 클로드 앱에서 열기</a>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <textarea id="chatInput" placeholder="내용을 입력하세요..."></textarea>
+      <div class="send-row">
+        <button class="send-btn" id="sendBtn">생성하기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function escapeHtml(str) {
+    return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // claude://claude.ai/new?q=... 딥링크는 데스크톱 클로드 앱이 설치되어 있을 때만 동작해요.
+  // q에 넣은 문구를 새 대화창에 "미리 채워"주기만 하고, 자동으로 전송하지는 않아요.
+  function claudeAppLink(query) {
+    return "claude://claude.ai/new?q=" + encodeURIComponent(query);
+  }
+
+  let tools = [];
+  let currentTool = null;
+  let conversation = []; // [{role, content}]
+
+  async function loadTools() {
+    const gridEl = document.getElementById("toolGrid");
+    try {
+      const res = await fetch("/api/prompt-studio/tools");
+      const data = await res.json();
+      tools = data.tools;
+      gridEl.innerHTML = tools
+        .map(
+          (t) => `
+        <div class="tool-card">
+          <span class="badge">${escapeHtml(t.badge)}</span>
+          <div class="tool-title">${escapeHtml(t.title)}</div>
+          <div class="tool-desc">${escapeHtml(t.desc)}</div>
+          <ul class="tool-bullets">${t.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>
+          <button class="use-btn" onclick="openTool('${t.id}')">챗봇 사용하기</button>
+          ${
+            t.opensExternal
+              ? `<a class="flow-link-btn" href="${t.opensExternal.url}" target="_blank" rel="noopener">${escapeHtml(t.opensExternal.label)}</a>`
+              : ""
+          }
+          ${
+            t.claudeAppQuery
+              ? `<a class="claude-app-btn" href="${claudeAppLink(t.claudeAppQuery)}">🖥️ 클로드 앱에서 열기</a>`
+              : ""
+          }
+        </div>`
+        )
+        .join("");
+    } catch (err) {
+      gridEl.innerHTML = `<div class="status error-text">목록을 불러오지 못했어요.</div>`;
+    }
+  }
+
+  async function loadWriterStatus() {
+    try {
+      const res = await fetch("/api/blog/writer-status");
+      const data = await res.json();
+      const el = document.getElementById("writerStatusNote");
+      el.innerHTML = data.ready
+        ? `<div class="note" style="margin-top:0;">✅ Claude API(${escapeHtml(data.model)})가 서버에 설정되어 있어요 — 모든 챗봇 카드를 바로 쓸 수 있습니다.</div>`
+        : `<div class="note" style="margin-top:0;">⚠️ 서버에 ANTHROPIC_API_KEY가 아직 설정되지 않았어요 — "메인키워드+연관키워드 추출기"(네이버 실데이터) 외 나머지 카드는 키 등록 후에 쓸 수 있어요. README를 참고해 주세요.</div>`;
+    } catch (err) {
+      /* 무시 */
+    }
+  }
+
+  function openTool(toolId) {
+    currentTool = tools.find((t) => t.id === toolId);
+    if (!currentTool) return;
+    conversation = [];
+    document.getElementById("modalTitle").textContent = currentTool.title;
+    document.getElementById("modalBody").innerHTML = `<div class="status">${escapeHtml(currentTool.desc)}<br>아래에 ${escapeHtml(currentTool.inputLabel)}을(를) 입력하고 생성하기를 눌러주세요.</div>`;
+    document.getElementById("chatInput").placeholder = currentTool.inputPlaceholder || "";
+    document.getElementById("chatInput").value = "";
+    const appBtn = document.getElementById("modalClaudeAppBtn");
+    if (currentTool.claudeAppQuery) {
+      appBtn.href = claudeAppLink(currentTool.claudeAppQuery);
+      appBtn.style.display = "";
+    } else {
+      appBtn.style.display = "none";
+    }
+    document.getElementById("modalBackdrop").classList.add("open");
+  }
+
+  function closeModal() {
+    document.getElementById("modalBackdrop").classList.remove("open");
+  }
+  document.getElementById("modalClose").onclick = closeModal;
+  document.getElementById("modalBackdrop").onclick = (e) => {
+    if (e.target.id === "modalBackdrop") closeModal();
+  };
+
+  function renderConversation() {
+    const bodyEl = document.getElementById("modalBody");
+    const ext = currentTool && currentTool.opensExternal;
+    bodyEl.innerHTML = conversation
+      .map(
+        (m, i) => `
+      <div class="chat-msg ${m.role}">
+        <div class="chat-bubble">${escapeHtml(m.content)}</div>
+        ${
+          m.role === "assistant"
+            ? `<div class="chat-actions">
+                <button onclick="copyMsg(${i})">📋 복사</button>
+                ${ext ? `<a href="${ext.url}" target="_blank" rel="noopener" onclick="copyMsg(${i}, true)">${escapeHtml(ext.label)}</a>` : ""}
+               </div>`
+            : ""
+        }
+      </div>`
+      )
+      .join("");
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+  }
+
+  // 클릭 한 번으로 바로 새 창(구글 Flow 등)이 열리도록 <a target="_blank"> 태그의 기본 동작을
+  // 그대로 씁니다(window.open을 따로 안 씀 — 팝업 차단 없이 확실하게 새 창으로 이동합니다).
+  // silent=true면 "복사했어요" 알림창을 띄우지 않습니다(새 창 이동을 알림창이 방해하지 않도록).
+  function copyMsg(i, silent) {
+    const text = conversation[i]?.content || "";
+    navigator.clipboard.writeText(text).then(
+      () => { if (!silent) alert("복사했어요!"); },
+      () => { if (!silent) alert("복사에 실패했어요 — 직접 선택해서 복사해 주세요."); }
+    );
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById("chatInput");
+    const text = input.value.trim();
+    if (!text || !currentTool) return;
+
+    conversation.push({ role: "user", content: text });
+    renderConversation();
+    input.value = "";
+
+    const sendBtn = document.getElementById("sendBtn");
+    sendBtn.disabled = true;
+    sendBtn.textContent = "생성 중...";
+
+    // "생성 중" 표시용 임시 말풍선
+    conversation.push({ role: "assistant", content: "..." });
+    renderConversation();
+
+    try {
+      const res = await fetch("/api/prompt-studio/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toolId: currentTool.id, messages: conversation.slice(0, -1) }),
+      });
+      const data = await res.json();
+      conversation.pop(); // 임시 말풍선 제거
+      if (!res.ok) {
+        conversation.push({ role: "assistant", content: `⚠️ ${data.message || "생성에 실패했어요."}` });
+      } else {
+        conversation.push({ role: "assistant", content: data.reply });
+      }
+      renderConversation();
+    } catch (err) {
+      conversation.pop();
+      conversation.push({ role: "assistant", content: `⚠️ 오류: ${err.message}` });
+      renderConversation();
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "생성하기";
+    }
+  }
+
+  document.getElementById("sendBtn").onclick = sendMessage;
+  document.getElementById("chatInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  loadTools();
+  loadWriterStatus();
+</script>
+</body>
+</html>

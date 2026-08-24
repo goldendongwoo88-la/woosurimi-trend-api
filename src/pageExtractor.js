@@ -34,15 +34,41 @@ function extractMainText(html) {
 
 // 아이콘/로고/추적픽셀처럼 "본문 사진"이 아닐 가능성이 높은 이미지를 대충 걸러내는 필터입니다.
 // 완벽하진 않아서 가끔 진짜 사진이 걸러지거나 아이콘이 섞여 들어올 수 있습니다.
-function looksLikeRealPhoto(src, widthAttr, heightAttr) {
+//
+// ⚠️ 블로그 에디터로 글을 쓸 때 문단 사이에 끼워넣는 "스티커/이모티콘" 장식 이미지도
+// 여기서 걸러냅니다 — 실제 사진이 아니라 텍스트가 그려진 장식 그래픽이라 숏폼 장면
+// 사진으로 쓰기에 부적절하기 때문입니다(스티커는 보통 storep-phinf.pstatic.net 같은
+// 별도 도메인이나 파일명/alt 텍스트에 "sticker"/"스티커"가 들어있습니다).
+function looksLikeRealPhoto(src, widthAttr, heightAttr, altText) {
   const lower = src.toLowerCase();
   if (/\.(svg)(\?|$)/.test(lower)) return false;
   if (/(icon|logo|sprite|pixel|blank|spacer|badge|button|1x1)/.test(lower)) return false;
+  if (/(sticker|emoticon|ogq_|band[-_]?sticker|stkr[-_]|storep-phinf)/.test(lower)) return false;
+  const alt = (altText || "").toLowerCase();
+  if (/(스티커|이모티콘|sticker|emoticon)/.test(alt)) return false;
   const w = Number(widthAttr);
   const h = Number(heightAttr);
-  if (w && w > 0 && w < 120) return false;
-  if (h && h > 0 && h < 120) return false;
+  if (w && w > 0 && w < 200) return false;
+  if (h && h > 0 && h < 200) return false;
   return true;
+}
+
+// 네이버 블로그 이미지(postfiles.pstatic.net, blogfiles.pstatic.net 등)는 주소에
+// "?type=w80"처럼 작은 썸네일 크기가 붙어있는 경우가 많아서, 그대로 쓰면 세로 영상
+// 크기로 확대할 때 화질이 뭉개집니다. "type=w966"(네이버 블로그 본문에서 쓰는 큰
+// 사이즈)로 바꿔서 최대한 선명한 원본에 가까운 버전을 받아옵니다.
+function upgradeImageResolution(url) {
+  try {
+    const u = new URL(url);
+    if (!/pstatic\.net$/.test(u.hostname)) return url;
+    if (u.searchParams.has("type")) {
+      u.searchParams.set("type", "w966");
+      return u.toString();
+    }
+    return url;
+  } catch {
+    return url;
+  }
 }
 
 function resolveUrl(src, baseUrl) {
@@ -62,11 +88,13 @@ function extractImages(html, baseUrl, ogImage, limit = 12) {
   const found = [];
   const seen = new Set();
 
-  const pushImage = (rawSrc, widthAttr, heightAttr) => {
+  const pushImage = (rawSrc, widthAttr, heightAttr, altText) => {
     if (!rawSrc) return;
-    const resolved = resolveUrl(rawSrc, baseUrl);
+    let resolved = resolveUrl(rawSrc, baseUrl);
     if (!resolved || seen.has(resolved)) return;
-    if (!looksLikeRealPhoto(resolved, widthAttr, heightAttr)) return;
+    if (!looksLikeRealPhoto(resolved, widthAttr, heightAttr, altText)) return;
+    resolved = upgradeImageResolution(resolved);
+    if (seen.has(resolved)) return;
     seen.add(resolved);
     found.push(resolved);
   };
@@ -74,8 +102,10 @@ function extractImages(html, baseUrl, ogImage, limit = 12) {
   if (ogImage) {
     const resolved = resolveUrl(ogImage, baseUrl);
     if (resolved) {
+      const upgraded = upgradeImageResolution(resolved);
       seen.add(resolved);
-      found.push(resolved);
+      seen.add(upgraded);
+      found.push(upgraded);
     }
   }
 
@@ -88,7 +118,8 @@ function extractImages(html, baseUrl, ogImage, limit = 12) {
     if (!srcMatch) continue;
     const widthAttr = (tag.match(/\bwidth=["']?(\d+)/i) || [])[1];
     const heightAttr = (tag.match(/\bheight=["']?(\d+)/i) || [])[1];
-    pushImage(srcMatch[1], widthAttr, heightAttr);
+    const altAttr = (tag.match(/\balt=["']([^"']*)["']/i) || [])[1];
+    pushImage(srcMatch[1], widthAttr, heightAttr, altAttr);
     if (found.length >= limit) break;
   }
 

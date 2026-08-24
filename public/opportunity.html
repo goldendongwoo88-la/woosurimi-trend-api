@@ -18,14 +18,78 @@
   .mode-btn.active { border-color: #03c75a; background: #eafaf1; color: #03c75a; font-weight: bold; }
   button.primary { width: 100%; background: #03c75a; color: #fff; border: none; font-weight: bold; cursor: pointer; }
   button.primary:disabled { background: #bcbcbc; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; }
-  th { color: #888; font-weight: normal; font-size: 12px; }
-  .score { font-weight: bold; color: #03c75a; }
+  .status { text-align: center; color: #999; padding: 30px 0; font-size: 13px; }
+
+  .ratio-note {
+    background: #fff8e1;
+    border: 1px solid #ffe08a;
+    color: #7a5c00;
+    font-size: 13px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    border-radius: 6px;
+    line-height: 1.6;
+  }
+
+  .kw-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+  .kw-rank {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #eef0ff;
+    color: #4a4de0;
+    font-size: 13px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .kw-card {
+    flex: 1;
+    min-width: 0;
+    background: #fff;
+    border: 1px solid #e8e8f2;
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .kw-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+  .kw-title { font-size: 15px; font-weight: bold; color: #222; }
+  .kw-score {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: bold;
+    color: #03c75a;
+    background: #eafaf1;
+    padding: 3px 9px;
+    border-radius: 12px;
+    white-space: nowrap;
+  }
+  .kw-badges, .kw-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .kw-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    background: #eef0ff;
+    color: #4a4de0;
+    font-weight: bold;
+  }
+  .kw-badge.volume { background: #e3f2ff; color: #0b74d1; }
+  .kw-pill {
+    font-size: 12px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    background: #f4f4f6;
+    color: #555;
+    border: 1px solid #eaeaea;
+  }
+  .kw-pill b { color: #222; }
+  .kw-desc { font-size: 12px; color: #999; line-height: 1.5; }
   .comp-낮음 { color: #03c75a; }
   .comp-중간 { color: #d68f00; }
   .comp-높음 { color: #d33; }
-  .status { text-align: center; color: #999; padding: 30px 0; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -77,26 +141,32 @@
         resultEl.innerHTML = `<div class="status">결과가 없어요.</div>`;
         return;
       }
-      resultEl.innerHTML = `
-        <div class="panel">
-          <table>
-            <thead><tr><th>키워드</th><th>월간 검색량</th><th>블로그 글수</th><th>경쟁도</th><th>기회점수</th></tr></thead>
-            <tbody>
-              ${data.items
-                .map(
-                  (it) => `
-                <tr>
-                  <td>${escapeHtml(it.keyword)}</td>
-                  <td>${it.monthlySearchVolume.toLocaleString()}</td>
-                  <td>${escapeHtml(it.blogPostCountLabel)}</td>
-                  <td class="comp-${escapeHtml(it.competition)}">${escapeHtml(it.competition)}</td>
-                  <td class="score">${it.opportunityScore}</td>
-                </tr>`
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>`;
+      const cards = data.items
+        .map(
+          (it, i) => `
+        <div class="kw-row">
+          <div class="kw-rank">${i + 1}</div>
+          <div class="kw-card">
+            <div class="kw-head">
+              <div class="kw-title">${escapeHtml(it.keyword)}</div>
+              <div class="kw-score">점수 ${it.opportunityScore}</div>
+            </div>
+            <div class="kw-badges">
+              <span class="kw-badge">네이버 실데이터</span>
+              <span class="kw-badge">${escapeHtml(category)}</span>
+              <span class="kw-badge volume">검색량 ${it.monthlySearchVolume.toLocaleString()}</span>
+            </div>
+            <div class="kw-pills">
+              <span class="kw-pill">문서수 <b>${escapeHtml(it.blogPostCountLabel)}</b></span>
+              <span class="kw-pill">문서/검색 <b>${it.docPerSearch !== null ? it.docPerSearch : "-"}</b></span>
+              <span class="kw-pill comp-${escapeHtml(it.competition)}">경쟁도 <b>${escapeHtml(it.competition)}</b></span>
+            </div>
+            <div class="kw-desc">네이버 검색광고 키워드도구 + 블로그 검색 API로 확인한 실제 검색량·문서수입니다. 문서/검색이 낮을수록 글은 적은데 찾는 사람은 많은 "틈새" 키워드예요.</div>
+          </div>
+        </div>`
+        )
+        .join("");
+      resultEl.innerHTML = `<div class="ratio-note">💡 <b>문서/검색은 낮을수록 좋아요</b> — 검색하는 사람 수에 비해 이미 올라온 블로그 글이 적다는 뜻이라, 상위노출 경쟁이 덜한 "틈새" 키워드입니다. 반대로 점수(기회점수)는 높을수록 좋아요.</div>${cards}`;
     } catch (err) {
       resultEl.innerHTML = `<div class="status">오류: ${escapeHtml(err.message)} (서버 .env에 네이버 API 키가 채워져 있는지 확인해 주세요)</div>`;
     } finally {

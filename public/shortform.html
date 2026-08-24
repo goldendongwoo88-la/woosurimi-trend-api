@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>숏폼 자동 제작 데모</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+  }
+  header {
+    background: #fff;
+    padding: 16px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  h1 { font-size: 18px; margin: 0; }
+  main {
+    padding: 16px;
+    max-width: 640px;
+    margin: 0 auto 60px auto;
+  }
+  .note {
+    background: #fff8e1;
+    border: 1px solid #ffe08a;
+    color: #7a5c00;
+    font-size: 13px;
+    padding: 12px 14px;
+    margin: 16px 0;
+    border-radius: 6px;
+    line-height: 1.6;
+  }
+  .panel {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .mode-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .mode-tab-btn {
+    flex: 1;
+    padding: 14px 8px;
+    border: 2px solid #ddd;
+    background: #fafafa;
+    border-radius: 10px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .mode-tab-btn .mode-emoji { font-size: 22px; display: block; margin-bottom: 4px; }
+  .mode-tab-btn .mode-title { font-size: 14px; font-weight: bold; color: #444; }
+  .mode-tab-btn .mode-desc { font-size: 11px; color: #999; margin-top: 2px; }
+  .mode-tab-btn.active { border-color: #03c75a; background: #eafaf1; }
+  .mode-tab-btn.active .mode-title { color: #03c75a; }
+  .mode-panel { display: none; }
+  .mode-panel.active { display: block; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    background: #fafafa;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 13px;
+    cursor: pointer;
+    color: #666;
+  }
+  .tab-btn.active {
+    border-color: #03c75a;
+    background: #eafaf1;
+    color: #03c75a;
+    font-weight: bold;
+  }
+  input[type="url"], input[type="text"], input[type="number"], input[type="file"], textarea, select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 10px;
+    font-family: inherit;
+  }
+  button.primary {
+    width: 100%;
+    padding: 13px;
+    background: #03c75a;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  button.primary:disabled { background: #bcbcbc; cursor: default; }
+  button.secondary {
+    padding: 6px 10px;
+    background: #f0f0f0;
+    color: #333;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .status { text-align: center; color: #999; font-size: 13px; padding: 20px 0; }
+  .error { color: #d33; }
+  .scene-card {
+    display: flex;
+    gap: 12px;
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .scene-thumb {
+    flex: 0 0 auto;
+    width: 90px;
+    height: 90px;
+    border-radius: 8px;
+    background: #eee;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #bbb;
+  }
+  .scene-body { flex: 1; min-width: 0; }
+  .scene-role {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+  }
+  .scene-role.hook { background: #ffe3e3; color: #d33; }
+  .scene-role.body { background: #eafaf1; color: #03c75a; }
+  .scene-role.cta { background: #e3edff; color: #2563eb; }
+  .scene-caption { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .scene-actions { margin-top: 8px; }
+  .hashtags { font-size: 13px; color: #555; margin-top: 4px; line-height: 1.8; }
+  textarea { min-height: 160px; resize: vertical; font-size: 13px; }
+  .section-title { font-size: 14px; font-weight: bold; margin: 18px 0 8px 0; color: #444; }
+  .toolbar { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .bgm-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .bgm-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 2px solid #eee;
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .bgm-card.selected { border-color: #03c75a; background: #eafaf1; }
+  .bgm-card .bgm-name { font-weight: bold; font-size: 14px; }
+  .bgm-card .bgm-desc { font-size: 12px; color: #777; margin-top: 2px; }
+  .bgm-card .bgm-play { flex: 0 0 auto; font-size: 18px; background: none; border: none; cursor: pointer; }
+  .tpl-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .tpl-card {
+    border: 2px solid #eee;
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .tpl-card.selected { border-color: #03c75a; background: #eafaf1; }
+  .tpl-card .tpl-name { font-weight: bold; font-size: 14px; }
+  .tpl-card .tpl-desc { font-size: 12px; color: #777; margin-top: 2px; }
+  .field-label { font-size: 13px; color: #555; display: block; margin-bottom: 6px; }
+  .qr-box { text-align: center; margin-top: 14px; }
+  .qr-box img { width: 160px; height: 160px; border: 1px solid #eee; border-radius: 8px; }
+  .qr-box .qr-caption { font-size: 12px; color: #888; margin-top: 6px; }
+  .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+  .photo-grid img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 6px; border: 1px solid #eee; }
+  .recipe-grid { display: flex; flex-direction: column; gap: 14px; }
+  .recipe-card {
+    border: 2px solid #eee;
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .recipe-card video { width: 100%; border-radius: 8px; background: #000; max-height: 320px; }
+  .recipe-meta { font-size: 12px; color: #666; margin: 8px 0; line-height: 1.8; }
+  .recipe-meta b { color: #333; }
+  details.advanced { margin-top: 6px; }
+  details.advanced summary { cursor: pointer; font-size: 13px; color: #03c75a; font-weight: bold; padding: 6px 0; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a>
+  <h1>우수리미 · 숏폼 자동 제작 (데모)</h1>
+</header>
+<main>
+  <div class="note">
+캡컷의 "자동컷"처럼, <b>링크 하나</b> 또는 <b>직접 고른 사진들</b>로 AI가 장면(씬)별 기획안을 짜고 <b>실제 mp4 영상</b>까지 만들어줘요. 사진 슬라이드에 <b>켄번즈 확대·축소 애니메이션</b> + 5가지 <b>자막 디자인 템플릿</b> + 어울리는 <b>배경음악 5곡</b> + (키가 있으면) <b>AI 성우 나레이션</b>을 조합해서, AI가 알아서 5가지 스타일을 추천해주고 그중 마음에 드는 걸 골라 완성할 수 있어요. 완성되면 <b>QR 코드</b>로 바로 휴대폰에서 받을 수 있습니다.
+  </div>
+
+  <div class="panel">
+    <div class="mode-tabs">
+      <div class="mode-tab-btn active" data-mode="link">
+        <span class="mode-emoji">🔗</span>
+        <span class="mode-title">링크컷</span>
+        <span class="mode-desc">블로그·쇼핑·여행 링크</span>
+      </div>
+      <div class="mode-tab-btn" data-mode="photo">
+        <span class="mode-emoji">🖼️</span>
+        <span class="mode-title">자동컷</span>
+        <span class="mode-desc">사진 직접 선택</span>
+      </div>
+    </div>
+
+    <div class="mode-panel active" id="modePanel-link">
+      <div class="tabs">
+        <div class="tab-btn active" data-source="blog">블로그 링크</div>
+        <div class="tab-btn" data-source="shopping">쇼핑 커넥트</div>
+        <div class="tab-btn" data-source="travel">여행 커넥트</div>
+      </div>
+      <input type="url" id="urlInput" placeholder="https://blog.naver.com/... 링크를 붙여넣어 주세요" />
+      <button class="primary" id="generateBtn">숏폼 기획안 생성하기</button>
+    </div>
+
+    <div class="mode-panel" id="modePanel-photo">
+      <div class="tabs">
+        <div class="tab-btn active" data-photosource="blog">블로그 톤</div>
+        <div class="tab-btn" data-photosource="shopping">쇼핑 톤</div>
+        <div class="tab-btn" data-photosource="travel">여행 톤</div>
+      </div>
+      <label class="field-label">영상 사진 (최대 12장, 순서대로 장면이 됩니다)</label>
+      <input type="file" id="photoInput" accept="image/*" multiple />
+      <div id="photoPreview" class="photo-grid"></div>
+      <label class="field-label">영상 주제 (한 줄, 필수)</label>
+      <input type="text" id="topicInput" placeholder="예) 서울 감성 카페 투어" />
+      <label class="field-label">본문 요약(선택) — 붙여넣으면 문장을 잘라 사진 순서에 맞춰 자막으로 써요</label>
+      <textarea id="summaryInput" placeholder="블로그 본문 등을 붙여넣으면 AI가 지어내지 않고 실제 문장으로 자막을 채웁니다. 비워두면 주제를 짧게 변형한 일반 문구로 채워져요."></textarea>
+      <button class="primary" id="generatePhotoBtn">사진으로 숏폼 기획안 생성하기</button>
+    </div>
+  </div>
+
+  <div id="result"></div>
+</main>
+
+<script>
+  let currentSource = "blog";
+  let currentPhotoSource = "blog";
+  let selectedPhotoFiles = [];
+
+  document.querySelectorAll(".mode-tab-btn").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll(".mode-tab-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const mode = btn.dataset.mode;
+      document.getElementById("modePanel-link").classList.toggle("active", mode === "link");
+      document.getElementById("modePanel-photo").classList.toggle("active", mode === "photo");
+    };
+  });
+
+  const tabs = document.querySelectorAll(".tab-btn[data-source]");
+  const urlInput = document.getElementById("urlInput");
+  const generateBtn = document.getElementById("generateBtn");
+  const resultEl = document.getElementById("result");
+
+  tabs.forEach((tab) => {
+    tab.onclick = () => {
+      tabs.forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      currentSource = tab.dataset.source;
+      urlInput.placeholder =
+        currentSource === "shopping"
+          ? "https://smartstore.naver.com/... 같은 상품 페이지 링크를 붙여넣어 주세요"
+          : currentSource === "travel"
+          ? "https://connects.naver.com/... 같은 여행 커넥트 링크를 붙여넣어 주세요"
+          : "https://blog.naver.com/... 링크를 붙여넣어 주세요";
+    };
+  });
+
+  const photoTabs = document.querySelectorAll(".tab-btn[data-photosource]");
+  photoTabs.forEach((tab) => {
+    tab.onclick = () => {
+      photoTabs.forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      currentPhotoSource = tab.dataset.photosource;
+    };
+  });
+
+  const photoInput = document.getElementById("photoInput");
+  const photoPreview = document.getElementById("photoPreview");
+  photoInput.onchange = () => {
+    selectedPhotoFiles = Array.from(photoInput.files || []).slice(0, 12);
+    photoPreview.innerHTML = selectedPhotoFiles.map((f) => `<img src="${URL.createObjectURL(f)}" />`).join("");
+  };
+
+  function speak(text) {
+    if (!("speechSynthesis" in window)) {
+      alert("이 브라우저는 음성 읽기를 지원하지 않아요. 크롬 최신 버전을 이용해 보세요.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "ko-KR";
+    window.speechSynthesis.speak(utter);
+  }
+
+  function escapeHtml(str) {
+    return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function renderResult(plan) {
+    const roleLabel = { hook: "오프닝 후킹", body: "본문", cta: "마무리 CTA" };
+    const sceneHtml = plan.scenes
+      .map(
+        (s) => `
+      <div class="scene-card">
+        <div class="scene-thumb" style="${s.image ? `background-image:url('${s.image}')` : ""}">${s.image ? "" : "🖼️"}</div>
+        <div class="scene-body">
+          <span class="scene-role ${s.role}">씬 ${s.index} · ${roleLabel[s.role] || s.role}</span>
+          <div class="scene-caption">${escapeHtml(s.caption)}</div>
+          <div class="scene-actions">
+            <button class="secondary" onclick='speak(${JSON.stringify(s.caption)})'>🔊 음성으로 듣기(무료 브라우저 TTS)</button>
+          </div>
+        </div>
+      </div>`
+      )
+      .join("");
+
+    resultEl.innerHTML = `
+      <div class="panel">
+        <div class="section-title" style="margin-top:0;">${plan.sourceUrl ? "원문 제목" : "주제"}</div>
+        <div>${escapeHtml(plan.sourceTitle || "(제목을 찾지 못했어요)")}</div>
+        ${plan.price ? `<div style="margin-top:6px;color:#d33;font-weight:bold;">가격: ${escapeHtml(plan.price)}</div>` : ""}
+        <div class="section-title">해시태그</div>
+        <div class="hashtags">${plan.hashtags.map((h) => escapeHtml(h)).join(" ")}</div>
+      </div>
+
+      <div class="section-title">장면별 기획안 (사진 ${plan.imagesFound}장 발견됨)</div>
+      ${sceneHtml}
+
+      <div class="panel">
+        <div class="section-title" style="margin-top:0;">전체 대본 (복사해서 쓰세요)</div>
+        <textarea readonly id="fullScript">${escapeHtml(plan.fullScript)}</textarea>
+        <div class="toolbar">
+          <button class="secondary" onclick="copyScript()">📋 대본 복사</button>
+          <button class="secondary" onclick='speak(${JSON.stringify(plan.fullScript.replace(/\[씬 \d+\]/g, ""))})'>🔊 전체 듣기</button>
+        </div>
+      </div>
+
+      <div class="note">${escapeHtml(plan.note)}</div>
+
+      <div class="panel">
+        <div class="section-title" style="margin-top:0;">🤖 AI 추천 5개 영상 (템플릿+음악+목소리 조합)</div>
+        <div class="note" style="margin:0 0 10px 0;">캡컷 자동컷처럼, AI가 자막 디자인·배경음악·성우 목소리를 알아서 5가지로 조합해서 짧게 미리보기를 만들어줘요. 서버에서 실제로 영상을 만드는 과정이라 30초~2분 정도 걸릴 수 있어요.</div>
+        <button class="primary" id="recommendBtn">AI 추천 5개 만들기</button>
+        <div id="recommendResult" style="margin-top:14px;"></div>
+      </div>
+
+      <details class="advanced">
+        <summary>⚙️ 직접 설정해서 만들기 (템플릿/음악/목소리 수동 선택)</summary>
+
+        <div class="panel">
+          <div class="section-title" style="margin-top:0;">💬 자막 디자인 템플릿 (대본에 맞는 순서로 5종 추천)</div>
+          <div id="tplList" class="tpl-list"><div class="status">추천 템플릿을 불러오는 중...</div></div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title" style="margin-top:0;">🎵 배경음악 추천 (대본에 맞는 순서로 5곡 추천)</div>
+          <div id="bgmList" class="bgm-list"><div class="status">추천 음악을 불러오는 중...</div></div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title" style="margin-top:0;">🎤 AI 성우 나레이션 (선택)</div>
+          <div class="note" style="margin:0 0 10px 0;">서버에 API 키가 설정되어 있는 서비스만 실제로 목소리가 나옵니다. 키가 없으면 자동으로 나레이션 없이(자막만) 만들어져요 — 발급 방법은 README를 참고하세요.</div>
+          <label class="field-label">성우 목소리 서비스</label>
+          <select id="voiceProviderSelect">
+            <option value="">사용 안 함 (자막만)</option>
+            <option value="clova">네이버 CLOVA Voice</option>
+            <option value="typecast">타입캐스트 Typecast</option>
+            <option value="elevenlabs">ElevenLabs</option>
+          </select>
+          <div id="voiceStatusNote" class="note" style="display:none;margin:0 0 10px 0;"></div>
+          <label class="field-label">목소리 ID(선택, 비워두면 기본 목소리 사용)</label>
+          <input type="text" id="voiceIdInput" placeholder="예) ElevenLabs voice_id, 클로바 speaker 이름 등" />
+        </div>
+
+        <div class="panel">
+          <div class="section-title" style="margin-top:0;">🎬 영상 파일(mp4)로 만들기</div>
+          <label class="field-label">직접 배경음악 업로드(선택, 넣으면 위 추천곡 대신 이 파일이 쓰여요)</label>
+          <input type="file" id="bgmInput" accept="audio/*" style="margin-bottom:10px;" />
+          <label class="field-label">장면당 길이(초) — AI 나레이션이 더 길면 자동으로 늘어나요</label>
+          <input type="number" id="durationInput" value="3" min="2" max="6" style="margin-bottom:10px;" />
+          <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+            <input type="checkbox" id="animateInput" checked style="width:auto;margin:0;" /> 켄번즈 확대·축소 애니메이션 사용
+          </label>
+          <button class="primary" id="renderBtn">영상 생성하기</button>
+          <div id="renderResult" style="margin-top:14px;"></div>
+        </div>
+      </details>
+    `;
+
+    loadTemplateSuggestions(plan.scenes);
+    loadBgmSuggestions(plan.scenes);
+    loadVoiceProviderStatus();
+    document.getElementById("renderBtn").onclick = () => renderVideo(plan.scenes);
+    document.getElementById("recommendBtn").onclick = () => loadRecommendations(plan.scenes);
+  }
+
+  let selectedBgmId = null;
+  let selectedTemplateId = null;
+  let currentPreviewAudio = null;
+
+  async function loadTemplateSuggestions(scenes) {
+    const tplListEl = document.getElementById("tplList");
+    try {
+      const res = await fetch("/api/shortform/template-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenes }),
+      });
+      const data = await res.json();
+      selectedTemplateId = data.templates[0]?.id || "bold-black";
+      tplListEl.innerHTML = data.templates
+        .map(
+          (t, i) => `
+        <div class="tpl-card ${i === 0 ? "selected" : ""}" data-id="${t.id}" onclick="selectTemplate('${t.id}')">
+          <div class="tpl-name">${escapeHtml(t.label)}${i === 0 ? " · 추천 1순위" : ""}</div>
+          <div class="tpl-desc">${escapeHtml(t.description)}</div>
+        </div>`
+        )
+        .join("");
+    } catch (err) {
+      tplListEl.innerHTML = `<div class="status error">템플릿 추천을 불러오지 못했어요.</div>`;
+    }
+  }
+
+  function selectTemplate(id) {
+    selectedTemplateId = id;
+    document.querySelectorAll(".tpl-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === id));
+  }
+
+  async function loadBgmSuggestions(scenes) {
+    const bgmListEl = document.getElementById("bgmList");
+    try {
+      const res = await fetch("/api/shortform/bgm-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenes }),
+      });
+      const data = await res.json();
+      selectedBgmId = data.tracks[0]?.id || null;
+      bgmListEl.innerHTML = data.tracks
+        .map(
+          (t, i) => `
+        <div class="bgm-card ${i === 0 ? "selected" : ""}" data-id="${t.id}" onclick="selectBgm('${t.id}')">
+          <button class="bgm-play" type="button" onclick="event.stopPropagation();previewBgm('${t.previewUrl}')">▶️</button>
+          <div>
+            <div class="bgm-name">${escapeHtml(t.label)}${i === 0 ? " · 추천 1순위" : ""}</div>
+            <div class="bgm-desc">${escapeHtml(t.description)}</div>
+          </div>
+        </div>`
+        )
+        .join("");
+    } catch (err) {
+      bgmListEl.innerHTML = `<div class="status error">배경음악 추천을 불러오지 못했어요.</div>`;
+    }
+  }
+
+  function selectBgm(id) {
+    selectedBgmId = id;
+    document.querySelectorAll(".bgm-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === id));
+  }
+
+  function previewBgm(url) {
+    if (currentPreviewAudio) {
+      currentPreviewAudio.pause();
+      currentPreviewAudio = null;
+    }
+    currentPreviewAudio = new Audio(url);
+    currentPreviewAudio.volume = 0.7;
+    currentPreviewAudio.play().catch(() => {});
+  }
+
+  async function loadVoiceProviderStatus() {
+    try {
+      const res = await fetch("/api/shortform/voice-providers");
+      const data = await res.json();
+      document.getElementById("voiceProviderSelect").onchange = (e) => {
+        const noteEl = document.getElementById("voiceStatusNote");
+        const key = e.target.value;
+        if (!key) {
+          noteEl.style.display = "none";
+          return;
+        }
+        const info = data.providers[key];
+        noteEl.style.display = "block";
+        noteEl.textContent = info.ready
+          ? `✅ ${info.label} API 키가 서버에 설정되어 있어요 — 실제 목소리가 생성됩니다.`
+          : `⚠️ ${info.label} API 키가 아직 서버에 설정되지 않았어요 — 이대로 만들면 나레이션 없이(자막만) 만들어져요. README에서 키 등록 방법을 확인해 주세요.`;
+      };
+    } catch (err) {
+      /* 상태를 못 가져와도 영상 생성 자체는 계속 진행 가능하게 조용히 무시 */
+    }
+  }
+
+  async function loadRecommendations(scenes) {
+    const recommendBtn = document.getElementById("recommendBtn");
+    const recommendResultEl = document.getElementById("recommendResult");
+    recommendBtn.disabled = true;
+    recommendBtn.textContent = "5개 조합 미리보기 만드는 중... (최대 2분)";
+    recommendResultEl.innerHTML = `<div class="status">AI가 템플릿·음악·목소리 조합을 짜고 있어요...</div>`;
+
+    try {
+      const res = await fetch("/api/shortform/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "추천 실패");
+
+      recommendResultEl.innerHTML = `
+        <div class="recipe-grid">
+          ${data.recipes
+            .map(
+              (r, i) => `
+            <div class="recipe-card">
+              ${r.previewUrl ? `<video controls muted src="${r.previewUrl}"></video>` : `<div class="status error">미리보기 생성 실패: ${escapeHtml(r.previewError || "")}</div>`}
+              <div class="recipe-meta">
+                <b>조합 ${i + 1}</b> · 자막 ${escapeHtml(r.templateLabel)} · 음악 ${escapeHtml(r.bgmLabel)} · 목소리 ${escapeHtml(r.voiceLabel)}
+              </div>
+              <button class="primary" onclick='useRecipe(${JSON.stringify(r)})'>이 스타일로 최종 영상 만들기</button>
+            </div>`
+            )
+            .join("")}
+        </div>
+        <div class="note" style="margin-top:12px;">${escapeHtml(data.note)}</div>
+      `;
+    } catch (err) {
+      recommendResultEl.innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      recommendBtn.disabled = false;
+      recommendBtn.textContent = "AI 추천 5개 만들기";
+    }
+  }
+
+  function useRecipe(recipe) {
+    selectedTemplateId = recipe.templateId;
+    selectedBgmId = recipe.bgmId;
+    document.querySelectorAll(".tpl-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === recipe.templateId));
+    document.querySelectorAll(".bgm-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === recipe.bgmId));
+    const voiceSelect = document.getElementById("voiceProviderSelect");
+    if (voiceSelect) {
+      voiceSelect.value = recipe.voiceProvider || "";
+      voiceSelect.dispatchEvent(new Event("change"));
+    }
+    document.querySelector("details.advanced").open = true;
+    document.getElementById("renderBtn").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function renderVideo(scenes) {
+    const renderBtn = document.getElementById("renderBtn");
+    const renderResultEl = document.getElementById("renderResult");
+    const bgmInput = document.getElementById("bgmInput");
+    const durationInput = document.getElementById("durationInput");
+    const animateInput = document.getElementById("animateInput");
+    const voiceProviderSelect = document.getElementById("voiceProviderSelect");
+    const voiceIdInput = document.getElementById("voiceIdInput");
+
+    renderBtn.disabled = true;
+    renderBtn.textContent = "영상 만드는 중... (몇십 초 걸릴 수 있어요)";
+    renderResultEl.innerHTML = "";
+
+    const form = new FormData();
+    form.append("scenes", JSON.stringify(scenes));
+    form.append("durationPerScene", durationInput.value || "3");
+    form.append("animate", animateInput.checked ? "true" : "false");
+    if (selectedTemplateId) form.append("templateId", selectedTemplateId);
+    if (bgmInput.files[0]) {
+      form.append("bgm", bgmInput.files[0]);
+    } else if (selectedBgmId) {
+      form.append("bgmId", selectedBgmId);
+    }
+    if (voiceProviderSelect.value) {
+      form.append("voiceProvider", voiceProviderSelect.value);
+      if (voiceIdInput.value.trim()) form.append("voiceId", voiceIdInput.value.trim());
+    }
+
+    try {
+      const res = await fetch("/api/shortform/render", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "영상 생성 실패");
+      renderResultEl.innerHTML = `
+        <video controls style="width:100%;border-radius:8px;background:#000;" src="${data.publicPath}"></video>
+        <div class="toolbar">
+          <a href="${data.publicPath}" download class="secondary" style="text-decoration:none;display:inline-block;">⬇️ 다운로드</a>
+        </div>
+        ${data.narrationNote ? `<div class="note" style="margin-top:10px;">${escapeHtml(data.narrationNote)}</div>` : ""}
+        <div class="qr-box">
+          <img src="${data.qrDataUrl}" alt="영상 다운로드 QR 코드" />
+          <div class="qr-caption">휴대폰 카메라로 QR을 찍으면 이 영상 주소로 바로 이동해요</div>
+        </div>
+        <div class="note" style="margin-top:10px;">${escapeHtml(data.note)}</div>
+      `;
+    } catch (err) {
+      renderResultEl.innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      renderBtn.disabled = false;
+      renderBtn.textContent = "영상 생성하기";
+    }
+  }
+
+  function copyScript() {
+    const ta = document.getElementById("fullScript");
+    ta.select();
+    document.execCommand("copy");
+    alert("대본을 복사했어요!");
+  }
+
+  generateBtn.onclick = async () => {
+    const url = urlInput.value.trim();
+    if (!url) {
+      alert("링크를 먼저 입력해 주세요.");
+      return;
+    }
+    generateBtn.disabled = true;
+    generateBtn.textContent = "만드는 중...";
+    resultEl.innerHTML = `<div class="status">페이지에서 사진·본문을 가져오는 중이에요...</div>`;
+    try {
+      const res = await fetch("/api/shortform/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, source: currentSource }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "생성 실패");
+      renderResult(data);
+    } catch (err) {
+      resultEl.innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = "숏폼 기획안 생성하기";
+    }
+  };
+
+  document.getElementById("generatePhotoBtn").onclick = async () => {
+    const topic = document.getElementById("topicInput").value.trim();
+    if (!selectedPhotoFiles.length) {
+      alert("사진을 최소 1장 이상 골라주세요.");
+      return;
+    }
+    if (!topic) {
+      alert("영상 주제를 한 줄 입력해 주세요.");
+      return;
+    }
+    const btn = document.getElementById("generatePhotoBtn");
+    btn.disabled = true;
+    btn.textContent = "만드는 중...";
+    resultEl.innerHTML = `<div class="status">사진으로 장면을 짜는 중이에요...</div>`;
+
+    const form = new FormData();
+    selectedPhotoFiles.forEach((f) => form.append("photos", f));
+    form.append("topic", topic);
+    form.append("source", currentPhotoSource);
+    const summaryText = document.getElementById("summaryInput").value.trim();
+    if (summaryText) form.append("summaryText", summaryText);
+
+    try {
+      const res = await fetch("/api/shortform/plan-from-photos", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "생성 실패");
+      renderResult(data);
+    } catch (err) {
+      resultEl.innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "사진으로 숏폼 기획안 생성하기";
+    }
+  };
+</script>
+</body>
+</html>

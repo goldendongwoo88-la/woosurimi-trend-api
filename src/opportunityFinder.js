@@ -71,11 +71,16 @@ async function findOpportunities(category, limit = 20, recencyMode = "all") {
       }
 
       const opportunityScore = monthlySearchVolume / (blogPostCount + 1);
+      // "문서/검색" = 블로그 문서 수 ÷ 월간 검색량. 검색하는 사람 수에 비해 이미 올라온
+      // 문서가 얼마나 되는지를 보는 비율이라, 이 숫자가 "낮을수록" 경쟁이 적은(글이
+      // 부족한) 틈새 키워드라는 뜻입니다 — opportunityScore와 방향이 반대인 값입니다.
+      const docPerSearch = monthlySearchVolume > 0 ? blogPostCount / monthlySearchVolume : null;
       results.push({
         keyword: c.keyword,
         monthlySearchVolume,
         blogPostCount,
         blogPostCountLabel: postCountApprox ? `${blogPostCount}+` : String(blogPostCount),
+        docPerSearch: docPerSearch === null ? null : Math.round(docPerSearch * 100) / 100,
         recencyMode,
         competition: c.compIdx,
         opportunityScore: Math.round(opportunityScore * 100) / 100,
