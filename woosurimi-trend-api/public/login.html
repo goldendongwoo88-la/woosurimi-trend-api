@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>로그인</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: #f5f6f8; color: #222; }
+  header { background: #fff; padding: 16px; border-bottom: 1px solid #e5e5e5; }
+  h1 { font-size: 18px; margin: 0; }
+  main { max-width: 400px; margin: 40px auto; padding: 0 16px; }
+  .note { background: #fff8e1; border: 1px solid #ffe08a; color: #7a5c00; font-size: 13px; padding: 12px 14px; margin-bottom: 16px; border-radius: 6px; line-height: 1.6; }
+  .panel { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  label { display: block; font-size: 13px; color: #555; margin-bottom: 6px; }
+  input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 14px; }
+  button { width: 100%; padding: 13px; background: #03c75a; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
+</style>
+</head>
+<body>
+<header><a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a><h1>🔐 로그인</h1></header>
+<main>
+  <div class="note">
+    ⚠️ 지금은 화면(UI)만 만들어 둔 상태입니다. 실제로 회원가입/로그인 정보를 저장하는 서버 기능은 아직 연결되어 있지 않아요 — 로그인을 눌러도 실제 계정 인증은 이루어지지 않습니다. 실제 계정 기능이 필요하시면 다음 단계로 만들어드릴게요.
+  </div>
+  <div class="panel">
+    <form onsubmit="event.preventDefault(); alert('회원 인증 기능은 아직 준비 중입니다.');">
+      <label>이메일</label>
+      <input type="email" placeholder="you@example.com" required />
+      <label>비밀번호</label>
+      <input type="password" placeholder="비밀번호" required />
+      <button type="submit">로그인</button>
+    </form>
+  </div>
+</main>
+</body>
+</html>

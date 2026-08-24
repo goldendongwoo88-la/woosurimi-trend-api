@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>엔터 뉴스 데모</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+  }
+  header {
+    background: #fff;
+    padding: 16px 16px 0 16px;
+    border-bottom: 1px solid #e5e5e5;
+    position: sticky;
+    top: 0;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 12px 0;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+  }
+  .tab {
+    flex: 0 0 auto;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .tab.active {
+    color: #03c75a;
+    font-weight: bold;
+    border-bottom: 2px solid #03c75a;
+  }
+  .note {
+    background: #fff8e1;
+    border: 1px solid #ffe08a;
+    color: #7a5c00;
+    font-size: 13px;
+    padding: 10px 12px;
+    margin: 12px 16px 0 16px;
+    border-radius: 6px;
+    line-height: 1.5;
+  }
+  main {
+    padding: 12px 16px 40px 16px;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    display: flex;
+    gap: 12px;
+  }
+  .thumb {
+    flex: 0 0 auto;
+    width: 84px;
+    height: 84px;
+    border-radius: 6px;
+    background: #eee;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: #bbb;
+  }
+  .card-body {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .card a {
+    color: #222;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .card a:hover { text-decoration: underline; }
+  .meta {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #999;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-block;
+    background: #eafaf1;
+    color: #03c75a;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .desc {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+  }
+  .empty, .loading {
+    text-align: center;
+    color: #999;
+    padding: 40px 0;
+    font-size: 14px;
+  }
+  .related {
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left: 2px solid #eee;
+  }
+  .related a { font-size: 12px; font-weight: normal; color: #777; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a>
+  <h1>우수리미 · 엔터 뉴스 데모</h1>
+  <div class="tabs" id="tabs"></div>
+</header>
+<div class="note" id="note" style="display:none;"></div>
+<main>
+  <div id="list" class="loading">불러오는 중...</div>
+</main>
+
+<script>
+  const tabsEl = document.getElementById("tabs");
+  const listEl = document.getElementById("list");
+  const noteEl = document.getElementById("note");
+  let currentCategory = "전체";
+
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  async function loadCategories() {
+    const res = await fetch("/api/entertainment/categories");
+    const data = await res.json();
+    tabsEl.innerHTML = "";
+    data.categories.forEach((cat) => {
+      const el = document.createElement("div");
+      el.className = "tab" + (cat === currentCategory ? " active" : "");
+      el.textContent = cat;
+      el.onclick = () => selectTab(cat);
+      tabsEl.appendChild(el);
+    });
+  }
+
+  function selectTab(cat) {
+    currentCategory = cat;
+    [...tabsEl.children].forEach((el) => el.classList.toggle("active", el.textContent === cat));
+    if (cat === "랭킹") {
+      loadRanking();
+    } else {
+      loadNews(cat);
+    }
+  }
+
+  async function loadNews(category) {
+    listEl.className = "loading";
+    listEl.textContent = "불러오는 중...";
+    try {
+      // hours를 안 붙이면 서버가 카테고리별 기본값을 알아서 씁니다
+      // ("전체" = 24시간, "최신뉴스" = 6시간, 나머지 = 24시간).
+      const res = await fetch(`/api/entertainment/news?category=${encodeURIComponent(category)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "불러오기 실패");
+      noteEl.textContent = `최근 ${data.hours}시간 이내 뉴스입니다.`;
+      noteEl.style.display = "block";
+      renderNews(data.items);
+    } catch (err) {
+      noteEl.style.display = "none";
+      listEl.className = "empty";
+      listEl.textContent = "오류: " + err.message + " (서버 .env에 API 키가 채워져 있는지 확인해 주세요)";
+    }
+  }
+
+  async function loadRanking() {
+    listEl.className = "loading";
+    listEl.textContent = "불러오는 중...";
+    try {
+      const res = await fetch("/api/entertainment/ranking?hours=24");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "불러오기 실패");
+      noteEl.textContent = data.note;
+      noteEl.style.display = "block";
+      renderRanking(data.items);
+    } catch (err) {
+      listEl.className = "empty";
+      listEl.textContent = "오류: " + err.message;
+    }
+  }
+
+  function renderNews(items) {
+    if (!items.length) {
+      listEl.className = "empty";
+      listEl.textContent = "최근 24시간 이내 뉴스가 없습니다.";
+      return;
+    }
+    listEl.className = "";
+    listEl.innerHTML = items
+      .map(
+        (it) => `
+      <div class="card">
+        <div class="thumb" style="${it.image ? `background-image:url('${it.image}')` : ""}">${it.image ? "" : "📰"}</div>
+        <div class="card-body">
+          <a href="${it.link}" target="_blank" rel="noopener">${it.title}</a>
+          <div class="desc">${it.description || ""}</div>
+          <div class="meta">
+            <span>${it.press || "출처 미상"}</span>
+            <span>${fmtTime(it.pubDate)}</span>
+          </div>
+        </div>
+      </div>`
+      )
+      .join("");
+  }
+
+  function renderRanking(items) {
+    if (!items.length) {
+      listEl.className = "empty";
+      listEl.textContent = "최근 24시간 이내 뉴스가 없습니다.";
+      return;
+    }
+    listEl.className = "";
+    listEl.innerHTML = items
+      .map(
+        (it, idx) => `
+      <div class="card">
+        <div class="thumb" style="${it.image ? `background-image:url('${it.image}')` : ""}">${it.image ? "" : "📰"}</div>
+        <div class="card-body">
+          <span class="badge">${idx + 1}위 · 기사 ${it.articleCount}건 / 언론사 ${it.pressCount}곳</span>
+          <div style="margin-top:8px;">
+            <a href="${it.link}" target="_blank" rel="noopener">${it.title}</a>
+          </div>
+          <div class="meta">
+            <span>${it.press || "출처 미상"}</span>
+            <span>${fmtTime(it.pubDate)}</span>
+          </div>
+          ${
+            it.relatedArticles && it.relatedArticles.length > 1
+              ? `<div class="related">${it.relatedArticles
+                  .slice(1)
+                  .map((r) => `<div><a href="${r.link}" target="_blank" rel="noopener">${r.press || ""} · ${r.title}</a></div>`)
+                  .join("")}</div>`
+              : ""
+          }
+        </div>
+      </div>`
+      )
+      .join("");
+  }
+
+  loadCategories().then(() => selectTab("전체"));
+</script>
+</body>
+</html>

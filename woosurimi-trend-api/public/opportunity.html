@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>황금 키워드 찾기</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: #f5f6f8; color: #222; }
+  header { background: #fff; padding: 16px; border-bottom: 1px solid #e5e5e5; }
+  h1 { font-size: 18px; margin: 0 0 12px 0; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 60px 16px; }
+  .panel { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  select, button { font-size: 14px; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
+  select { width: 100%; margin-bottom: 10px; background: #fff; }
+  .mode-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+  .mode-btn { flex: 1; padding: 10px; text-align: center; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; color: #666; font-size: 13px; }
+  .mode-btn.active { border-color: #03c75a; background: #eafaf1; color: #03c75a; font-weight: bold; }
+  button.primary { width: 100%; background: #03c75a; color: #fff; border: none; font-weight: bold; cursor: pointer; }
+  button.primary:disabled { background: #bcbcbc; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; }
+  th { color: #888; font-weight: normal; font-size: 12px; }
+  .score { font-weight: bold; color: #03c75a; }
+  .comp-낮음 { color: #03c75a; }
+  .comp-중간 { color: #d68f00; }
+  .comp-높음 { color: #d33; }
+  .status { text-align: center; color: #999; padding: 30px 0; font-size: 13px; }
+</style>
+</head>
+<body>
+<header><a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a><h1>🔑 황금 키워드 찾기</h1></header>
+<main>
+  <div class="panel">
+    <select id="categorySelect"></select>
+    <div class="mode-toggle">
+      <div class="mode-btn active" data-mode="all">전체 기간</div>
+      <div class="mode-btn" data-mode="today">오늘 발행된 글 기준</div>
+    </div>
+    <button class="primary" id="searchBtn">검색하기</button>
+  </div>
+  <div id="result"><div class="status">카테고리를 고르고 검색해 보세요.</div></div>
+</main>
+<script>
+  let mode = "all";
+  const select = document.getElementById("categorySelect");
+  const resultEl = document.getElementById("result");
+  const searchBtn = document.getElementById("searchBtn");
+
+  document.querySelectorAll(".mode-btn").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      mode = btn.dataset.mode;
+    };
+  });
+
+  async function loadCategories() {
+    const res = await fetch("/api/categories");
+    const data = await res.json();
+    select.innerHTML = data.categories.map((c) => `<option value="${c}">${c}</option>`).join("");
+  }
+
+  function escapeHtml(str) {
+    return (str || "").toString().replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  searchBtn.onclick = async () => {
+    const category = select.value;
+    searchBtn.disabled = true;
+    resultEl.innerHTML = `<div class="status">불러오는 중...</div>`;
+    try {
+      const res = await fetch(`/api/opportunity?category=${encodeURIComponent(category)}&mode=${mode}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "불러오기 실패");
+      if (!data.items.length) {
+        resultEl.innerHTML = `<div class="status">결과가 없어요.</div>`;
+        return;
+      }
+      resultEl.innerHTML = `
+        <div class="panel">
+          <table>
+            <thead><tr><th>키워드</th><th>월간 검색량</th><th>블로그 글수</th><th>경쟁도</th><th>기회점수</th></tr></thead>
+            <tbody>
+              ${data.items
+                .map(
+                  (it) => `
+                <tr>
+                  <td>${escapeHtml(it.keyword)}</td>
+                  <td>${it.monthlySearchVolume.toLocaleString()}</td>
+                  <td>${escapeHtml(it.blogPostCountLabel)}</td>
+                  <td class="comp-${escapeHtml(it.competition)}">${escapeHtml(it.competition)}</td>
+                  <td class="score">${it.opportunityScore}</td>
+                </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`;
+    } catch (err) {
+      resultEl.innerHTML = `<div class="status">오류: ${escapeHtml(err.message)} (서버 .env에 네이버 API 키가 채워져 있는지 확인해 주세요)</div>`;
+    } finally {
+      searchBtn.disabled = false;
+    }
+  };
+
+  loadCategories();
+</script>
+</body>
+</html>
