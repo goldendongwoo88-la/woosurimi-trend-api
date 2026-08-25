@@ -328,8 +328,15 @@ async function resolveImageInput(imageInput) {
 
 // 사진이 있을 때: 캔버스에 꽉 차게(cover) 크롭한 뒤, 텍스트가 잘 보이도록 스타일의
 // scrim(반투명 색) 레이어를 위에 한 겹 더 깔아줍니다.
-async function photoBackgroundBuffer(imagePath, style, w, h) {
+//
+// applyScrim=false로 끌 수 있게 한 이유: "포스터 프레임형" 레이아웃은 하단에만
+// 자기 전용 어두운 그라디언트 스크림을 이미 깔기 때문에(buildFramedOverlay 참고),
+// 여기서 카드 전체에 스타일 스크림까지 겹치면(특히 크림/파스텔처럼 밝고 진한
+// 스크림 팔레트일 때) 사진 전체가 뿌옇게 바래 보입니다. 실제 스톡 사진으로
+// 렌더링해보고 나서 발견해서 고쳤습니다.
+async function photoBackgroundBuffer(imagePath, style, w, h, applyScrim = true) {
   const cropped = await sharp(imagePath).resize(w, h, { fit: "cover", position: "attention" }).png().toBuffer();
+  if (!applyScrim) return cropped;
   const scrimSvg = Buffer.from(`
     <svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
       <rect width="${w}" height="${h}" fill="${style.scrim}" />
@@ -608,9 +615,36 @@ function buildOverlaySvg(page, style, layoutId, w, h, pageIndex, totalPages, top
 async function renderCardImage({ page, style, layoutId, ratio, pageIndex, totalPages, topic, imagePath }) {
   const { w, h } = ASPECT_RATIOS[ratio] || ASPECT_RATIOS["4:5"];
   const resolvedInput = await resolveImageInput(imagePath);
-  const bg = resolvedInput ? await photoBackgroundBuffer(resolvedInput, style, w, h) : gradientBackgroundSvg(style, w, h);
+  // 포스터 프레임형은 자체 하단 스크림이 있어서 스타일 스크림을 겹치지 않습니다(위 주석 참고).
+  const bg = resolvedInput
+    ? await photoBackgroundBuffer(resolvedInput, style, w, h, layoutId !== "framed")
+    : gradientBackgroundSvg(style, w, h);
   const overlay = buildOverlaySvg(page, style, layoutId, w, h, pageIndex, totalPages, topic);
   return sharp(bg).composite([{ input: overlay, top: 0, left: 0 }]).png().toBuffer();
+}
+
+// 예시 문장 하나로 레이아웃×팔레트 조합을 실제로 렌더링해서 보여주는 미리보기용입니다.
+// 사용자가 옵션을 고를 때마다(대본을 아직 안 만든 시점에도) 실제 결과물이 어떻게
+// 생기는지 바로 확인할 수 있게, 파일로 저장하지 않고 PNG 버퍼만 즉시 돌려줍니다.
+const PREVIEW_SAMPLE_PAGE = {
+  role: "content",
+  title: "카드뉴스 제목 예시",
+  body: "이렇게 본문 내용이 들어가는 느낌이에요. 실제 대본을 만들면 이 자리에 진짜 내용이 채워져요.",
+};
+
+async function renderPreviewBuffer({ styleId = "midnight-purple", layoutId = "stack", ratio = "4:5" } = {}) {
+  const style = getStyle(styleId);
+  const layout = getLayout(layoutId);
+  return renderCardImage({
+    page: PREVIEW_SAMPLE_PAGE,
+    style,
+    layoutId: layout.id,
+    ratio,
+    pageIndex: 0,
+    totalPages: 1,
+    topic: "예시 주제",
+    imagePath: null,
+  });
 }
 
 /**
@@ -659,5 +693,6 @@ module.exports = {
   recommendStyles,
   getGeneratorStatus,
   generatePlan,
+  renderPreviewBuffer,
   renderCardNewsSet,
 };

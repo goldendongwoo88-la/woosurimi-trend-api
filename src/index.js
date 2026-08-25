@@ -533,6 +533,23 @@ app.get("/api/cardnews/styles", (req, res) => {
   });
 });
 
+// 레이아웃·팔레트를 고를 때마다 실제로 어떻게 나오는지 바로 보여주는 미리보기입니다.
+// 예시 문장 하나로 그 조합을 렌더링해서 PNG 그대로 돌려줍니다(파일로 저장하지 않음).
+// GET /api/cardnews/preview?layoutId=stack&styleId=midnight-purple&ratio=4:5
+app.get("/api/cardnews/preview", async (req, res) => {
+  try {
+    const buf = await cardNewsGenerator.renderPreviewBuffer({
+      styleId: req.query.styleId,
+      layoutId: req.query.layoutId,
+      ratio: req.query.ratio,
+    });
+    res.set("Cache-Control", "no-store");
+    res.type("png").send(buf);
+  } catch (err) {
+    res.status(400).json({ error: "preview_failed", message: err.message });
+  }
+});
+
 // 배경 사진을 다양하게 고를 수 있도록, 무료 스톡 사진(Pexels)을 검색합니다.
 app.get("/api/cardnews/stock-photos-status", (req, res) => {
   res.json({ ready: stockPhotoSearch.isConfigured() });

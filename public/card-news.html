@@ -150,6 +150,29 @@
   .stock-thumb.selected { border-color: #7b3ff2; }
   .stock-thumb img { width: 100%; height: 72px; object-fit: cover; display: block; }
   .stock-credit { font-size: 9px; color: #999; text-align: center; padding: 2px; background: #fafafa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .preview-box {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #f0f0f3;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 14px;
+    min-height: 220px;
+  }
+  .preview-box img { max-width: 100%; max-height: 360px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); display: block; }
+  .preview-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(255,255,255,0.6);
+    font-size: 12px;
+    color: #888;
+    border-radius: 10px;
+  }
 </style>
 </head>
 <body>
@@ -172,6 +195,12 @@
 
     <div class="section-title">비율</div>
     <div class="chip-row" id="ratioChips"></div>
+
+    <div class="section-title">미리보기 <span style="font-weight:normal;color:#999;">— 레이아웃·팔레트를 고르면 바로 바뀌어요</span></div>
+    <div class="preview-box">
+      <img id="previewImg" alt="미리보기" />
+      <div id="previewLoading" class="preview-loading" style="display:none;">그리는 중...</div>
+    </div>
 
     <div class="section-title">레이아웃 구성</div>
     <div id="layoutList" class="layout-list"><div class="status">불러오는 중...</div></div>
@@ -231,6 +260,7 @@
         document.querySelectorAll("#ratioChips .chip").forEach((c) => c.classList.remove("selected"));
         chip.classList.add("selected");
         currentRatio = chip.dataset.ratio;
+        updatePreview();
       };
     });
 
@@ -256,6 +286,7 @@
         document.querySelectorAll(".layout-option").forEach((s) => s.classList.remove("selected"));
         el.classList.add("selected");
         currentLayoutId = el.dataset.layout;
+        updatePreview();
       };
     });
   }
@@ -278,8 +309,30 @@
         document.querySelectorAll(".style-swatch").forEach((s) => s.classList.remove("selected"));
         el.classList.add("selected");
         currentStyleId = el.dataset.style;
+        updatePreview();
       };
     });
+  }
+
+  async function updatePreview() {
+    const img = document.getElementById("previewImg");
+    const loading = document.getElementById("previewLoading");
+    loading.style.display = "flex";
+    const url = `/api/cardnews/preview?layoutId=${encodeURIComponent(currentLayoutId)}&styleId=${encodeURIComponent(currentStyleId)}&ratio=${encodeURIComponent(currentRatio)}&t=${Date.now()}`;
+    try {
+      // 이미지 로드가 끝난 뒤에 로딩 표시를 지우려고, <img>의 onload를 직접 기다립니다.
+      await new Promise((resolve, reject) => {
+        const probe = new Image();
+        probe.onload = resolve;
+        probe.onerror = () => reject(new Error("미리보기를 불러오지 못했어요."));
+        probe.src = url;
+      });
+      img.src = url;
+    } catch (err) {
+      /* 미리보기 실패는 조용히 무시 — 대본/이미지 생성 자체엔 영향 없음 */
+    } finally {
+      loading.style.display = "none";
+    }
   }
 
   // 서버 스타일 정의(bgFrom/bgTo)를 노출하지 않으므로, 미리보기 점 색상은 화면에서 대충 매칭해둡니다.
@@ -528,6 +581,7 @@
     await loadStockPhotoStatus(); // 대본 카드를 그리기 전에 먼저 알아야 "스톡 사진 검색" 탭을 보여줄지 정할 수 있음
     await loadStyles();
     loadGeneratorStatus();
+    updatePreview();
   })();
 </script>
 </body>
