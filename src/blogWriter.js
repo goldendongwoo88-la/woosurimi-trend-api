@@ -1,6 +1,12 @@
-// "AI 자동화 글쓰기" 기능입니다. 오른쪽 화면처럼 주제별(네이버 홈판 인기 / 여행 커넥트 /
-// 쇼핑 커넥트)로 실시간 트렌드 주제를 보여주고, 주제를 고르면 초안(제목+본문+이미지)을
-// 자동으로 짜줍니다.
+// "AI 자동화 글쓰기" 기능입니다. 주제 카테고리 8종(맛집 후기/여행 후기/정보성 글/소개·홍보글/
+// IT·상품리뷰/비즈니스·경제/뷰티·패션/일상·취미)별로 실시간 트렌드 주제를 보여주고, 주제를
+// 고르면 초안(제목+본문+이미지)을 자동으로 짜줍니다.
+//
+// ⚠️ 카테고리 이름과 실제로 연결된 데이터 소스가 항상 1:1로 딱 맞는 건 아닙니다. "정보성 글"은
+// 구글 트렌드 실시간 인기 검색어를 그대로 쓰고, 나머지는 네이버 검색 데이터 기반 "기회 키워드"
+// (검색은 많은데 아직 블로그 글이 적은 키워드, opportunityFinder.js)를 씁니다. 다만 "소개/홍보글"
+// 처럼 정확히 맞는 시드 키워드가 없는 카테고리는, 없는 데이터를 지어내는 대신 뜻이 가장 가까운
+// 기존 키워드 분야로 대신 채우고 그 사실을 note에 그대로 안내합니다(CATEGORY_DATA_SOURCES 참고).
 //
 // 실제 문장을 새로 "창작"하는 부분은 Anthropic Claude API(ANTHROPIC_API_KEY 환경변수)로
 // 만듭니다. 서버에 키가 설정되어 있지 않거나 API 호출이 실패하면, 에러로 죽지 않고
@@ -13,21 +19,62 @@ const cache = require("./cache");
 const { findOpportunities } = require("./opportunityFinder");
 const claudeClient = require("./claudeClient");
 
+// claudeAppTriggerTemplate: "클로드 앱에서 글 생성하기" 버튼이 여는 claude://claude.ai/new?q=...
+// 딥링크에 넣을 문구입니다. {topic} 자리에 사용자가 고르거나 입력한 주제가 그대로 들어갑니다.
+// 이 문구는 사장님이 claude.ai 계정에 저장해두신 해당 스킬의 description 안 트리거 예시 문구와
+// 정확히 겹치도록(또는 아주 가깝도록) 맞춰뒀습니다 — 그래야 클로드가 그 스킬을 자동으로 골라 씁니다.
+// beauty_fashion은 저장된 스킬이 4개(연예인 패션/패션 후기/연예인 뷰티/뷰티 후기)라서, 특정
+// 스킬 이름을 강제하지 않고 평범한 문구만 보내서 클로드가 주제 내용을 보고 알맞은 스킬을 스스로
+// 고르게 했습니다.
 const CATEGORIES = [
   {
-    id: "naver_home",
-    label: "네이버 홈판 유력",
-    description: "지금 대한민국에서 실시간으로 가장 많이 검색되는 주제예요.",
+    id: "food_review",
+    label: "맛집 후기",
+    description: "검색은 많은데 아직 블로그 글이 적은 맛집·먹거리 관련 '기회 키워드'예요.",
+    claudeAppTriggerTemplate: "{topic} 맛집 후기 블로그 써줘",
   },
   {
-    id: "travel_connect",
-    label: "여행 커넥트",
+    id: "travel_review",
+    label: "여행 후기",
     description: "국내·해외 여행 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
+    claudeAppTriggerTemplate: "{topic} 여행 후기 블로그 써줘",
   },
   {
-    id: "shopping_connect",
-    label: "쇼핑 커넥트",
-    description: "상품 리뷰·패션/미용 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
+    id: "info_post",
+    label: "정보성 글",
+    description: "지금 대한민국에서 실시간으로 가장 많이 검색되는 화제 이슈예요.",
+    claudeAppTriggerTemplate: "{topic} 지식교양 블로그 써줘",
+  },
+  {
+    id: "intro_promo",
+    label: "소개/홍보글",
+    description:
+      "공간·인테리어·라이프스타일 관련 '기회 키워드'예요 — '소개/홍보글'에 정확히 맞는 실시간 데이터가 없어서, 뜻이 가장 가까운 분야로 대신 채웠어요.",
+    claudeAppTriggerTemplate: "{topic} 소개 홍보 블로그 써줘",
+  },
+  {
+    id: "it_review",
+    label: "IT·상품리뷰",
+    description: "IT 기기·자동차·생활가전 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
+    claudeAppTriggerTemplate: "{topic} IT 자동차 블로그 써줘",
+  },
+  {
+    id: "biz_economy",
+    label: "비즈니스/경제",
+    description: "재테크·경제·세금 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
+    claudeAppTriggerTemplate: "{topic} 재테크 경제 블로그 써줘",
+  },
+  {
+    id: "beauty_fashion",
+    label: "뷰티/패션",
+    description: "패션·미용 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
+    claudeAppTriggerTemplate: "{topic} 블로그 써줘",
+  },
+  {
+    id: "daily_hobby",
+    label: "일상/취미",
+    description: "반려동물·육아·요리·건강·운동 등 일상 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
+    claudeAppTriggerTemplate: "{topic} 리빙 라이프 블로그 써줘",
   },
 ];
 
@@ -35,47 +82,96 @@ function getCategories() {
   return CATEGORIES;
 }
 
+// 카테고리 → 실제 데이터 소스 매핑입니다.
+//   - "trends": 구글 트렌드 대한민국 실시간 인기 검색어(cache.js) 그대로
+//   - "opportunity": opportunityFinder.js의 CATEGORY_SEEDS 중 지정한 시드들을 합쳐서 씀
+//   - "trends_plus_opportunity": 트렌드 실시간 검색어 + 지정 시드의 기회 키워드를 함께 보여줌
+//   - substituted: true인 카테고리는, 화면에 보이는 카테고리 이름과 실제 시드 키워드 분야가
+//     정확히 일치하지 않는다는 뜻입니다(없는 데이터를 지어내지 않기 위한 대체) — note에 안내됩니다.
+const CATEGORY_DATA_SOURCES = {
+  food_review: { type: "opportunity", seeds: ["맛집"] },
+  travel_review: { type: "opportunity", seeds: ["국내여행", "세계여행"] },
+  info_post: { type: "trends_plus_opportunity", seeds: ["사회/정치"] },
+  intro_promo: { type: "opportunity", seeds: ["인테리어/DIY", "원예/재배"], substituted: true },
+  it_review: { type: "opportunity", seeds: ["IT/컴퓨터", "자동차", "상품리뷰"] },
+  biz_economy: { type: "opportunity", seeds: ["비즈니스/경제"] },
+  beauty_fashion: { type: "opportunity", seeds: ["패션/미용"] },
+  daily_hobby: { type: "opportunity", seeds: ["반려동물", "육아/결혼", "요리/레시피", "건강/의학", "스포츠"] },
+};
+
+// 기회 점수가 이 목록 평균보다 눈에 띄게 높은(1.5배 이상) 상위 몇 개만 "급상승" 배지를
+// 붙입니다 — 화면을 예쁘게 꾸미려고 아무 데나 무작위로 붙이는 게 아니라, 실제로 검색량 대비
+// 글이 부족해서 "지금 쓰면 눈에 띌 가능성이 높은" 키워드라는 실제 신호에 근거합니다.
+function markOpportunityHot(items, maxHot = 3) {
+  if (!items.length) return items.map((it) => ({ ...it, hot: false }));
+  const avg = items.reduce((sum, it) => sum + it.opportunityScore, 0) / items.length;
+  let hotCount = 0;
+  return items.map((it) => {
+    const hot = hotCount < maxHot && it.opportunityScore > avg * 1.5;
+    if (hot) hotCount++;
+    return { ...it, hot };
+  });
+}
+
+async function getOpportunityTopics(seeds, limit) {
+  const results = await Promise.all(seeds.map((s) => findOpportunities(s, limit, "all").catch(() => [])));
+  const merged = results.flat().sort((a, b) => b.opportunityScore - a.opportunityScore).slice(0, limit);
+  const withHot = markOpportunityHot(merged);
+  return withHot.map((it) => ({
+    topic: it.keyword,
+    meta: `월 검색 ${it.monthlySearchVolume.toLocaleString()}건 · 글 ${it.blogPostCountLabel}개`,
+    hot: it.hot,
+  }));
+}
+
+async function getTrendsTopics(limit) {
+  const data = cache.getLatest();
+  if (!data) {
+    return {
+      note: "아직 실시간 인기 검색어를 가져오는 중입니다. 잠시 후 다시 시도해 주세요.",
+      generatedAt: null,
+      items: [],
+    };
+  }
+  return {
+    note: "구글 트렌드 대한민국 실시간 인기 검색어입니다(공식 공개 RSS). 네이버 자체 '홈판 유력' 순위는 외부에 공개되지 않아서, 그 대신 실시간성이 가장 비슷한 이 데이터를 씁니다.",
+    generatedAt: data.fetchedAt,
+    items: data.items.slice(0, limit).map((it, i) => ({ topic: it.term, meta: it.approxTraffic || null, hot: i < 3 })),
+  };
+}
+
 // 카테고리별로 "실제 데이터 기반" 실시간 트렌드 주제 목록을 만듭니다.
 async function getTrendTopics(categoryId, limit = 20) {
-  if (categoryId === "naver_home") {
-    const data = cache.getLatest();
-    if (!data) {
-      return { note: "아직 실시간 인기 검색어를 가져오는 중입니다. 잠시 후 다시 시도해 주세요.", items: [] };
-    }
-    return {
-      note: "구글 트렌드 대한민국 실시간 인기 검색어입니다(공식 공개 RSS). 네이버 자체 '홈판 유력' 순위는 외부에 공개되지 않아서, 그 대신 실시간성이 가장 비슷한 이 데이터를 씁니다.",
-      generatedAt: data.fetchedAt,
-      items: data.items.slice(0, limit).map((it) => ({ topic: it.term, meta: it.approxTraffic || null })),
-    };
+  const src = CATEGORY_DATA_SOURCES[categoryId];
+  if (!src) {
+    throw new Error(`등록되지 않은 카테고리입니다: "${categoryId}". 사용 가능: ${CATEGORIES.map((c) => c.id).join(", ")}`);
   }
 
-  if (categoryId === "travel_connect") {
-    const [domestic, world] = await Promise.all([
-      findOpportunities("국내여행", limit, "all").catch(() => []),
-      findOpportunities("세계여행", limit, "all").catch(() => []),
-    ]);
-    const merged = [...domestic, ...world].sort((a, b) => b.opportunityScore - a.opportunityScore).slice(0, limit);
+  if (src.type === "trends") {
+    return getTrendsTopics(limit);
+  }
+
+  if (src.type === "trends_plus_opportunity") {
+    const trendsPart = await getTrendsTopics(Math.ceil(limit / 2));
+    const remaining = Math.max(limit - trendsPart.items.length, 0);
+    const oppItems = remaining ? await getOpportunityTopics(src.seeds, remaining) : [];
     return {
-      note: "네이버 검색 데이터를 기반으로, 검색은 많은데 아직 블로그 글이 적은 여행 관련 '기회 키워드'입니다.",
+      note:
+        "앞부분은 구글 트렌드 대한민국 실시간 인기 검색어, 뒷부분은 네이버 검색 데이터 기반 사회·시사 관련 '기회 키워드'입니다(둘 다 실제 데이터이며 지어낸 내용은 아닙니다).",
       generatedAt: new Date().toISOString(),
-      items: merged.map((it) => ({ topic: it.keyword, meta: `월 검색 ${it.monthlySearchVolume.toLocaleString()}건 · 글 ${it.blogPostCountLabel}개` })),
+      items: [...trendsPart.items, ...oppItems],
     };
   }
 
-  if (categoryId === "shopping_connect") {
-    const [review, fashion] = await Promise.all([
-      findOpportunities("상품리뷰", limit, "all").catch(() => []),
-      findOpportunities("패션/미용", limit, "all").catch(() => []),
-    ]);
-    const merged = [...review, ...fashion].sort((a, b) => b.opportunityScore - a.opportunityScore).slice(0, limit);
-    return {
-      note: "네이버 검색 데이터를 기반으로, 검색은 많은데 아직 블로그 글이 적은 쇼핑/제품 관련 '기회 키워드'입니다.",
-      generatedAt: new Date().toISOString(),
-      items: merged.map((it) => ({ topic: it.keyword, meta: `월 검색 ${it.monthlySearchVolume.toLocaleString()}건 · 글 ${it.blogPostCountLabel}개` })),
-    };
-  }
-
-  throw new Error(`등록되지 않은 카테고리입니다: "${categoryId}". 사용 가능: ${CATEGORIES.map((c) => c.id).join(", ")}`);
+  // type === "opportunity"
+  const items = await getOpportunityTopics(src.seeds, limit);
+  const catLabel = CATEGORIES.find((c) => c.id === categoryId)?.label || categoryId;
+  const note = src.substituted
+    ? `"${catLabel}"에 정확히 맞는 실시간 데이터가 없어서, 뜻이 가장 가까운 네이버 검색 데이터 기반 키워드(${src.seeds.join(
+        ", "
+      )} 분야)로 대신 채웠습니다 — 실제 검색량 데이터이며 지어낸 내용은 아닙니다.`
+    : "네이버 검색 데이터를 기반으로, 검색은 많은데 아직 블로그 글이 적은 '기회 키워드'입니다.";
+  return { note, generatedAt: new Date().toISOString(), items };
 }
 
 // ===================== Claude API (실제 문장 생성) =====================
@@ -89,9 +185,14 @@ function getWriterStatus() {
 }
 
 const CATEGORY_TONE = {
-  naver_home: "지금 화제가 된 이슈를 다루는 정보성 블로그 글 — 궁금증을 자극하는 후킹, 사실관계 요약, 반응/전망 순서",
-  travel_connect: "직접 다녀온 듯한 여행 후기/정보 블로그 글 — 기본 정보, 방문 경험, 함께 가기 좋은 곳, 추천 대상 순서",
-  shopping_connect: "제품을 실제로 써본 듯한 쇼핑 리뷰 블로그 글 — 스펙/가격, 사용 경험, 비교, 추천 대상 순서",
+  food_review: "직접 먹어본 듯한 맛집 후기 블로그 글 — 메뉴/가격, 맛과 분위기, 웨이팅·주차 팁, 추천 대상 순서",
+  travel_review: "직접 다녀온 듯한 여행 후기/정보 블로그 글 — 기본 정보, 방문 경험, 함께 가기 좋은 곳, 추천 대상 순서",
+  info_post: "지금 화제가 된 이슈를 다루는 정보성 블로그 글 — 궁금증을 자극하는 후킹, 사실관계 요약, 반응/전망 순서",
+  intro_promo: "장소·서비스·공간을 소개하는 홍보성 블로그 글 — 핵심 특징 소개, 이용 방법/포인트, 실제 이용 팁, 추천 대상 순서",
+  it_review: "제품을 실제로 써본 듯한 IT·상품 리뷰 블로그 글 — 스펙/가격, 사용 경험, 비교, 추천 대상 순서",
+  biz_economy: "경제·재테크 이슈를 다루는 정보성 블로그 글 — 핵심 개념 설명, 최근 이슈 요약, 실생활 영향, 확인해볼 점 순서",
+  beauty_fashion: "뷰티·패션 트렌드를 다루는 정보성 블로그 글 — 트렌드 소개, 특징/포인트, 활용 팁, 추천 대상 순서",
+  daily_hobby: "일상생활 꿀팁·취미를 다루는 블로그 글 — 상황 공감, 노하우/팁, 직접 해본 경험, 마무리 조언 순서",
 };
 
 async function callClaude(topic, cat, imageCount) {
@@ -128,50 +229,94 @@ async function callClaude(topic, cat, imageCount) {
 // ===================== 템플릿 기반 대체(폴백) =====================
 
 const TITLE_BY_CATEGORY = {
-  naver_home: (topic) => `"${topic}" 요즘 왜 이렇게 화제일까? (총정리)`,
-  travel_connect: (topic) => `"${topic}" 가기 전에 꼭 알아야 할 것들`,
-  shopping_connect: (topic) => `"${topic}" 사기 전에 이것부터 확인하세요`,
+  food_review: (topic) => `"${topic}" 직접 가본 솔직 후기 (웨이팅·가격 정보)`,
+  travel_review: (topic) => `"${topic}" 가기 전에 꼭 알아야 할 것들`,
+  info_post: (topic) => `"${topic}" 요즘 왜 이렇게 화제일까? (총정리)`,
+  intro_promo: (topic) => `"${topic}" 이런 곳이에요 (특징 총정리)`,
+  it_review: (topic) => `"${topic}" 사기 전에 이것부터 확인하세요`,
+  biz_economy: (topic) => `"${topic}" 지금 꼭 알아야 하는 이유`,
+  beauty_fashion: (topic) => `"${topic}" 요즘 트렌드 총정리`,
+  daily_hobby: (topic) => `"${topic}" 이렇게 해보니 확실히 다르네요`,
 };
 const INTRO_BY_CATEGORY = {
-  naver_home: (topic) =>
-    `요즘 "${topic}"이(가) 실시간 검색어에 오를 만큼 화제예요. 왜 이렇게 관심을 받고 있는지, 이 글에서 정리해볼게요.`,
-  travel_connect: (topic) =>
+  food_review: (topic) => `"${topic}" 직접 다녀와서 먹어본 솔직한 후기를 이 글에 담아볼게요.`,
+  travel_review: (topic) =>
     `"${topic}" 여행을 계획 중이신가요? 실제로 다녀온 경험과 알아두면 좋은 정보를 이 글에 담아볼게요.`,
-  shopping_connect: (topic) =>
-    `"${topic}" 구매를 고민하고 계신가요? 실제 사용 후기와 비교 포인트를 이 글에서 정리해드릴게요.`,
+  info_post: (topic) =>
+    `요즘 "${topic}"이(가) 실시간 검색어에 오를 만큼 화제예요. 왜 이렇게 관심을 받고 있는지, 이 글에서 정리해볼게요.`,
+  intro_promo: (topic) => `"${topic}"이(가) 궁금하신 분들을 위해, 핵심 특징과 이용 팁을 이 글에 정리해볼게요.`,
+  it_review: (topic) => `"${topic}" 구매를 고민하고 계신가요? 실제 사용 후기와 비교 포인트를 이 글에서 정리해드릴게요.`,
+  biz_economy: (topic) => `"${topic}"에 대해 궁금해하시는 분들이 많아서, 핵심만 이 글에 정리해볼게요.`,
+  beauty_fashion: (topic) => `요즘 "${topic}"이(가) 화제인 이유, 이 글에서 트렌드와 포인트를 정리해볼게요.`,
+  daily_hobby: (topic) => `"${topic}", 저도 직접 해보고 느낀 점을 이 글에 솔직하게 담아볼게요.`,
 };
 const CTA_BY_CATEGORY = {
-  naver_home: "여기까지 읽어주셔서 감사해요! 도움이 되셨다면 이웃추가하고 다음 글도 받아보세요 :)",
-  travel_connect: "실제 다녀오시면 후기 댓글로 알려주세요! 저장해두고 여행 갈 때 다시 참고하세요 :)",
-  shopping_connect: "구매 결정에 도움이 되셨길 바라요! 궁금한 점은 댓글로 남겨주세요 :)",
+  food_review: "실제 방문하시면 후기 댓글로 알려주세요! 저장해두고 다음에 또 참고하세요 :)",
+  travel_review: "실제 다녀오시면 후기 댓글로 알려주세요! 저장해두고 여행 갈 때 다시 참고하세요 :)",
+  info_post: "여기까지 읽어주셔서 감사해요! 도움이 되셨다면 이웃추가하고 다음 글도 받아보세요 :)",
+  intro_promo: "궁금한 점은 댓글로 남겨주세요! 도움이 되셨다면 저장하고 주변에도 공유해주세요 :)",
+  it_review: "구매 결정에 도움이 되셨길 바라요! 궁금한 점은 댓글로 남겨주세요 :)",
+  biz_economy: "여기까지 읽어주셔서 감사해요! 정확한 판단은 본인 상황에 맞게 추가로 확인해보시는 걸 권해요.",
+  beauty_fashion: "여기까지 읽어주셔서 감사해요! 도움이 되셨다면 이웃추가하고 다음 글도 받아보세요 :)",
+  daily_hobby: "여기까지 읽어주셔서 감사해요! 도움이 되셨다면 저장해두고 따라해보세요 :)",
+};
+
+const SECTION_TEMPLATES = {
+  food_review: [
+    { heading: (t) => `1. "${t}" 기본 정보`, hint: (t) => `위치, 가격대, 영업시간·웨이팅 정보를 적어주세요` },
+    { heading: () => `2. 실제로 먹어보니`, hint: () => `대표 메뉴, 맛, 양, 분위기를 적어주세요` },
+    { heading: () => `3. 주차·웨이팅 팁`, hint: () => `주차 가능 여부, 웨이팅 피하는 시간대 등 실용 팁을 적어주세요` },
+    { heading: () => `4. 이런 분께 추천해요`, hint: () => `어떤 사람에게, 어떤 상황에 추천하는지 적어주세요` },
+  ],
+  travel_review: [
+    { heading: (t) => `1. "${t}" 기본 정보`, hint: (t) => `위치, 가는 방법, 운영시간·요금 등 "${t}"의 기본 정보를 적어주세요` },
+    { heading: () => `2. 실제로 가보니`, hint: () => `직접 가서 느낀 점, 분위기, 사진 찍기 좋은 포인트를 적어주세요` },
+    { heading: () => `3. 함께 가면 좋은 곳`, hint: () => `근처에 같이 들르면 좋은 장소나 맛집을 적어주세요` },
+    { heading: () => `4. 이런 분께 추천해요`, hint: () => `어떤 사람에게, 어떤 시기에 추천하는지 적어주세요` },
+  ],
+  info_post: [
+    { heading: () => `1. 무슨 일이길래`, hint: () => `핵심 사실관계(누가, 언제, 무엇을)를 적어주세요` },
+    { heading: () => `2. 왜 화제가 됐을까`, hint: () => `화제가 된 배경이나 이유를 적어주세요` },
+    { heading: () => `3. 반응은 어땠나`, hint: () => `실제 반응이나 여론, 관련 통계를 적어주세요` },
+    { heading: () => `4. 앞으로는`, hint: () => `전망이나 마무리 생각을 적어주세요` },
+  ],
+  intro_promo: [
+    { heading: (t) => `1. "${t}" 소개`, hint: () => `무엇을 하는 곳/서비스인지, 핵심 특징을 적어주세요` },
+    { heading: () => `2. 이용 방법·포인트`, hint: () => `이용 방법, 가격, 예약 방법 등을 적어주세요` },
+    { heading: () => `3. 실제 이용해보니`, hint: () => `직접 이용해본 경험이나 강점을 적어주세요` },
+    { heading: () => `4. 이런 분께 추천해요`, hint: () => `어떤 사람/상황에 추천하는지 적어주세요` },
+  ],
+  it_review: [
+    { heading: (t) => `1. "${t}" 스펙/가격`, hint: () => `가격, 구성, 주요 스펙을 적어주세요` },
+    { heading: () => `2. 실제 사용해보니`, hint: () => `장점, 아쉬운 점을 솔직하게 적어주세요` },
+    { heading: () => `3. 이런 제품과 비교하면`, hint: () => `비슷한 다른 제품과 비교했을 때 차별점을 적어주세요` },
+    { heading: () => `4. 이런 분께 추천해요`, hint: () => `어떤 사람에게 추천하는지, 구매 링크는 어디인지 적어주세요` },
+  ],
+  biz_economy: [
+    { heading: (t) => `1. "${t}" 핵심 개념`, hint: () => `기본 개념이나 최근 이슈 요약을 적어주세요` },
+    { heading: () => `2. 왜 지금 중요할까`, hint: () => `최근 배경이나 변화를 적어주세요` },
+    { heading: () => `3. 나에게 미치는 영향`, hint: () => `실생활·재정에 미치는 영향을 적어주세요` },
+    { heading: () => `4. 확인해볼 점`, hint: () => `직접 확인하거나 준비해야 할 것들을 적어주세요` },
+  ],
+  beauty_fashion: [
+    { heading: (t) => `1. "${t}" 요즘 트렌드`, hint: () => `트렌드 배경이나 특징을 적어주세요` },
+    { heading: () => `2. 핵심 포인트`, hint: () => `구체적인 스타일링/제품 포인트를 적어주세요` },
+    { heading: () => `3. 활용 팁`, hint: () => `직접 따라 할 수 있는 팁을 적어주세요` },
+    { heading: () => `4. 이런 분께 추천해요`, hint: () => `어떤 사람에게 어울리는지 적어주세요` },
+  ],
+  daily_hobby: [
+    { heading: (t) => `1. "${t}" 시작하게 된 이유`, hint: () => `상황이나 계기를 적어주세요` },
+    { heading: () => `2. 직접 해보니`, hint: () => `실제로 해본 경험과 노하우를 적어주세요` },
+    { heading: () => `3. 꿀팁`, hint: () => `초보자가 알면 좋은 팁을 적어주세요` },
+    { heading: () => `4. 마무리`, hint: () => `소감이나 다음에 시도해볼 것을 적어주세요` },
+  ],
 };
 
 // 사람이 실제 정보(가격/위치/후기 등)만 채우면 되는 "본문 뼈대"입니다.
 function buildSections(topic, categoryId) {
   const fillIn = (hint) => `✏️ ${hint} (실제로 경험했거나 조사한 내용을 2~4문장으로 채워주세요)`;
-
-  if (categoryId === "travel_connect") {
-    return [
-      { heading: `1. "${topic}" 기본 정보`, body: fillIn(`위치, 가는 방법, 운영시간·요금 등 "${topic}"의 기본 정보를 적어주세요`) },
-      { heading: `2. 실제로 가보니`, body: fillIn(`직접 가서 느낀 점, 분위기, 사진 찍기 좋은 포인트를 적어주세요`) },
-      { heading: `3. 함께 가면 좋은 곳`, body: fillIn(`근처에 같이 들르면 좋은 장소나 맛집을 적어주세요`) },
-      { heading: `4. 이런 분께 추천해요`, body: fillIn(`어떤 사람에게, 어떤 시기에 추천하는지 적어주세요`) },
-    ];
-  }
-  if (categoryId === "shopping_connect") {
-    return [
-      { heading: `1. "${topic}" 스펙/가격`, body: fillIn(`가격, 구성, 주요 스펙을 적어주세요`) },
-      { heading: `2. 실제 사용해보니`, body: fillIn(`장점, 아쉬운 점을 솔직하게 적어주세요`) },
-      { heading: `3. 이런 제품과 비교하면`, body: fillIn(`비슷한 다른 제품과 비교했을 때 차별점을 적어주세요`) },
-      { heading: `4. 이런 분께 추천해요`, body: fillIn(`어떤 사람에게 추천하는지, 구매 링크는 어디인지 적어주세요`) },
-    ];
-  }
-  return [
-    { heading: `1. "${topic}" 무슨 일이길래`, body: fillIn(`핵심 사실관계(누가, 언제, 무엇을)를 적어주세요`) },
-    { heading: `2. 왜 화제가 됐을까`, body: fillIn(`화제가 된 배경이나 이유를 적어주세요`) },
-    { heading: `3. 반응은 어땠나`, body: fillIn(`실제 반응이나 여론, 관련 통계를 적어주세요`) },
-    { heading: `4. 앞으로는`, body: fillIn(`전망이나 마무리 생각을 적어주세요`) },
-  ];
+  const list = SECTION_TEMPLATES[categoryId] || SECTION_TEMPLATES.info_post;
+  return list.map((s) => ({ heading: s.heading(topic), body: fillIn(s.hint(topic)) }));
 }
 
 function extractHashtags(topic) {
@@ -225,13 +370,14 @@ function assembleDraft(cleanTopic, cat, content, mode, images, note) {
 
 /**
  * topic: 글 주제(카테고리 트렌드 목록에서 고르거나 직접 입력)
- * category: "naver_home" | "travel_connect" | "shopping_connect"
+ * category: CATEGORIES에 있는 id 중 하나 (food_review/travel_review/info_post/intro_promo/
+ *           it_review/biz_economy/beauty_fashion/daily_hobby)
  * mode: "text" | "text_images" — 이미지 포함 여부
  * images: [{url}] — 업로드된 이미지 목록(선택). mode가 text_images인데 images가 없으면
  *         이미지 없이 "이미지를 첨부해 주세요"라는 안내만 넣습니다(가짜 이미지를 지어내지 않음).
  */
 async function generateDraft({ topic, category, mode = "text", images = [] } = {}) {
-  const cat = CATEGORIES.some((c) => c.id === category) ? category : "naver_home";
+  const cat = CATEGORIES.some((c) => c.id === category) ? category : "info_post";
   const cleanTopic = (topic || "").trim();
   if (!cleanTopic) throw new Error("주제를 입력해 주세요.");
 

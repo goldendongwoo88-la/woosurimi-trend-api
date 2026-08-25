@@ -7,7 +7,7 @@ const { fetchGoogleTrendsKR } = require("./trendSource");
 const { findOpportunities, CATEGORY_SEEDS } = require("./opportunityFinder");
 const { searchRecentNews, searchMergedNews, getBuzzNews, attachImages } = require("./naverNewsSearch");
 const { planShortform, planFromPhotos } = require("./shortformPlanner");
-const { renderShortformVideo } = require("./videoRenderer");
+const { renderShortformVideo, FRAME_STYLES } = require("./videoRenderer");
 const { recommendBgm, getTrackPath } = require("./bgmLibrary");
 const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
@@ -236,8 +236,11 @@ app.post("/api/shortform/plan", async (req, res) => {
 //   - photos: 사진 파일 여러 장 (최대 12장, 각 15MB 이하)
 //   - topic: 영상 주제를 한 줄로 (필수)
 //   - source: (선택) "blog" | "shopping" | "travel" — 후킹/CTA 문구 톤만 다르게
-//   - summaryText: (선택) 본문 요약 문단 — 넣으면 문장 단위로 잘라 사진 순서에 맞춰 캡션으로 씀
+//   - summaryText: (선택) 본문 요약 문단 — 사진 순서에 맞춰 문장을 매칭해서, 아래 이미지 인식
+//     AI에게 "본문 맥락"으로 함께 전달함(사진 내용과 자연스럽게 이어지는 캡션을 쓰도록)
 //   - captions: (선택) JSON 배열 문자열 — photos와 같은 순서로 사진별 캡션을 직접 지정
+// 캡션을 직접 안 넣은 사진은 이미지 인식 AI(Claude Vision, imageCaption.js)가 사진을 실제로
+// 보고 자동으로 캡션을 만듭니다(ANTHROPIC_API_KEY 필요 — 없으면 본문 문장/일반 문구로 대체).
 app.post("/api/shortform/plan-from-photos", uploadPhotos.array("photos", 12), async (req, res) => {
   const files = req.files || [];
   if (!files.length) {
@@ -266,7 +269,7 @@ app.post("/api/shortform/plan-from-photos", uploadPhotos.array("photos", 12), as
   }));
 
   try {
-    const plan = planFromPhotos(photos, topic, { source, summaryText: req.body.summaryText || "" });
+    const plan = await planFromPhotos(photos, topic, { source, summaryText: req.body.summaryText || "" });
     res.json(plan);
   } catch (err) {
     res.status(500).json({ error: "plan_failed", message: err.message });
@@ -304,6 +307,12 @@ app.get("/api/shortform/voice-providers", (req, res) => {
   res.json({ providers: getProviderStatus() });
 });
 
+// 사진 프레임 스타일 목록 — "polaroid"(하얀 테두리 포토카드, 기본값) | "full"(화면 꽉 채우기).
+// /api/shortform/render 호출 시 frameStyle로 넘기면 적용됩니다.
+app.get("/api/shortform/frame-styles", (req, res) => {
+  res.json({ frameStyles: FRAME_STYLES });
+});
+
 // 캡컷 "자동컷"처럼, 대본(scenes) 하나로 "템플릿 + 배경음악 + 성우 목소리" 조합 5가지를
 // AI가 알아서 짜서, 각각 짧은 미리보기 영상으로 만들어 보여줍니다. 사용자는 5개 중
 // 마음에 드는 걸 골라서 /api/shortform/render 를 그 조합(templateId/bgmId/voiceProvider)
@@ -327,6 +336,7 @@ app.post("/api/shortform/recommend", async (req, res) => {
     .map(([key, v]) => ({ provider: key, label: v.label }));
 
   const previewScenes = scenes.slice(0, 3); // 미리보기는 앞부분 최대 3장면만
+  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "polaroid";
   const RECIPE_COUNT = 5;
   const recipes = [];
 
@@ -344,6 +354,7 @@ app.post("/api/shortform/recommend", async (req, res) => {
         animate: true,
         voice: null, // 미리보기는 속도를 위해 나레이션 없이 만듭니다
         templateId: template.id,
+        frameStyle,
       });
       previewPath = result.publicPath;
     } catch (err) {
@@ -373,15 +384,17 @@ app.post("/api/shortform/recommend", async (req, res) => {
 
 // /api/shortform/plan으로 만든 scenes를 실제 mp4 영상 파일로 렌더링합니다.
 // ffmpeg로 서버에서 직접 합성합니다 — 사진마다 켄번즈(확대·축소) 애니메이션과 자막을
-// 입히고 순서대로 이어붙인 뒤, 배경음악(직접 업로드한 mp3 또는 추천 라이브러리 중
-// 선택한 곡)을 전체 길이에 맞춰 함께 입힙니다. AI 성우 목소리(provider)를 지정하면
-// 장면별 나레이션도 TTS로 만들어서 입힙니다(해당 서비스 API 키가 서버에 설정된 경우).
+// 입히고, 장면과 장면 사이는 하드컷이 아니라 xfade/acrossfade로 부드럽게 겹쳐 넘어가도록
+// 이어붙인 뒤, 배경음악(직접 업로드한 mp3 또는 추천 라이브러리 중 선택한 곡)을 전체
+// 길이에 맞춰 함께 입힙니다. AI 성우 목소리(provider)를 지정하면 장면별 나레이션도
+// TTS로 만들어서 입힙니다(해당 서비스 API 키가 서버에 설정된 경우).
 // multipart/form-data 로 보내주세요:
 //   - scenes: JSON 문자열(배열) — /api/shortform/plan 응답의 scenes 그대로
 //   - durationPerScene: (선택) 장면당 초 — 기본 3 (나레이션이 더 길면 자동으로 늘어남)
 //   - bgm: (선택) 직접 업로드하는 mp3/오디오 파일 — 있으면 이게 우선
 //   - bgmId: (선택) 추천 라이브러리 트랙 id (예: "calm-piano") — bgm 파일이 없을 때 사용
 //   - animate: (선택) "false"를 주면 켄번즈 애니메이션 없이 정지 사진으로 만듦 (기본 true)
+//   - frameStyle: (선택) "polaroid"(기본, 하얀 테두리 포토카드+흐린 확대 배경) | "full"(화면 꽉 채우기)
 //   - voiceProvider: (선택) "clova" | "typecast" | "elevenlabs"
 //   - voiceId: (선택) 서비스별 목소리 식별자
 app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
@@ -407,9 +420,10 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   const voiceProvider = ["clova", "typecast", "elevenlabs"].includes(req.body.voiceProvider) ? req.body.voiceProvider : null;
   const voice = voiceProvider ? { provider: voiceProvider, voiceId: req.body.voiceId || null } : null;
   const templateId = TEMPLATES.some((t) => t.id === req.body.templateId) ? req.body.templateId : "bold-black";
+  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "polaroid";
 
   try {
-    const result = await renderShortformVideo(scenes, { durationPerScene, bgmPath, animate, voice, templateId });
+    const result = await renderShortformVideo(scenes, { durationPerScene, bgmPath, animate, voice, templateId, frameStyle });
 
     // 방금 만든 영상의 "진짜 인터넷 주소"를 QR 코드로 만들어서, 휴대폰 카메라로
     // 바로 찍어 다운로드 페이지로 이동할 수 있게 해줍니다.
@@ -428,7 +442,7 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
       videoUrl: absoluteUrl,
       qrDataUrl,
       narrationNote,
-      note: "사진 슬라이드 + 켄번즈 애니메이션 + 자막 + 배경음악(+선택 시 AI 나레이션)이 들어간 실제 mp4 영상입니다. 무료 서버(Render)는 재시작되면 이 파일이 사라질 수 있으니 바로 다운로드해 두세요.",
+      note: `사진 ${frameStyle === "polaroid" ? "포토카드(하얀 테두리+흐린 확대 배경)" : "화면 꽉 채우기"} + 켄번즈 애니메이션 + 장면 간 크로스페이드 전환 + 자막 + 배경음악(+선택 시 AI 나레이션)이 들어간 실제 mp4 영상입니다. 무료 서버(Render)는 재시작되면 이 파일이 사라질 수 있으니 바로 다운로드해 두세요.`,
     });
   } catch (err) {
     res.status(500).json({ error: "render_failed", message: err.message });
@@ -455,9 +469,9 @@ app.get("/api/blog/categories", (req, res) => {
 const BLOG_TOPICS_TTL_MS = Number(process.env.BLOG_TOPICS_TTL_MS || 10 * 60 * 1000);
 const blogTopicsCache = new Map();
 
-// GET /api/blog/topics?category=naver_home|travel_connect|shopping_connect
+// GET /api/blog/topics?category=food_review|travel_review|info_post|intro_promo|it_review|biz_economy|beauty_fashion|daily_hobby
 app.get("/api/blog/topics", async (req, res) => {
-  const category = req.query.category || "naver_home";
+  const category = req.query.category || "info_post";
   const cached = blogTopicsCache.get(category);
   if (cached && cached.expiresAt > Date.now()) {
     return res.json({ category, cached: true, ...cached.data });
@@ -480,7 +494,7 @@ app.get("/api/blog/writer-status", (req, res) => {
 
 // 초안 생성. multipart/form-data로 보내주세요:
 //   - topic: 주제(필수, 트렌드 목록에서 고르거나 직접 입력)
-//   - category: "naver_home" | "travel_connect" | "shopping_connect"
+//   - category: "food_review" | "travel_review" | "info_post" | "intro_promo" | "it_review" | "biz_economy" | "beauty_fashion" | "daily_hobby"
 //   - mode: "text"(글만) | "text_images"(글+이미지, 첫 이미지가 자동으로 썸네일이 됨)
 //   - images: (mode가 text_images일 때) 이미지 파일 5~8장
 // 서버에 ANTHROPIC_API_KEY가 설정되어 있으면 Claude API로 실제 문장을 생성하고,

@@ -236,8 +236,8 @@
       <div id="photoPreview" class="photo-grid"></div>
       <label class="field-label">영상 주제 (한 줄, 필수)</label>
       <input type="text" id="topicInput" placeholder="예) 서울 감성 카페 투어" />
-      <label class="field-label">본문 요약(선택) — 붙여넣으면 문장을 잘라 사진 순서에 맞춰 자막으로 써요</label>
-      <textarea id="summaryInput" placeholder="블로그 본문 등을 붙여넣으면 AI가 지어내지 않고 실제 문장으로 자막을 채웁니다. 비워두면 주제를 짧게 변형한 일반 문구로 채워져요."></textarea>
+      <label class="field-label">본문 요약(선택) — 캡션을 직접 안 적은 사진은 AI가 사진을 직접 보고, 이 본문 내용과 자연스럽게 이어지는 자막을 자동으로 만들어요</label>
+      <textarea id="summaryInput" placeholder="블로그 본문 등을 붙여넣으면, 이미지 인식 AI가 각 사진을 실제로 보면서 이 본문 내용과 어울리는 자막을 새로 씁니다(서버에 ANTHROPIC_API_KEY 등록 필요). 키가 없거나 비워두면 본문 문장을 그대로 쓰거나, 그마저 없으면 주제를 짧게 변형한 일반 문구로 채워져요."></textarea>
       <button class="primary" id="generatePhotoBtn">사진으로 숏폼 기획안 생성하기</button>
     </div>
   </div>
@@ -392,6 +392,9 @@
           <input type="file" id="bgmInput" accept="audio/*" style="margin-bottom:10px;" />
           <label class="field-label">장면당 길이(초) — AI 나레이션이 더 길면 자동으로 늘어나요</label>
           <input type="number" id="durationInput" value="3" min="2" max="6" style="margin-bottom:10px;" />
+          <label class="field-label">사진 프레임 스타일</label>
+          <select id="frameStyleSelect" style="margin-bottom:6px;"></select>
+          <div id="frameStyleNote" class="note" style="margin:0 0 10px 0;"></div>
           <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:6px;margin-bottom:10px;">
             <input type="checkbox" id="animateInput" checked style="width:auto;margin:0;" /> 켄번즈 확대·축소 애니메이션 사용
           </label>
@@ -404,13 +407,36 @@
     loadTemplateSuggestions(plan.scenes);
     loadBgmSuggestions(plan.scenes);
     loadVoiceProviderStatus();
+    loadFrameStyleOptions();
     document.getElementById("renderBtn").onclick = () => renderVideo(plan.scenes);
     document.getElementById("recommendBtn").onclick = () => loadRecommendations(plan.scenes);
   }
 
   let selectedBgmId = null;
   let selectedTemplateId = null;
+  let selectedFrameStyle = "polaroid";
   let currentPreviewAudio = null;
+
+  async function loadFrameStyleOptions() {
+    const selectEl = document.getElementById("frameStyleSelect");
+    const noteEl = document.getElementById("frameStyleNote");
+    try {
+      const res = await fetch("/api/shortform/frame-styles");
+      const data = await res.json();
+      const styles = data.frameStyles || [];
+      selectEl.innerHTML = styles.map((s) => `<option value="${s.id}">${escapeHtml(s.label)}</option>`).join("");
+      selectedFrameStyle = styles[0]?.id || "polaroid";
+      selectEl.value = selectedFrameStyle;
+      noteEl.textContent = styles[0]?.description || "";
+      selectEl.onchange = () => {
+        selectedFrameStyle = selectEl.value;
+        const found = styles.find((s) => s.id === selectedFrameStyle);
+        noteEl.textContent = found ? found.description : "";
+      };
+    } catch (err) {
+      noteEl.textContent = "프레임 스타일 목록을 불러오지 못했어요 — 기본값(포토카드)으로 만들어져요.";
+    }
+  }
 
   async function loadTemplateSuggestions(scenes) {
     const tplListEl = document.getElementById("tplList");
@@ -516,7 +542,7 @@
       const res = await fetch("/api/shortform/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes }),
+        body: JSON.stringify({ scenes, frameStyle: selectedFrameStyle || "polaroid" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "추천 실패");
@@ -577,6 +603,7 @@
     form.append("scenes", JSON.stringify(scenes));
     form.append("durationPerScene", durationInput.value || "3");
     form.append("animate", animateInput.checked ? "true" : "false");
+    form.append("frameStyle", selectedFrameStyle || "polaroid");
     if (selectedTemplateId) form.append("templateId", selectedTemplateId);
     if (bgmInput.files[0]) {
       form.append("bgm", bgmInput.files[0]);

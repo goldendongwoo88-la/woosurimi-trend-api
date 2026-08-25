@@ -41,20 +41,40 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
   }
   .section-title { font-size: 14px; font-weight: bold; margin: 0 0 10px 0; color: #444; }
-  .cat-chips { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-  .cat-chip {
-    flex: 1 1 auto;
-    min-width: 100px;
-    padding: 10px;
-    border: 2px solid #ddd;
-    background: #fafafa;
+  .cat-dropdown { position: relative; margin-bottom: 10px; }
+  .cat-dropdown-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 170px;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
     border-radius: 8px;
-    text-align: center;
-    font-size: 13px;
+    background: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    color: #222;
     cursor: pointer;
-    color: #555;
   }
-  .cat-chip.active { border-color: #03c75a; background: #eafaf1; color: #03c75a; font-weight: bold; }
+  .cat-dropdown-btn .chevron { color: #999; font-size: 12px; }
+  .cat-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 10;
+    min-width: 190px;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    overflow: hidden;
+  }
+  .cat-dropdown-menu.open { display: block; }
+  .cat-dropdown-item { padding: 10px 14px; font-size: 13px; color: #444; cursor: pointer; }
+  .cat-dropdown-item:hover { background: #f5f6f8; }
+  .cat-dropdown-item.active { background: #eafaf1; color: #03c75a; font-weight: bold; }
   .cat-desc { font-size: 12px; color: #888; margin-bottom: 12px; }
   .topic-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
   .topic-row {
@@ -72,6 +92,17 @@
   .topic-row .topic-name { font-weight: bold; color: #333; }
   .topic-row .topic-meta { color: #999; font-size: 11px; }
   .topic-rank { color: #03c75a; font-weight: bold; margin-right: 6px; }
+  .topic-hot-badge {
+    display: inline-block;
+    background: #ffe3e3;
+    color: #e0334f;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
   input[type="text"], select, textarea {
     width: 100%;
     padding: 12px;
@@ -103,27 +134,24 @@
     font-size: 13px;
     cursor: pointer;
   }
-  .mode-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-  .mode-option {
-    border: 2px solid #eee;
-    border-radius: 8px;
-    padding: 12px;
-    cursor: pointer;
-  }
-  .mode-option.selected { border-color: #03c75a; background: #eafaf1; }
-  .mode-option .mode-name { font-weight: bold; font-size: 14px; }
-  .mode-option .mode-desc { font-size: 12px; color: #777; margin-top: 2px; }
   .status { text-align: center; color: #999; font-size: 13px; padding: 20px 0; }
   .error { color: #d33; }
-  .draft-title-input { font-size: 17px; font-weight: bold; }
-  .section-block { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-  .section-block img { width: 100%; max-width: 240px; border-radius: 8px; margin-bottom: 8px; display: block; }
-  .section-heading-input { font-weight: bold; margin-bottom: 6px; }
-  .thumb-box { text-align: center; margin-bottom: 12px; }
-  .thumb-box img { max-width: 100%; border-radius: 8px; }
-  .thumb-badge { display: inline-block; background: #ffe3e3; color: #d33; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px; }
-  .hashtags { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 10px; }
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .claude-app-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 14px;
+    background: #2b2b2b;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .claude-app-btn:hover { background: #1a1a1a; }
+  .skill-tag { display: inline-block; background: #eef1ff; color: #4552d6; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -133,44 +161,33 @@
 </header>
 <main>
   <div class="note">
-카테고리를 고르면 <b>실시간 트렌드 주제</b>(구글 트렌드·네이버 검색 데이터 기반, 실제 데이터입니다)를 볼 수 있어요. 주제를 고르고 <b>초안 생성하기</b>를 누르면 글만 생성 / 글+이미지 생성(첫 이미지가 자동으로 썸네일) 중 골라서 초안을 만들 수 있어요. 제목·본문은 <b>Claude API</b>로 실제 문장을 생성해요(가격·날짜 등 확인이 필요한 구체적 사실은 ✏️로 표시돼요).
+카테고리 8종(맛집 후기/여행 후기/정보성 글/소개·홍보글/IT·상품리뷰/비즈니스·경제/뷰티·패션/일상·취미) 중 하나를 고르면 <b>실시간 트렌드 주제</b>(구글 트렌드·네이버 검색 데이터 기반, 실제 데이터입니다)를 볼 수 있어요. <span class="topic-hot-badge" style="margin-left:0;">급상승</span> 배지는 검색량 대비 아직 글이 적어서 지금 쓰면 특히 눈에 띌 가능성이 높은 주제예요.
   <br><br>
-  ⚠️ 네이버 블로그로 "한 번에 자동 발행"은 로그인 정보가 필요해서 지원하지 않고, 대신 초안을 복사해서 실제 블로그 글쓰기 화면으로 바로 이동시켜드려요.
+  🖥️ 주제를 고르거나 직접 입력한 뒤 <b>클로드 앱에서 글 생성하기</b>를 누르면, 그 카테고리에 맞는 스킬(사장님이 claude.ai 계정에 미리 저장해두신 홈판 상위노출용 스킬)이 채워진 채팅창으로 데스크톱 클로드 앱이 열려요. 이 방식은 저희 서버의 Claude API를 거치지 않아서 API 비용이 들지 않고, 이미 쓰고 계신 클로드 구독 안에서 처리돼요. 앱이 열리면 채팅창에 문구가 미리 채워져 있는데, <b>직접 전송 버튼을 눌러야</b> 스킬이 실제로 작동해요(자동 전송은 안 돼요 — 클로드 앱 딥링크 자체의 제한이에요). 데스크톱 앱 전용이라 모바일·웹 브라우저에서는 안 열릴 수 있어요.
+  <br><br>
+  ⚠️ "소개/홍보글" 카테고리는 정확히 맞는 실시간 데이터가 없어서, 뜻이 가장 가까운 카테고리(인테리어·DIY, 원예·재배 관련 키워드)로 대신 채웠어요 — 화면에 뜨는 문구를 잘 보면 어떤 데이터를 대신 썼는지 안내돼 있어요.
   </div>
-  <div id="writerStatusNote"></div>
 
   <div class="panel">
     <div class="section-title">주제 카테고리</div>
-    <div class="cat-chips" id="catChips"><div class="status">불러오는 중...</div></div>
+    <div class="cat-dropdown" id="catDropdown">
+      <button type="button" class="cat-dropdown-btn" id="catDropdownBtn">
+        <span id="catDropdownLabel">불러오는 중...</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="cat-dropdown-menu" id="catDropdownMenu"></div>
+    </div>
     <div class="cat-desc" id="catDesc"></div>
-    <div class="section-title">📈 실시간 트렌드 주제</div>
+    <div class="section-title">📈 실시간 트렌드 주제!</div>
     <div class="topic-list" id="topicList"><div class="status">불러오는 중...</div></div>
   </div>
 
   <div class="panel">
     <div class="section-title">주제 직접 입력(선택, 위에서 고른 주제 대신 쓰고 싶을 때)</div>
     <input type="text" id="topicInput" placeholder="예) 제주도 가을 여행" />
-
-    <div class="section-title">초안 생성 옵션</div>
-    <div class="mode-options">
-      <div class="mode-option selected" data-mode="text">
-        <div class="mode-name">📝 글만 생성</div>
-        <div class="mode-desc">제목+본문 틀만 만들어요. 이미지는 나중에 직접 추가하세요.</div>
-      </div>
-      <div class="mode-option" data-mode="text_images">
-        <div class="mode-name">🖼️ 글+이미지 생성 (5~8장)</div>
-        <div class="mode-desc">사진을 업로드하면 순서대로 각 섹션에 배치하고, 첫 사진을 썸네일로 자동 지정해요.</div>
-      </div>
-    </div>
-    <div id="imageUploadBox" style="display:none;">
-      <label style="font-size:13px;color:#555;display:block;margin-bottom:6px;">사진 5~8장 선택 (첫 번째 사진 = 썸네일)</label>
-      <input type="file" id="draftImages" accept="image/*" multiple />
-    </div>
-
-    <button class="primary" id="draftBtn">초안 생성하기</button>
+    <a class="claude-app-btn" id="claudeAppBtn" href="#">🖥️ 클로드 앱에서 글 생성하기</a>
+    <div id="claudeAppNote" class="status" style="padding-top:10px;"></div>
   </div>
-
-  <div id="draftResult"></div>
 </main>
 
 <script>
@@ -178,29 +195,67 @@
     return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  let currentCategory = "naver_home";
+  let currentCategory = "";
   let selectedTopic = "";
-  let currentMode = "text";
   let categoriesData = [];
+
+  // claude://claude.ai/new?q=... 딥링크는 데스크톱 클로드 앱이 설치되어 있을 때만 동작해요.
+  function claudeAppLink(query) {
+    return "claude://claude.ai/new?q=" + encodeURIComponent(query);
+  }
+
+  function updateClaudeAppBtn() {
+    const btn = document.getElementById("claudeAppBtn");
+    const noteEl = document.getElementById("claudeAppNote");
+    const topic = document.getElementById("topicInput").value.trim();
+    const catInfo = categoriesData.find((c) => c.id === currentCategory);
+    if (!topic || !catInfo?.claudeAppTriggerTemplate) {
+      btn.href = "#";
+      noteEl.textContent = topic ? "" : "먼저 주제를 고르거나 입력해 주세요.";
+      return;
+    }
+    const query = catInfo.claudeAppTriggerTemplate.replace("{topic}", topic);
+    btn.href = claudeAppLink(query);
+    noteEl.textContent = `"${query}" 문구로 클로드 앱이 열려요.`;
+  }
 
   async function loadCategories() {
     const res = await fetch("/api/blog/categories");
     const data = await res.json();
     categoriesData = data.categories;
-    document.getElementById("catChips").innerHTML = categoriesData
-      .map((c, i) => `<div class="cat-chip ${i === 0 ? "active" : ""}" data-id="${c.id}">${escapeHtml(c.label)}</div>`)
-      .join("");
+    currentCategory = categoriesData[0]?.id || "";
+
+    const btn = document.getElementById("catDropdownBtn");
+    const menu = document.getElementById("catDropdownMenu");
+    const label = document.getElementById("catDropdownLabel");
+
+    label.textContent = categoriesData[0]?.label || "카테고리";
     document.getElementById("catDesc").textContent = categoriesData[0]?.description || "";
-    document.querySelectorAll(".cat-chip").forEach((chip) => {
-      chip.onclick = () => {
-        document.querySelectorAll(".cat-chip").forEach((c) => c.classList.remove("active"));
-        chip.classList.add("active");
-        currentCategory = chip.dataset.id;
+    menu.innerHTML = categoriesData
+      .map((c, i) => `<div class="cat-dropdown-item ${i === 0 ? "active" : ""}" data-id="${c.id}">${escapeHtml(c.label)}</div>`)
+      .join("");
+
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      menu.classList.toggle("open");
+    };
+    document.addEventListener("click", () => menu.classList.remove("open"));
+    menu.onclick = (e) => e.stopPropagation();
+
+    menu.querySelectorAll(".cat-dropdown-item").forEach((item) => {
+      item.onclick = () => {
+        menu.querySelectorAll(".cat-dropdown-item").forEach((i) => i.classList.remove("active"));
+        item.classList.add("active");
+        currentCategory = item.dataset.id;
+        label.textContent = item.textContent;
         const catInfo = categoriesData.find((c) => c.id === currentCategory);
         document.getElementById("catDesc").textContent = catInfo?.description || "";
+        menu.classList.remove("open");
         loadTopics();
+        updateClaudeAppBtn();
       };
     });
+
     loadTopics();
   }
 
@@ -219,7 +274,9 @@
         .map(
           (it, i) => `
         <div class="topic-row" data-topic="${escapeHtml(it.topic)}">
-          <span><span class="topic-rank">${i + 1}</span><span class="topic-name">${escapeHtml(it.topic)}</span></span>
+          <span><span class="topic-rank">${i + 1}</span><span class="topic-name">${escapeHtml(it.topic)}</span>${
+            it.hot ? '<span class="topic-hot-badge">급상승</span>' : ""
+          }</span>
           <span class="topic-meta">${escapeHtml(it.meta || "")}</span>
         </div>`
         )
@@ -230,6 +287,7 @@
           row.classList.add("selected");
           selectedTopic = row.dataset.topic;
           document.getElementById("topicInput").value = selectedTopic;
+          updateClaudeAppBtn();
         };
       });
     } catch (err) {
@@ -237,128 +295,10 @@
     }
   }
 
-  document.querySelectorAll(".mode-option").forEach((opt) => {
-    opt.onclick = () => {
-      document.querySelectorAll(".mode-option").forEach((o) => o.classList.remove("selected"));
-      opt.classList.add("selected");
-      currentMode = opt.dataset.mode;
-      document.getElementById("imageUploadBox").style.display = currentMode === "text_images" ? "block" : "none";
-    };
-  });
-
-  document.getElementById("draftBtn").onclick = async () => {
-    const topic = document.getElementById("topicInput").value.trim();
-    if (!topic) {
-      alert("주제를 골라주시거나 직접 입력해 주세요.");
-      return;
-    }
-    const btn = document.getElementById("draftBtn");
-    const resultEl = document.getElementById("draftResult");
-    btn.disabled = true;
-    btn.textContent = "초안 만드는 중...";
-    resultEl.innerHTML = `<div class="status">초안을 짜는 중이에요...</div>`;
-
-    const form = new FormData();
-    form.append("topic", topic);
-    form.append("category", currentCategory);
-    form.append("mode", currentMode);
-    if (currentMode === "text_images") {
-      const files = Array.from(document.getElementById("draftImages").files || []).slice(0, 8);
-      files.forEach((f) => form.append("images", f));
-    }
-
-    try {
-      const res = await fetch("/api/blog/draft", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "생성 실패");
-      renderDraft(data);
-    } catch (err) {
-      resultEl.innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "초안 생성하기";
-    }
-  };
-
-  function renderDraft(draft) {
-    const resultEl = document.getElementById("draftResult");
-    const sectionsHtml = draft.sections
-      .map(
-        (s, i) => `
-      <div class="section-block">
-        ${s.image ? `<img src="${s.image}" />` : ""}
-        <div class="section-heading-input">${escapeHtml(s.heading)}</div>
-        <textarea data-section="${i}">${escapeHtml(s.body)}</textarea>
-      </div>`
-      )
-      .join("");
-
-    resultEl.innerHTML = `
-      <div class="panel">
-        <div class="section-title">생성된 초안 (직접 수정해서 완성하세요)</div>
-        ${draft.thumbnailUrl ? `<div class="thumb-box"><div class="thumb-badge">썸네일</div><img src="${draft.thumbnailUrl}" /></div>` : ""}
-        ${draft.imagesRequestedButMissing ? `<div class="note">이미지 포함 초안을 골랐지만 업로드된 사진이 없어서, 이미지 없이(글만) 만들어졌어요. 사진을 추가하려면 위에서 다시 선택해 주세요.</div>` : ""}
-        <input type="text" class="draft-title-input" id="draftTitle" value="${escapeHtml(draft.title)}" />
-        <textarea id="draftIntro">${escapeHtml(draft.intro)}</textarea>
-        ${sectionsHtml}
-        <textarea id="draftCta">${escapeHtml(draft.cta)}</textarea>
-        <div class="hashtags">${draft.hashtags.map((h) => escapeHtml(h)).join(" ")}</div>
-        <div class="note" style="margin:0;">${escapeHtml(draft.note)}</div>
-      </div>
-
-      <div class="panel">
-        <div class="section-title">확인 및 발행하기</div>
-        <label style="font-size:13px;color:#555;display:block;margin-bottom:6px;">내 네이버 블로그 아이디(선택, blog.naver.com/ 뒤에 오는 부분)</label>
-        <input type="text" id="blogIdInput" placeholder="예) myblogid" />
-        <button class="primary" id="publishBtn">📋 초안 복사하고 내 블로그 글쓰기 열기</button>
-        <div class="note" style="margin-top:10px;">
-          "발행하기"를 누르면 완성된 초안 전체가 클립보드에 복사되고, 입력한 아이디의 네이버 블로그 홈이 새 창으로 열려요. 새 창에서 <b>글쓰기</b> 버튼을 누르고 <b>붙여넣기(Ctrl+V 또는 Cmd+V)</b> 하면 바로 올릴 수 있어요. (네이버 블로그 API·로그인 정보가 없어 완전 자동 발행은 지원하지 않아요 — README에 이유를 자세히 적어뒀어요.)
-        </div>
-        <div id="publishStatus" style="margin-top:8px;"></div>
-      </div>
-    `;
-
-    document.getElementById("publishBtn").onclick = () => publishDraft();
-  }
-
-  function collectDraftText() {
-    const title = document.getElementById("draftTitle").value;
-    const intro = document.getElementById("draftIntro").value;
-    const cta = document.getElementById("draftCta").value;
-    const sectionTextareas = Array.from(document.querySelectorAll("textarea[data-section]"));
-    const sectionsText = sectionTextareas.map((ta) => ta.value).join("\n\n");
-    return `${title}\n\n${intro}\n\n${sectionsText}\n\n${cta}`;
-  }
-
-  async function publishDraft() {
-    const text = collectDraftText();
-    const statusEl = document.getElementById("publishStatus");
-    try {
-      await navigator.clipboard.writeText(text);
-      statusEl.innerHTML = `<div class="note" style="margin:0;">✅ 초안이 클립보드에 복사됐어요!</div>`;
-    } catch (err) {
-      statusEl.innerHTML = `<div class="status error">클립보드 복사에 실패했어요 — 위 내용을 직접 선택해서 복사해 주세요.</div>`;
-    }
-    const blogId = document.getElementById("blogIdInput").value.trim();
-    const blogUrl = blogId ? `https://blog.naver.com/${encodeURIComponent(blogId)}` : "https://section.blog.naver.com/BlogHome.naver";
-    window.open(blogUrl, "_blank");
-  }
-
-  async function loadWriterStatus() {
-    try {
-      const res = await fetch("/api/blog/writer-status");
-      const data = await res.json();
-      const el = document.getElementById("writerStatusNote");
-      el.innerHTML = data.ready
-        ? `<div class="note" style="margin-top:0;">✅ Claude API(${escapeHtml(data.model)})가 서버에 설정되어 있어요 — 초안 본문이 실제 문장으로 생성됩니다.</div>`
-        : `<div class="note" style="margin-top:0;">⚠️ 서버에 ANTHROPIC_API_KEY가 아직 설정되지 않았어요 — 이대로 만들면 실제 문장 대신 빈칸(✏️)만 채우면 되는 글쓰기 틀로 만들어져요. README를 참고해 키를 등록해 주세요.</div>`;
-    } catch (err) {
-      /* 상태를 못 가져와도 초안 생성 자체는 계속 진행 가능하게 조용히 무시 */
-    }
-  }
+  document.getElementById("topicInput").addEventListener("input", updateClaudeAppBtn);
 
   loadCategories();
-  loadWriterStatus();
+  updateClaudeAppBtn();
 </script>
 </body>
 </html>
