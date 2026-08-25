@@ -1,6 +1,24 @@
 const { getRelatedKeywords } = require("./naverKeywordTool");
 const { getBlogPostCount, getTodayPostCount } = require("./naverBlogSearch");
 
+// 후보 키워드마다 네이버 블로그 검색 API를 순서대로(한 번에 하나씩) 호출하면 후보가
+// 많을 때(최대 60개) 카테고리 하나 불러오는 데 수십 초가 걸립니다. 그렇다고 전부
+// 한꺼번에(Promise.all) 쏘면 네이버 API 쪽에서 순간 요청 폭주로 막힐 수 있어서, 한 번에
+// CONCURRENCY개씩만 동시에 처리하는 절충안을 씁니다.
+const CONCURRENCY = 8;
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 // 씨앗 키워드는 실제로 많이 검색되는 "2단어 정도의 대중적인" 키워드로 골랐습니다.
 // (너무 길고 구체적인 문장형 키워드는 네이버 키워드도구가 연관 키워드를 거의 못 찾아서
 // 확장이 안 되는 문제가 있었습니다 — 그래서 다시 이 방식으로 돌아왔습니다.)
@@ -45,8 +63,8 @@ async function findOpportunities(category, limit = 20, recencyMode = "all") {
   }
 
   const seen = new Map();
-  for (const seed of seeds) {
-    const related = await getRelatedKeywords(seed);
+  const relatedBySeed = await mapWithConcurrency(seeds, CONCURRENCY, (seed) => getRelatedKeywords(seed));
+  for (const related of relatedBySeed) {
     for (const item of related) {
       if (!seen.has(item.keyword)) seen.set(item.keyword, item);
     }
@@ -55,8 +73,7 @@ async function findOpportunities(category, limit = 20, recencyMode = "all") {
   // 넉넉히 뽑아둔 뒤, 블로그 검색량(경쟁)까지 확인해서 최종 20개로 추립니다.
   const candidates = Array.from(seen.values()).slice(0, limit * 3);
 
-  const results = [];
-  for (const c of candidates) {
+  const settled = await mapWithConcurrency(candidates, CONCURRENCY, async (c) => {
     try {
       const monthlySearchVolume = c.monthlyPcQcCnt + c.monthlyMobileQcCnt;
       let blogPostCount;
@@ -75,7 +92,7 @@ async function findOpportunities(category, limit = 20, recencyMode = "all") {
       // 문서가 얼마나 되는지를 보는 비율이라, 이 숫자가 "낮을수록" 경쟁이 적은(글이
       // 부족한) 틈새 키워드라는 뜻입니다 — opportunityScore와 방향이 반대인 값입니다.
       const docPerSearch = monthlySearchVolume > 0 ? blogPostCount / monthlySearchVolume : null;
-      results.push({
+      return {
         keyword: c.keyword,
         monthlySearchVolume,
         blogPostCount,
@@ -84,13 +101,15 @@ async function findOpportunities(category, limit = 20, recencyMode = "all") {
         recencyMode,
         competition: c.compIdx,
         opportunityScore: Math.round(opportunityScore * 100) / 100,
-      });
+      };
     } catch (err) {
       // 개별 키워드 하나가 실패해도 전체를 멈추지 않고 건너뜁니다.
       console.error(`[opportunityFinder] "${c.keyword}" 처리 실패:`, err.message);
+      return null;
     }
-  }
+  });
 
+  const results = settled.filter(Boolean);
   results.sort((a, b) => b.opportunityScore - a.opportunityScore);
   return results.slice(0, limit);
 }

@@ -126,6 +126,32 @@ function extractImages(html, baseUrl, ogImage, limit = 12) {
   return found.slice(0, limit);
 }
 
+// blog.naver.com의 PC용 글 페이지는 실제 본문이 <iframe id="mainFrame">로 다른 문서
+// (PostView.naver)에 들어있어서, 겉 페이지 HTML만 받아오면 og:title/본문/사진을 전혀
+// 못 찾습니다(실제로 겉 페이지의 <title>은 "블로그 이름"일 뿐, 그 글의 진짜 제목이
+// 아닙니다). m.blog.naver.com(모바일 버전)은 아이프레임 없이 본문을 페이지에 바로
+// 담고 있어서, 같은 blogId/logNo를 모바일 주소로 바꿔서 가져오면 문제없이 읽힙니다.
+function normalizeNaverBlogUrl(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  if (!/(^|\.)blog\.naver\.com$/.test(u.hostname)) return url;
+
+  const pathMatch = u.pathname.match(/^\/([^/]+)\/(\d+)\/?$/);
+  if (pathMatch) {
+    return `https://m.blog.naver.com/${pathMatch[1]}/${pathMatch[2]}`;
+  }
+  if (/PostView\.naver/i.test(u.pathname)) {
+    const blogId = u.searchParams.get("blogId");
+    const logNo = u.searchParams.get("logNo");
+    if (blogId && logNo) return `https://m.blog.naver.com/${blogId}/${logNo}`;
+  }
+  return url;
+}
+
 async function fetchPageHtml(url) {
   let parsed;
   try {
@@ -157,13 +183,14 @@ async function fetchPageHtml(url) {
 }
 
 async function extractPageData(url) {
-  const html = await fetchPageHtml(url);
+  const fetchUrl = normalizeNaverBlogUrl(url);
+  const html = await fetchPageHtml(fetchUrl);
   const titleTag = (html.match(/<title>([^<]*)<\/title>/i) || [])[1] || "";
   const ogImage = extractMeta(html, "og:image");
   const title = extractMeta(html, "og:title") || decodeHtmlEntities(titleTag.trim());
   const description = extractMeta(html, "og:description") || "";
   const bodyText = extractMainText(html);
-  const images = extractImages(html, url, ogImage);
+  const images = extractImages(html, fetchUrl, ogImage);
   return { url, title: (title || "").trim(), description: description.trim(), bodyText, images };
 }
 

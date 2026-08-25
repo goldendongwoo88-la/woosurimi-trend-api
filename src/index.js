@@ -517,6 +517,25 @@ app.get("/api/blog/topics", async (req, res) => {
   }
 });
 
+// 카테고리 하나가 처음 조회될 때(캐시 미스) 네이버 API를 여러 개 순서대로 불러와야 해서
+// 몇 초~수십 초씩 걸릴 수 있습니다. 사용자가 카테고리를 바꿀 때마다 그 지연을 겪지 않도록,
+// 서버가 켜질 때와 캐시 만료 주기에 맞춰 8개 카테고리를 미리(백그라운드에서) 데워둡니다.
+// 카테고리끼리는 순서대로(한 번에 하나씩) 데워서, 네이버 API에 순간적으로 너무 많은
+// 요청이 한꺼번에 몰리지 않게 합니다(카테고리 내부는 이미 opportunityFinder.js에서
+// 적당히 병렬 처리됩니다).
+async function warmBlogTopicsCache() {
+  for (const c of BLOG_CATEGORIES) {
+    const cached = blogTopicsCache.get(c.id);
+    if (cached && cached.expiresAt > Date.now()) continue;
+    try {
+      const data = await getTrendTopics(c.id, 20);
+      blogTopicsCache.set(c.id, { data, expiresAt: Date.now() + BLOG_TOPICS_TTL_MS });
+    } catch (err) {
+      console.error(`[blogTopicsCache] "${c.id}" 예열 실패:`, err.message);
+    }
+  }
+}
+
 // 이 서버에 Claude API 키(ANTHROPIC_API_KEY)가 설정되어 있는지 알려줍니다. 키가 없어도
 // /api/blog/draft 자체는 실패하지 않고, 실제 문장 대신 "빈칸만 채우면 되는 글쓰기 틀"로
 // 자동 대체됩니다.
@@ -722,6 +741,12 @@ async function refresh() {
 // 서버가 켜지자마자 1회 즉시 수집하고, 이후 정해진 주기로 반복합니다.
 refresh();
 cron.schedule(REFRESH_CRON, refresh);
+
+// 블로그 카테고리 트렌드도 마찬가지로 서버 시작 시 1회 예열하고, 캐시 TTL과 같은
+// 주기로 다시 예열합니다(둘 다 시간이 걸리는 백그라운드 작업이라 await 없이 그냥
+// 실행만 시켜두고 서버 시작을 막지 않습니다).
+warmBlogTopicsCache();
+cron.schedule(`*/${Math.max(1, Math.round(BLOG_TOPICS_TTL_MS / 60000))} * * * *`, warmBlogTopicsCache);
 
 app.listen(PORT, () => {
   console.log(`우수리미 트렌드 API 서버 실행 중 — http://localhost:${PORT}`);
