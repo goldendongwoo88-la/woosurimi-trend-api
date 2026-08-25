@@ -1,4 +1,8 @@
-require("dotenv").config();
+// override: true — 이 프로젝트의 .env 파일 값이 항상 우선하게 합니다. 기본값(override
+// 없음)은 이미 시스템/셸에 같은 이름의 환경변수가 있으면 .env 값을 무시하는데, 실제로
+// 이 개발 환경에 예전에 다른 용도로 설정해둔 ELEVENLABS_API_KEY가 남아있어서, .env에
+// 새 키를 넣어도 계속 예전 키가 쓰이는 문제를 겪었습니다.
+require("dotenv").config({ override: true });
 const express = require("express");
 const cors = require("cors");
 const cron = require("node-cron");
