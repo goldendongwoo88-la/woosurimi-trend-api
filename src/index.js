@@ -531,7 +531,7 @@ app.get("/api/blog/topics", async (req, res) => {
 // 카테고리끼리는 순서대로, 그리고 사이에 간격을 두고 데워서(카테고리 내부는 이미
 // opportunityFinder.js에서 적당히 병렬 처리되므로, 카테고리 8개를 쉬지 않고 곧바로
 // 이어붙이면 네이버 API 쪽에서 짧은 시간에 너무 많은 요청으로 보고 막을 수 있습니다).
-const WARM_GAP_MS = 4000;
+const WARM_GAP_MS = 1000;
 async function warmBlogTopicsCache() {
   for (const c of BLOG_CATEGORIES) {
     const cached = blogTopicsCache.get(c.id);

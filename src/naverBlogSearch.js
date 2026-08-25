@@ -4,8 +4,14 @@
 // NAVER API HUB 경로/헤더를 사용합니다.
 // 공식 문서: https://guide.ncloud-docs.com/docs/apihub-use
 
+const { createLimiter } = require("./concurrencyLimiter");
+
 const BASE_URL = "https://naverapihub.apigw.ntruss.com";
 const PATH = "/search/v1/blog";
+
+// 후보 키워드가 많을 때(최대 60개) 이 함수가 그만큼 많이 동시에 불릴 수 있어서, API
+// 쪽 레이트리밋을 피하려고 프로세스 전체 기준 동시 요청 수를 제한합니다.
+const limit = createLimiter(5);
 
 async function getBlogPostCount(keyword) {
   const { NAVER_APIHUB_KEY_ID, NAVER_APIHUB_KEY_SECRET } = process.env;
@@ -15,21 +21,23 @@ async function getBlogPostCount(keyword) {
     );
   }
 
-  const url = `${BASE_URL}${PATH}?query=${encodeURIComponent(keyword)}&display=1`;
-  const res = await fetch(url, {
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": NAVER_APIHUB_KEY_ID,
-      "X-NCP-APIGW-API-KEY": NAVER_APIHUB_KEY_SECRET,
-    },
+  return limit(async () => {
+    const url = `${BASE_URL}${PATH}?query=${encodeURIComponent(keyword)}&display=1`;
+    const res = await fetch(url, {
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": NAVER_APIHUB_KEY_ID,
+        "X-NCP-APIGW-API-KEY": NAVER_APIHUB_KEY_SECRET,
+      },
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`블로그 검색 API 오류 (${res.status}): ${body.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    return data.total || 0;
   });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`블로그 검색 API 오류 (${res.status}): ${body.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  return data.total || 0;
 }
 
 // 오늘(한국시간 기준) 발행된 블로그 글이 몇 개인지 셉니다.
@@ -56,29 +64,31 @@ async function getTodayPostCount(keyword) {
     );
   }
 
-  // sort=date로 최신순 100개를 받아서, 그중 오늘 날짜인 것만 직접 셉니다.
-  const url = `${BASE_URL}${PATH}?query=${encodeURIComponent(keyword)}&display=100&sort=date`;
-  const res = await fetch(url, {
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": NAVER_APIHUB_KEY_ID,
-      "X-NCP-APIGW-API-KEY": NAVER_APIHUB_KEY_SECRET,
-    },
+  return limit(async () => {
+    // sort=date로 최신순 100개를 받아서, 그중 오늘 날짜인 것만 직접 셉니다.
+    const url = `${BASE_URL}${PATH}?query=${encodeURIComponent(keyword)}&display=100&sort=date`;
+    const res = await fetch(url, {
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": NAVER_APIHUB_KEY_ID,
+        "X-NCP-APIGW-API-KEY": NAVER_APIHUB_KEY_SECRET,
+      },
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`블로그 검색 API 오류 (${res.status}): ${body.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const items = data.items || [];
+    const today = todayYyyymmddKST();
+    const todayItems = items.filter((it) => it.postdate === today);
+
+    return {
+      count: todayItems.length,
+      approximate: todayItems.length >= 100, // 100개를 다 채웠으면 실제로는 더 많을 수 있다는 뜻
+    };
   });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`블로그 검색 API 오류 (${res.status}): ${body.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  const items = data.items || [];
-  const today = todayYyyymmddKST();
-  const todayItems = items.filter((it) => it.postdate === today);
-
-  return {
-    count: todayItems.length,
-    approximate: todayItems.length >= 100, // 100개를 다 채웠으면 실제로는 더 많을 수 있다는 뜻
-  };
 }
 
 module.exports = { getBlogPostCount, getTodayPostCount };
