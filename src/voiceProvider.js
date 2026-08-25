@@ -36,7 +36,7 @@ const PROVIDERS = {
   azure: {
     label: "Microsoft Azure Speech",
     configured: () => !!(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION),
-    defaultVoice: process.env.AZURE_SPEECH_VOICE || "ko-KR-SunHiNeural", // 기본 한국어 여성 뉴럴 보이스
+    defaultVoice: process.env.AZURE_SPEECH_VOICE || "ko-KR-InJoonNeural", // 사장님이 샘플 듣고 고른 기본 한국어 남성 뉴럴 보이스
   },
 };
 
