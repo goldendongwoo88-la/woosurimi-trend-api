@@ -173,7 +173,13 @@ async function synthesizeAzure(text, voiceId, destPath) {
   const key = process.env.AZURE_SPEECH_KEY;
   const region = process.env.AZURE_SPEECH_REGION;
   const voice = voiceId || PROVIDERS.azure.defaultVoice;
-  const ssml = `<speak version='1.0' xml:lang='ko-KR'><voice name='${escapeXml(voice)}'>${escapeXml(text)}</voice></speak>`;
+  // 숏폼 나레이션은 일반 낭독보다 살짝 빠르게 읽는 게 자연스럽고(요즘 쇼츠 톤),
+  // 장면당 길이도 짧아져서 전체 영상이 10~25초 안에 들어옵니다.
+  const rate = process.env.AZURE_SPEECH_RATE || "+12%";
+  const ssml =
+    `<speak version='1.0' xml:lang='ko-KR'><voice name='${escapeXml(voice)}'>` +
+    `<prosody rate='${escapeXml(rate)}'>${escapeXml(text)}</prosody>` +
+    `</voice></speak>`;
 
   const res = await fetchWithTimeout(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: "POST",

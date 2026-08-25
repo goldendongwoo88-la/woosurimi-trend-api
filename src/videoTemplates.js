@@ -8,6 +8,28 @@ const FONT_NAME = "Woosurimi Caption KR";
 // ⚠️ ASS 스타일의 함정: BorderStyle=3(불투명 박스)일 때 박스 배경색은 BackColour가
 // 아니라 OutlineColour 필드로 정해집니다(BackColour는 BorderStyle=1일 때 그림자
 // 색으로만 쓰입니다). 그래서 아래 템플릿들은 박스색을 OutlineColour에 넣습니다.
+//
+// 자막은 두 겹으로 들어갑니다:
+//   - forceStyle : 장면마다 바뀌는 하단 멘트(구어체 설명) — Alignment=2(하단 중앙)
+//   - hookStyle  : 영상 내내 상단에 고정으로 떠 있는 후킹 문구 — Alignment=6(상단 중앙)
+// ⚠️ 여기서 쓰는 Alignment는 ASS v4+ 넘패드 방식(8=상단중앙)이 아니라 구식 SSA 방식
+// 입니다. 실제로 찍어보니 8은 "중앙-왼쪽"으로 나왔고, 상단 중앙은 6이었습니다
+// (SSA: 1~3=하단, 5~7=상단, 9~11=중앙).
+// 유튜브 쇼츠에서 흔히 쓰는 "상단 후킹 + 하단 자막" 구성을 그대로 따른 것입니다.
+// 상단 후킹은 스크롤을 멈추게 하는 역할이라 하단 멘트보다 글자를 크고 두껍게 씁니다.
+
+// ⚠️ 크기/위치 숫자의 기준: ffmpeg가 .srt를 내부적으로 .ass로 바꿀 때 기준 해상도를
+// PlayResY=288로 잡고, libass가 그걸 실제 영상 높이(1280)로 확대합니다. 즉 실제 픽셀
+// ≈ 값 × (1280/288) ≈ 값 × 4.44 입니다. 아래 숫자들은 사장님이 주신 참고 쇼츠 2편을
+// 프레임 단위로 실측한 값(후킹 글자 ~70px, 하단 자막 ~50px, 후킹 위쪽 여백 ~130px,
+// 하단 자막 아래 여백 ~300px)을 이 배율로 되돌려 계산한 것입니다.
+const HOOK_FONT_SIZE = 16; // ≈ 71px
+const HOOK_MARGIN_V = 29; // ≈ 129px (화면 위에서부터)
+const BODY_FONT_SIZE = 12; // ≈ 53px
+const BODY_MARGIN_V = 68; // ≈ 302px (화면 아래에서부터)
+
+// 상단 후킹 문구 기본형: 굵은 흰 글씨 + 두꺼운 검은 테두리(어떤 사진 위에서도 잘 보임).
+const HOOK_BASE = `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`;
 
 const TEMPLATES = [
   {
@@ -16,8 +38,9 @@ const TEMPLATES = [
     description: "흰 글씨 + 검은 반투명 박스, 화면 아래쪽 — 어디에나 무난하게 잘 어울려요",
     moodKeywords: ["세일", "할인", "핫딜", "특가", "정보", "리뷰", "후기"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=20,PrimaryColour=&H00FFFFFF,` +
-      "BorderStyle=3,OutlineColour=&H99000000,Outline=1,Shadow=0,Alignment=2,MarginV=140",
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00FFFFFF,` +
+      `BorderStyle=3,OutlineColour=&H99000000,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
+    hookStyle: HOOK_BASE,
   },
   {
     id: "soft-cream",
@@ -25,8 +48,10 @@ const TEMPLATES = [
     description: "짙은 글씨 + 따뜻한 크림색 박스, 화면 아래쪽 — 카페/여행/일상 브이로그에 잘 어울려요",
     moodKeywords: ["카페", "감성", "여행", "일상", "브이로그", "힐링", "하루"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=20,PrimaryColour=&H00303030,` +
-      "BorderStyle=3,OutlineColour=&HB0E8F0F5,Outline=1,Shadow=0,Alignment=2,MarginV=140",
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00303030,` +
+      `BorderStyle=3,OutlineColour=&HB0E8F0F5,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
+    // 크림 톤에 맞춰 상단 후킹도 따뜻한 아이보리 글씨로.
+    hookStyle: `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H00F0F6FA,OutlineColour=&H00202020,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`,
   },
   {
     id: "neon-pink",
@@ -34,17 +59,20 @@ const TEMPLATES = [
     description: "핑크색 글씨 + 박스 없이 테두리만, 화면 아래쪽 — 트렌디하고 힙한 콘텐츠에 잘 어울려요",
     moodKeywords: ["숏폼", "챌린지", "트렌드", "밈", "힙", "스타일", "패션"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=22,PrimaryColour=&H00AA5AFF,OutlineColour=&H00201020,` +
-      "BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=160",
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00AA5AFF,OutlineColour=&H00201020,` +
+      `BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=${BODY_MARGIN_V}`,
+    hookStyle: `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H00AA5AFF,OutlineColour=&H00201020,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`,
   },
   {
-    id: "vivid-yellow-top",
-    label: "비비드 옐로우(상단)",
-    description: "노란 글씨 + 검은 박스, 화면 위쪽 — 세일/이벤트처럼 눈에 확 띄어야 할 때 잘 어울려요",
+    id: "vivid-yellow",
+    label: "비비드 옐로우",
+    description: "노란 글씨 + 검은 박스 — 세일/이벤트처럼 눈에 확 띄어야 할 때 잘 어울려요",
     moodKeywords: ["이벤트", "오픈", "런칭", "신상", "인기", "대박", "쇼핑"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=21,PrimaryColour=&H0000D6FF,` +
-      "BorderStyle=3,OutlineColour=&H99000000,Outline=1,Shadow=0,Alignment=8,MarginV=80",
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H0000D6FF,` +
+      `BorderStyle=3,OutlineColour=&H99000000,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
+    // 상단 후킹도 노란 글씨로 통일해서 강한 대비를 유지합니다.
+    hookStyle: `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H0000D6FF,OutlineColour=&H00000000,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`,
   },
   {
     id: "clean-blue",
@@ -52,8 +80,9 @@ const TEMPLATES = [
     description: "흰 글씨 + 차분한 블루 박스, 화면 아래쪽 — 제품 소개/정보성 콘텐츠에 잘 어울려요",
     moodKeywords: ["가격", "스펙", "비교", "추천", "가이드", "정리"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=19,PrimaryColour=&H00FFFFFF,` +
-      "BorderStyle=3,OutlineColour=&HA0783C1E,Outline=1,Shadow=0,Alignment=2,MarginV=140",
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00FFFFFF,` +
+      `BorderStyle=3,OutlineColour=&HA0783C1E,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
+    hookStyle: HOOK_BASE,
   },
 ];
 

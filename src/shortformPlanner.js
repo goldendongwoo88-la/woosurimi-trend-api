@@ -15,8 +15,25 @@ const path = require("path");
 const { extractPageData } = require("./pageExtractor");
 const { generateCaptionFromImage } = require("./imageCaption");
 const { isConfigured: isVisionConfigured } = require("./claudeClient");
+const { writeShortformScript, toConversational, shorten, buildTemplateHook } = require("./shortformScriptWriter");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
+
+// 숏폼은 너무 짧으면 내용이 안 들어오고, 너무 길면 이탈합니다. 장면 수에 맞춰 장면당
+// 길이를 정해서 전체가 대략 10~25초(목표 ~20초)에 들어오게 합니다. 실제로는 AI 성우
+// 나레이션이 이 값보다 길면 그 장면이 자동으로 늘어나므로(목소리가 잘리면 안 되니까),
+// 여기 값은 "나레이션이 없을 때의 기준 길이"에 가깝습니다.
+const TARGET_TOTAL_SECONDS = 20;
+// AI 성우 나레이션을 켜면 장면 길이가 "그 문장을 다 읽는 시간"까지 자동으로 늘어납니다.
+// 자막 한 줄(최대 22자)을 읽는 데 대략 3초쯤 걸리므로, 장면이 너무 많으면 나레이션을
+// 켰을 때 영상이 40초를 훌쩍 넘어가 버립니다(실제로 12장면일 때 47초가 나왔습니다).
+// 그래서 사진이 아무리 많아도 장면 수는 이 값까지만 씁니다 — 7장면 × 약 3.4초 ≈ 24초로
+// 목표 구간(10~25초) 안에 들어옵니다(8장면으로 재보니 28초가 나와서 7로 낮췄습니다).
+const MAX_SCENES = 7;
+function recommendDuration(sceneCount) {
+  const raw = TARGET_TOTAL_SECONDS / Math.max(sceneCount, 1);
+  return Math.round(Math.min(Math.max(raw, 1.8), 3.2) * 10) / 10;
+}
 
 function splitSentences(text) {
   return (text || "")
@@ -82,10 +99,11 @@ const HOOK_BY_SOURCE = {
   travel: (title) => (title ? `"${title}" — 여기 실화냐?!` : "요즘 다들 여기 간대요"),
   blog: (title) => (title ? `"${title}" — 요즘 이거 아세요?` : "요즘 화제인 이 이야기, 아세요?"),
 };
+// 마무리 멘트도 참고 영상 톤(낭독체·짧은 문장 조각)에 맞춰 짧게 씁니다.
 const CTA_BY_SOURCE = {
-  shopping: "지금 바로 링크 확인하고 득템하세요! (구매 링크는 설명란에 있어요)",
-  travel: "자세한 여행 코스는 원문 링크에서 확인해보세요! 저장하고 나중에 또 보세요 :)",
-  blog: "더 자세한 내용은 원문 링크에서 확인해보세요! 팔로우 하고 더 많은 정보 받아가세요 :)",
+  shopping: "링크는 설명란에 있음",
+  travel: "코스는 원문에 다 있음",
+  blog: "자세한 건 원문에 있음",
 };
 const HASHTAG_EXTRA_BY_SOURCE = {
   shopping: ["추천템", "득템"],
@@ -108,46 +126,56 @@ async function planShortform(url, source = "blog", sceneCountOverride = null) {
   const src = normalizeSource(source);
   const page = await extractPageData(url);
   const images = page.images && page.images.length ? page.images : [];
-  const sceneCount = sceneCountOverride || Math.min(Math.max(images.length, 6), 12);
+  const sceneCount = sceneCountOverride || Math.min(Math.max(images.length, 6), MAX_SCENES);
 
   const sentences = splitSentences(page.bodyText || page.description);
   const sceneSentences = pickSceneSentences(sentences, sceneCount, page.title);
   const price = src === "shopping" ? findPrice(page.bodyText) : null;
 
-  const hook = HOOK_BY_SOURCE[src](page.title);
   const cta = CTA_BY_SOURCE[src];
 
-  // 씬 1은 항상 오프닝 후킹, 마지막 씬은 항상 CTA로 고정하고, 그 사이를 본문 문장으로 채웁니다.
-  const middleCount = Math.max(sceneCount - 2, 1);
-  const middleSentences =
-    sceneSentences.length > 0
-      ? sceneSentences.slice(0, middleCount)
-      : [page.description || "원문에서 핵심 문장을 찾지 못했어요 — 원문을 직접 확인해 주세요."];
+  // 원문 문장을 그대로 자막으로 쓰지 않고, "친구한테 말해주듯" 구어체 숏폼 대본으로
+  // 다시 씁니다. 상단 고정 후킹 문구(hook)와 장면별 하단 멘트(lines)를 함께 받습니다.
+  const script = await writeShortformScript({
+    title: page.title,
+    bodyText: page.bodyText || page.description,
+    sentences: sceneSentences,
+    sceneCount,
+    source: src,
+  });
+
+  const hookText = script.hook || HOOK_BY_SOURCE[src](page.title);
+
+  // 대본 줄 수가 장면 수보다 모자라면, 남는 장면은 원문 문장을 구어체로 다듬어 채웁니다
+  // (빈 자막으로 두면 그 장면만 휑하게 지나가서 어색합니다).
+  const lines = script.lines.slice(0, sceneCount);
+  for (let i = lines.length; i < sceneCount; i++) {
+    const fallback = sceneSentences[i] ? shorten(toConversational(sceneSentences[i]), 30) : "";
+    lines.push(fallback);
+  }
+  // 마지막 줄은 항상 자연스러운 마무리(CTA)로 덮어씁니다.
+  lines[lines.length - 1] = price ? `${cta} (${price})` : cta;
 
   const pickImage = (idx) => (images.length ? images[idx % images.length] : null);
 
-  const scenes = [];
-  scenes.push({ index: 1, role: "hook", caption: hook, image: pickImage(0) });
-  middleSentences.forEach((sentence, i) => {
-    scenes.push({ index: scenes.length + 1, role: "body", caption: sentence, image: pickImage(i + 1) });
-  });
-  scenes.push({
-    index: scenes.length + 1,
-    role: "cta",
-    caption: price ? `${cta}\n가격: ${price}` : cta,
-    image: pickImage(scenes.length),
-  });
+  const scenes = lines.map((line, i) => ({
+    index: i + 1,
+    role: i === 0 ? "hook" : i === lines.length - 1 ? "cta" : "body",
+    caption: line,
+    image: pickImage(i),
+  }));
 
-  const fullScript = scenes.map((s) => `[씬 ${s.index}] ${s.caption}`).join("\n\n");
+  const fullScript = [`[상단 고정] ${hookText}`, ...scenes.map((s) => `[씬 ${s.index}] ${s.caption}`)].join("\n\n");
 
-  // 장면이 많아질수록(=사진을 많이 써서) 장면당 길이를 짧게 잡아야 숏폼다운 15~20초
-  // 안팎에 맞습니다. 렌더링 화면의 "장면당 길이" 입력칸 기본값으로 씁니다.
-  const recommendedDurationPerScene = scenes.length <= 6 ? 3 : scenes.length <= 8 ? 2.4 : 1.8;
+  const recommendedDurationPerScene = recommendDuration(scenes.length);
 
   return {
     sourceUrl: url,
     source: src,
     sourceTitle: page.title,
+    hookText, // 영상 내내 화면 상단에 고정으로 붙는 후킹 문구
+    scriptGeneratedBy: script.generatedBy,
+    scriptNote: script.note,
     price,
     imagesFound: images.length,
     sourceImages: images, // 씬 에디터에서 "다른 사진으로 교체"할 때 고를 수 있는 원문 사진 후보 전체
@@ -249,11 +277,13 @@ async function planFromPhotos(photos, topic, { source = "blog", summaryText = ""
     sourceUrl: null,
     source: src,
     sourceTitle: cleanTopic,
+    hookText: buildTemplateHook(cleanTopic), // 자동컷은 원문 글이 없으니 주제를 그대로 상단 문구로 씁니다
     price: null,
     imagesFound: photos.length,
     sourceImages: photos.map((p) => p.url).filter(Boolean), // 씬 에디터에서 다른 업로드 사진으로 바꿔 쓸 수 있게 전체 목록도 같이 줍니다
     scenes,
     fullScript,
+    recommendedDurationPerScene: recommendDuration(scenes.length),
     hashtags: extractHashtags(cleanTopic, HASHTAG_EXTRA_BY_SOURCE[src]),
     note: note.trim(),
   };

@@ -49,16 +49,18 @@ const CARD_W = CARD_CONTENT_W + CARD_BORDER * 2;
 const CARD_H = CARD_CONTENT_H + CARD_BORDER * 2;
 const CARD_Y_OFFSET = 55; // 화면 정중앙보다 이만큼(px) 위로 올려서 아래쪽 자막 공간 확보
 
+// 목록 맨 앞이 화면(드롭다운)의 기본 선택값이 됩니다 — 숏폼은 세로 화면을 꽉 채우는
+// 게 기본이라 "full"을 앞에 둡니다.
 const FRAME_STYLES = [
+  {
+    id: "full",
+    label: "세로 꽉 채우기 (숏폼 기본)",
+    description: "사진을 9:16 세로 화면에 여백 없이 꽉 채워요 — 유튜브 쇼츠/릴스에 올릴 때 기본으로 쓰는 방식이에요.",
+  },
   {
     id: "polaroid",
     label: "포토카드(폴라로이드)",
-    description: "사진을 하얀 테두리 카드로 두고, 배경은 같은 사진을 흐리게 확대해서 채워요 — 요즘 감성 숏폼에서 많이 쓰는 스타일이에요.",
-  },
-  {
-    id: "full",
-    label: "화면 꽉 채우기",
-    description: "사진을 화면 전체에 꽉 채우는 예전 스타일이에요. 사진 안에 이미 여백 없이 꽉 찬 정보(표, 인포그래픽 등)가 있을 때 잘 어울려요.",
+    description: "사진을 하얀 테두리 카드로 두고, 배경은 같은 사진을 흐리게 확대해서 채워요 — 감성 브이로그 느낌을 낼 때 써보세요.",
   },
 ];
 
@@ -137,6 +139,32 @@ function buildCaptionChunks(text, linesPerChunk = 2, maxCharsPerLine = 12) {
 // 자막 덩어리 하나당 최소 이 정도(초)는 보여야 읽을 수 있다고 보고, 장면 길이가
 // 너무 짧으면(나레이션도 없고 durationPerScene도 짧으면) 이 값을 기준으로 늘려줍니다.
 const MIN_SECONDS_PER_CAPTION_CHUNK = 1.4;
+
+// 상단 후킹 문구는 하단 자막보다 글자가 커서, 한 줄에 들어가는 글자 수가 더 적습니다.
+const HOOK_MAX_CHARS_PER_LINE = 12;
+
+// 후킹 문구를 그냥 순서대로 줄바꿈하면 마지막 줄에 "6종" 같은 한 단어만 덩그러니
+// 남아 3줄이 되어버립니다(참고 영상은 항상 2줄). 그래서 두 줄로 나눌 때는 양쪽 길이가
+// 최대한 비슷해지는 지점에서 끊습니다.
+function wrapHookLines(text) {
+  const clean = (text || "").replace(/\s+/g, " ").trim();
+  if (clean.length <= HOOK_MAX_CHARS_PER_LINE) return [clean];
+
+  const words = clean.split(" ");
+  let best = null;
+  // 단어 사이 어디서 끊을지 전부 따져보고, 두 줄 길이 차이가 가장 작은 곳을 고릅니다.
+  for (let i = 1; i < words.length; i++) {
+    const first = words.slice(0, i).join(" ");
+    const second = words.slice(i).join(" ");
+    const longest = Math.max(first.length, second.length);
+    const diff = Math.abs(first.length - second.length);
+    // 한 줄 한도를 넘는 후보는 크게 감점해서 되도록 피합니다.
+    const penalty = longest > HOOK_MAX_CHARS_PER_LINE ? 100 + longest : 0;
+    const score = diff + penalty;
+    if (!best || score < best.score) best = { score, lines: [first, second] };
+  }
+  return best ? best.lines : wrapCaptionLines(clean, HOOK_MAX_CHARS_PER_LINE);
+}
 
 function estimateMinDurationForCaption(text) {
   return buildCaptionChunks(text).length * MIN_SECONDS_PER_CAPTION_CHUNK;
@@ -244,7 +272,9 @@ async function renderSceneSegment({
   animate = true,
   narrationPath = null,
   templateId = "bold-black",
-  frameStyle = "polaroid",
+  frameStyle = "full",
+  hookText = "",
+  encodePreset = "veryfast",
   fadeIn = true,
   fadeOut = true,
 }) {
@@ -255,8 +285,27 @@ async function renderSceneSegment({
   fs.writeFileSync(srtFile, srtContent, "utf8");
 
   const fontsDir = escapeFilterPath(path.dirname(FONT_PATH));
-  const forceStyle = getTemplate(templateId).forceStyle;
-  const subtitles = `subtitles=filename='${escapeFilterPath(srtFile)}':fontsdir='${fontsDir}':force_style='${forceStyle}'`;
+  const template = getTemplate(templateId);
+  const tempFiles = [srtFile];
+
+  // 자막은 두 겹입니다(유튜브 쇼츠에서 흔히 쓰는 구성):
+  //   - 상단: 영상 내내 안 바뀌는 후킹 문구(hookText) — 스크롤하다 멈추게 만드는 역할
+  //   - 하단: 장면마다 바뀌는 구어체 멘트(captionText) — 실제 내용 전달
+  // libass subtitles 필터를 두 번 이어 붙여서 각각 다른 스타일/위치로 얹습니다.
+  const subtitleFilters = [
+    `subtitles=filename='${escapeFilterPath(srtFile)}':fontsdir='${fontsDir}':force_style='${template.forceStyle}'`,
+  ];
+  if (hookText && hookText.trim()) {
+    const hookSrtFile = outPath.replace(/\.mp4$/, ".hook.srt");
+    // 후킹 문구는 장면 내내 계속 떠 있어야 해서 구간을 하나만 만듭니다.
+    const hookLines = wrapHookLines(hookText.trim()).join("\n");
+    fs.writeFileSync(hookSrtFile, `1\n${srtTimestamp(0)} --> ${srtTimestamp(duration)}\n${hookLines}\n\n`, "utf8");
+    tempFiles.push(hookSrtFile);
+    subtitleFilters.push(
+      `subtitles=filename='${escapeFilterPath(hookSrtFile)}':fontsdir='${fontsDir}':force_style='${template.hookStyle}'`
+    );
+  }
+  const subtitles = subtitleFilters.join(",");
 
   const fadeSteps = [];
   if (fadeIn) fadeSteps.push(`fade=t=in:st=0:d=${FADE_SEC}`);
@@ -321,14 +370,19 @@ async function renderSceneSegment({
       "-map", "[outv]",
       "-map", "2:a",
       "-c:v", "libx264",
-      "-preset", "veryfast",
+      "-preset", encodePreset,
       "-pix_fmt", "yuv420p",
       "-c:a", "aac",
-      "-shortest",
+      // 나레이션 mp3는 장면 길이보다 짧을 수 있습니다. 예전엔 "-shortest"를 썼는데,
+      // 그러면 장면 조각이 나레이션 길이만큼 짧게 잘려버려서 나중에 이어붙일 때
+      // (xfade offset 계산이 계획한 길이 기준이라) 영상이 통째로 깨졌습니다.
+      // 그래서 뒤를 무음으로 채우고(apad) 길이를 장면 길이로 못박습니다.
+      "-af", "apad",
+      "-t", String(duration),
       outPath,
     ];
     await runFfmpeg(args);
-    fs.unlinkSync(srtFile);
+    tempFiles.forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
     return;
   }
 
@@ -364,14 +418,16 @@ async function renderSceneSegment({
     "-map", "0:v",
     "-map", "1:a",
     "-c:v", "libx264",
-    "-preset", "veryfast",
+    "-preset", encodePreset,
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
-    "-shortest",
+    // (위 폴라로이드 분기와 같은 이유로) 오디오를 무음으로 채워 장면 길이를 고정합니다.
+    "-af", "apad",
+    "-t", String(duration),
     outPath,
   ];
   await runFfmpeg(args);
-  fs.unlinkSync(srtFile);
+  tempFiles.forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
 }
 
 // 하드컷(그냥 순서대로 이어붙이기) — xfade 크로스페이드가 어떤 이유로든 실패했을 때만
@@ -489,8 +545,10 @@ async function renderShortformVideo(
     animate = true,
     voice = null,
     templateId = "bold-black",
-    frameStyle = "polaroid",
+    frameStyle = "full", // 숏폼은 세로 화면을 꽉 채우는 게 기본(폴라로이드 카드는 선택 옵션)
+    hookText = "", // 영상 내내 상단에 고정으로 붙는 후킹 문구
     fastConcat = false, // true면 크로스페이드 없이 하드컷으로 이어붙여 렌더링 속도를 크게 아낌(미리보기용)
+    encodePreset = "veryfast", // 미리보기는 "ultrafast"로 더 빠르게
   } = {}
 ) {
   if (!scenes || !scenes.length) throw new Error("장면(scene)이 없습니다.");
@@ -563,6 +621,8 @@ async function renderShortformVideo(
         narrationPath,
         templateId,
         frameStyle,
+        hookText,
+        encodePreset,
         fadeIn: i === 0,
         fadeOut: i === scenes.length - 1,
       });

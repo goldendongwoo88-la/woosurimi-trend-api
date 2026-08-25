@@ -348,9 +348,13 @@ app.post("/api/shortform/recommend", async (req, res) => {
     .map(([key, v]) => ({ provider: key, label: v.label }));
 
   const previewScenes = scenes.slice(0, 2); // 미리보기는 앞부분 최대 2장면만
-  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "polaroid";
+  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "full";
+  const hookText = (req.body.hookText || "").trim();
   const RECIPE_COUNT = 5;
-  const DEADLINE_MS = 60000;
+  // 무료 Render 서버는 CPU가 느려서 5개를 다 만들려면 시간이 꽤 걸립니다. 아래
+  // renderShortformVideo 옵션(ultrafast 인코딩 + 애니메이션 끄기 + 하드컷)으로 장면당
+  // 렌더링을 최대한 가볍게 만들고, 데드라인도 5개를 채울 수 있을 만큼 넉넉히 줍니다.
+  const DEADLINE_MS = 150000;
   const startedAt = Date.now();
   const recipes = [];
   let timedOut = false;
@@ -368,13 +372,15 @@ app.post("/api/shortform/recommend", async (req, res) => {
     let previewError = null;
     try {
       const result = await renderShortformVideo(previewScenes, {
-        durationPerScene: 1.3,
+        durationPerScene: 2,
         bgmPath: getTrackPath(bgm.id),
-        animate: true,
+        animate: false, // 켄번즈(zoompan)는 CPU를 많이 먹어서 미리보기에선 끕니다
         voice: null, // 미리보기는 속도를 위해 나레이션 없이 만듭니다
         templateId: template.id,
         frameStyle,
+        hookText,
         fastConcat: true, // 미리보기는 크로스페이드 없이 하드컷으로(훨씬 빠름)
+        encodePreset: "ultrafast",
       });
       previewPath = result.publicPath;
     } catch (err) {
@@ -441,10 +447,11 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   const voiceProvider = ["clova", "typecast", "elevenlabs", "azure"].includes(req.body.voiceProvider) ? req.body.voiceProvider : null;
   const voice = voiceProvider ? { provider: voiceProvider, voiceId: req.body.voiceId || null } : null;
   const templateId = TEMPLATES.some((t) => t.id === req.body.templateId) ? req.body.templateId : "bold-black";
-  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "polaroid";
+  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "full";
+  const hookText = (req.body.hookText || "").trim();
 
   try {
-    const result = await renderShortformVideo(scenes, { durationPerScene, bgmPath, animate, voice, templateId, frameStyle });
+    const result = await renderShortformVideo(scenes, { durationPerScene, bgmPath, animate, voice, templateId, frameStyle, hookText });
 
     // 방금 만든 영상의 "진짜 인터넷 주소"를 QR 코드로 만들어서, 휴대폰 카메라로
     // 바로 찍어 다운로드 페이지로 이동할 수 있게 해줍니다.
