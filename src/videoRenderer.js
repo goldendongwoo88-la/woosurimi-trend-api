@@ -71,9 +71,17 @@ const FRAME_STYLES = [
 // 수 있게(또는 사용자에게 실패로 보여줄 수 있게) 합니다.
 const FFMPEG_TIMEOUT_MS = 90000;
 
+// ⚠️ Render 무료 플랜은 CPU가 0.1개뿐입니다. ffmpeg가 기본값대로 CPU를 최대한 끌어쓰면
+// Node가 CPU를 못 받아 헬스체크(5초 안에 응답)에 실패하고, 60초 이상 실패하면 Render가
+// 인스턴스를 통째로 재시작해 버립니다(실제로 렌더링 도중 서버가 죽고 작업이 사라졌습니다).
+// 그래서 ffmpeg가 쓰는 스레드 수를 제한해 서버가 숨 쉴 틈을 남겨둡니다.
+const FFMPEG_THREADS = process.env.FFMPEG_THREADS || "1";
+
 function runFfmpeg(args) {
+  // -threads는 입력 옵션보다 앞에 두어도 전역으로 적용됩니다.
+  const withThreads = ["-threads", FFMPEG_THREADS, ...args];
   return new Promise((resolve, reject) => {
-    execFile(ffmpegPath, args, { maxBuffer: 1024 * 1024 * 100, timeout: FFMPEG_TIMEOUT_MS }, (err, stdout, stderr) => {
+    execFile(ffmpegPath, withThreads, { maxBuffer: 1024 * 1024 * 100, timeout: FFMPEG_TIMEOUT_MS }, (err, stdout, stderr) => {
       if (err) {
         const tail = (stderr || "").toString().split("\n").slice(-25).join("\n");
         const reason = err.killed ? `ffmpeg가 ${FFMPEG_TIMEOUT_MS / 1000}초 안에 끝나지 않아 중단했습니다.` : tail || err.message;
@@ -648,6 +656,11 @@ async function renderShortformVideo(
       });
       segmentPaths.push(segPath);
       durations.push(sceneDuration);
+
+      // 장면 사이에 아주 짧은 틈을 둡니다. ffmpeg가 CPU를 계속 붙잡고 있으면 서버가
+      // 헬스체크에 제때 응답하지 못해 Render가 인스턴스를 재시작해 버리기 때문에,
+      // 중간중간 서버가 숨 쉴 틈을 만들어 주는 용도입니다.
+      await new Promise((r) => setTimeout(r, 400));
     }
 
     const concatenatedPath = path.join(workDir, "concat.mp4");
