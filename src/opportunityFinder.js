@@ -5,7 +5,7 @@ const { getBlogPostCount, getTodayPostCount } = require("./naverBlogSearch");
 // 많을 때(최대 60개) 카테고리 하나 불러오는 데 수십 초가 걸립니다. 그렇다고 전부
 // 한꺼번에(Promise.all) 쏘면 네이버 API 쪽에서 순간 요청 폭주로 막힐 수 있어서, 한 번에
 // CONCURRENCY개씩만 동시에 처리하는 절충안을 씁니다.
-const CONCURRENCY = 8;
+const CONCURRENCY = 4;
 async function mapWithConcurrency(items, limit, fn) {
   const results = new Array(items.length);
   let cursor = 0;

@@ -501,6 +501,14 @@ app.get("/api/blog/categories", (req, res) => {
 const BLOG_TOPICS_TTL_MS = Number(process.env.BLOG_TOPICS_TTL_MS || 10 * 60 * 1000);
 const blogTopicsCache = new Map();
 
+// 네이버 API가 순간적으로 막히거나(레이트리밋) 일부 후보만 실패해도 items가 0개로
+// 돌아올 수 있습니다. 그 "실패한 빈 결과"를 그대로 캐시에 저장해버리면, 진짜 데이터가
+// 있는데도 TTL(10분)이 끝날 때까지 계속 빈 목록만 보여주게 됩니다 — 그래서 items가
+// 있을 때만 캐시에 저장하고, 비어있으면 저장하지 않고 다음 요청/예열 때 다시 시도합니다.
+function isCacheable(data) {
+  return !!(data && data.items && data.items.length > 0);
+}
+
 // GET /api/blog/topics?category=food_review|travel_review|info_post|intro_promo|it_review|biz_economy|beauty_fashion|daily_hobby
 app.get("/api/blog/topics", async (req, res) => {
   const category = req.query.category || "info_post";
@@ -510,29 +518,31 @@ app.get("/api/blog/topics", async (req, res) => {
   }
   try {
     const data = await getTrendTopics(category, 20);
-    blogTopicsCache.set(category, { data, expiresAt: Date.now() + BLOG_TOPICS_TTL_MS });
+    if (isCacheable(data)) blogTopicsCache.set(category, { data, expiresAt: Date.now() + BLOG_TOPICS_TTL_MS });
     res.json({ category, cached: false, ...data });
   } catch (err) {
     res.status(400).json({ error: "fetch_failed", message: err.message });
   }
 });
 
-// 카테고리 하나가 처음 조회될 때(캐시 미스) 네이버 API를 여러 개 순서대로 불러와야 해서
-// 몇 초~수십 초씩 걸릴 수 있습니다. 사용자가 카테고리를 바꿀 때마다 그 지연을 겪지 않도록,
-// 서버가 켜질 때와 캐시 만료 주기에 맞춰 8개 카테고리를 미리(백그라운드에서) 데워둡니다.
-// 카테고리끼리는 순서대로(한 번에 하나씩) 데워서, 네이버 API에 순간적으로 너무 많은
-// 요청이 한꺼번에 몰리지 않게 합니다(카테고리 내부는 이미 opportunityFinder.js에서
-// 적당히 병렬 처리됩니다).
+// 카테고리 하나가 처음 조회될 때(캐시 미스) 네이버 API를 여러 개 불러와야 해서 몇
+// 초씩 걸릴 수 있습니다. 사용자가 카테고리를 바꿀 때마다 그 지연을 겪지 않도록, 서버가
+// 켜질 때와 캐시 만료 주기에 맞춰 8개 카테고리를 미리(백그라운드에서) 데워둡니다.
+// 카테고리끼리는 순서대로, 그리고 사이에 간격을 두고 데워서(카테고리 내부는 이미
+// opportunityFinder.js에서 적당히 병렬 처리되므로, 카테고리 8개를 쉬지 않고 곧바로
+// 이어붙이면 네이버 API 쪽에서 짧은 시간에 너무 많은 요청으로 보고 막을 수 있습니다).
+const WARM_GAP_MS = 4000;
 async function warmBlogTopicsCache() {
   for (const c of BLOG_CATEGORIES) {
     const cached = blogTopicsCache.get(c.id);
     if (cached && cached.expiresAt > Date.now()) continue;
     try {
       const data = await getTrendTopics(c.id, 20);
-      blogTopicsCache.set(c.id, { data, expiresAt: Date.now() + BLOG_TOPICS_TTL_MS });
+      if (isCacheable(data)) blogTopicsCache.set(c.id, { data, expiresAt: Date.now() + BLOG_TOPICS_TTL_MS });
     } catch (err) {
       console.error(`[blogTopicsCache] "${c.id}" 예열 실패:`, err.message);
     }
+    await new Promise((resolve) => setTimeout(resolve, WARM_GAP_MS));
   }
 }
 
