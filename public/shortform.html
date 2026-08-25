@@ -143,7 +143,80 @@
   .scene-role.body { background: #eafaf1; color: #03c75a; }
   .scene-role.cta { background: #e3edff; color: #2563eb; }
   .scene-caption { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
-  .scene-actions { margin-top: 8px; }
+  .scene-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .scene-thumb { position: relative; cursor: pointer; }
+  .scene-thumb .swap-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  .scene-caption-input {
+    width: 100%;
+    min-height: 54px;
+    font-size: 13px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    resize: vertical;
+    font-family: inherit;
+    margin-bottom: 2px;
+  }
+  .scene-order-btns { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+  .scene-order-btns button {
+    width: 26px;
+    height: 26px;
+    border: 1px solid #ddd;
+    background: #fafafa;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #666;
+  }
+  .scene-order-btns button:disabled { opacity: 0.3; cursor: default; }
+  .add-scene-btn {
+    width: 100%;
+    padding: 10px;
+    border: 2px dashed #ccc;
+    background: #fafafa;
+    border-radius: 8px;
+    color: #888;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .image-picker {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: flex-end;
+    z-index: 50;
+  }
+  .image-picker-sheet {
+    background: #fff;
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    border-radius: 14px 14px 0 0;
+    padding: 16px;
+  }
+  .image-picker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .image-picker-grid img {
+    width: 100%;
+    aspect-ratio: 1/1;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+  }
+  .image-picker-grid img:hover { border-color: #03c75a; }
+  .image-picker-close { text-align: right; }
+  .image-picker-close button { border: none; background: none; font-size: 20px; color: #999; cursor: pointer; }
   .hashtags { font-size: 13px; color: #555; margin-top: 4px; line-height: 1.8; }
   textarea { min-height: 160px; resize: vertical; font-size: 13px; }
   .section-title { font-size: 14px; font-weight: bold; margin: 18px 0 8px 0; color: #444; }
@@ -310,23 +383,17 @@
     return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
+  // 씬 에디터 상태 — plan.scenes를 그대로 쓰지 않고 복사해서, 사용자가 캡션 수정·순서
+  // 변경·삭제·사진 교체를 해도 원본 기획안(plan)은 건드리지 않습니다. 템플릿/음악 추천,
+  // AI 추천, 실제 렌더링까지 전부 이 currentScenes(최신 편집 상태)를 그대로 참조합니다.
+  let currentScenes = [];
+  let sourcePhotoPool = [];
+
+  const ROLE_LABEL = { hook: "오프닝 후킹", body: "본문", cta: "마무리 CTA" };
+
   function renderResult(plan) {
-    const roleLabel = { hook: "오프닝 후킹", body: "본문", cta: "마무리 CTA" };
-    const sceneHtml = plan.scenes
-      .map(
-        (s) => `
-      <div class="scene-card">
-        <div class="scene-thumb" style="${s.image ? `background-image:url('${s.image}')` : ""}">${s.image ? "" : "🖼️"}</div>
-        <div class="scene-body">
-          <span class="scene-role ${s.role}">씬 ${s.index} · ${roleLabel[s.role] || s.role}</span>
-          <div class="scene-caption">${escapeHtml(s.caption)}</div>
-          <div class="scene-actions">
-            <button class="secondary" onclick='speak(${JSON.stringify(s.caption)})'>🔊 음성으로 듣기(무료 브라우저 TTS)</button>
-          </div>
-        </div>
-      </div>`
-      )
-      .join("");
+    currentScenes = plan.scenes.map((s) => ({ ...s }));
+    sourcePhotoPool = plan.sourceImages || [];
 
     resultEl.innerHTML = `
       <div class="panel">
@@ -337,15 +404,17 @@
         <div class="hashtags">${plan.hashtags.map((h) => escapeHtml(h)).join(" ")}</div>
       </div>
 
-      <div class="section-title">장면별 기획안 (사진 ${plan.imagesFound}장 발견됨)</div>
-      ${sceneHtml}
+      <div class="section-title">장면별 직접 편집 (사진 ${plan.imagesFound}장 발견됨)</div>
+      <div class="note" style="margin-top:0;">자막을 고쳐 쓰거나, 사진을 눌러 다른 사진으로 바꾸거나, 순서를 바꾸고 장면을 추가·삭제할 수 있어요. 여기서 고친 내용이 그대로 아래 AI 추천·영상 생성에 쓰여요.</div>
+      <div id="sceneEditorList"></div>
+      <button type="button" class="add-scene-btn" id="addSceneBtn">+ 장면 추가</button>
 
       <div class="panel">
         <div class="section-title" style="margin-top:0;">전체 대본 (복사해서 쓰세요)</div>
-        <textarea readonly id="fullScript">${escapeHtml(plan.fullScript)}</textarea>
+        <textarea readonly id="fullScript"></textarea>
         <div class="toolbar">
           <button class="secondary" onclick="copyScript()">📋 대본 복사</button>
-          <button class="secondary" onclick='speak(${JSON.stringify(plan.fullScript.replace(/\[씬 \d+\]/g, ""))})'>🔊 전체 듣기</button>
+          <button class="secondary" id="speakAllBtn">🔊 전체 듣기</button>
         </div>
       </div>
 
@@ -404,12 +473,123 @@
       </details>
     `;
 
-    loadTemplateSuggestions(plan.scenes);
-    loadBgmSuggestions(plan.scenes);
+    renderSceneEditor();
+    loadTemplateSuggestions();
+    loadBgmSuggestions();
     loadVoiceProviderStatus();
     loadFrameStyleOptions();
-    document.getElementById("renderBtn").onclick = () => renderVideo(plan.scenes);
-    document.getElementById("recommendBtn").onclick = () => loadRecommendations(plan.scenes);
+    document.getElementById("renderBtn").onclick = () => renderVideo();
+    document.getElementById("recommendBtn").onclick = () => loadRecommendations();
+    document.getElementById("addSceneBtn").onclick = () => {
+      currentScenes.push({ index: currentScenes.length + 1, role: "body", caption: "", image: null });
+      renderSceneEditor();
+    };
+  }
+
+  // 씬 배열이 바뀔 때마다(캡션 수정/순서 변경/추가/삭제/사진 교체) 이 함수를 다시 불러서
+  // 화면과 index 번호, 전체 대본을 최신 상태로 맞춥니다.
+  function renderSceneEditor() {
+    currentScenes.forEach((s, i) => (s.index = i + 1));
+    const listEl = document.getElementById("sceneEditorList");
+    listEl.innerHTML = currentScenes
+      .map(
+        (s, i) => `
+      <div class="scene-card">
+        <div class="scene-thumb" data-sceneimg="${i}" style="${s.image ? `background-image:url('${s.image}')` : ""}">
+          ${s.image ? "" : "🖼️"}
+          ${sourcePhotoPool.length ? '<span class="swap-badge">🔄 교체</span>' : ""}
+        </div>
+        <div class="scene-body">
+          <span class="scene-role ${s.role}">씬 ${s.index} · ${ROLE_LABEL[s.role] || s.role}</span>
+          <textarea class="scene-caption-input" data-scenecaption="${i}" placeholder="이 장면의 자막을 입력하세요">${escapeHtml(s.caption)}</textarea>
+          <div class="scene-actions">
+            <button class="secondary" data-scenespeak="${i}">🔊 듣기</button>
+            <button class="secondary" data-scenedelete="${i}">🗑️ 삭제</button>
+          </div>
+        </div>
+        <div class="scene-order-btns">
+          <button type="button" data-sceneup="${i}" ${i === 0 ? "disabled" : ""}>▲</button>
+          <button type="button" data-scenedown="${i}" ${i === currentScenes.length - 1 ? "disabled" : ""}>▼</button>
+        </div>
+      </div>`
+      )
+      .join("");
+
+    listEl.querySelectorAll("[data-scenecaption]").forEach((el) => {
+      el.oninput = () => {
+        currentScenes[Number(el.dataset.scenecaption)].caption = el.value;
+        syncFullScript();
+      };
+    });
+    listEl.querySelectorAll("[data-scenespeak]").forEach((el) => {
+      el.onclick = () => speak(currentScenes[Number(el.dataset.scenespeak)].caption);
+    });
+    listEl.querySelectorAll("[data-scenedelete]").forEach((el) => {
+      el.onclick = () => {
+        if (currentScenes.length <= 1) {
+          alert("장면이 최소 1개는 있어야 해요.");
+          return;
+        }
+        currentScenes.splice(Number(el.dataset.scenedelete), 1);
+        renderSceneEditor();
+      };
+    });
+    listEl.querySelectorAll("[data-sceneup]").forEach((el) => {
+      el.onclick = () => {
+        const i = Number(el.dataset.sceneup);
+        [currentScenes[i - 1], currentScenes[i]] = [currentScenes[i], currentScenes[i - 1]];
+        renderSceneEditor();
+      };
+    });
+    listEl.querySelectorAll("[data-scenedown]").forEach((el) => {
+      el.onclick = () => {
+        const i = Number(el.dataset.scenedown);
+        [currentScenes[i], currentScenes[i + 1]] = [currentScenes[i + 1], currentScenes[i]];
+        renderSceneEditor();
+      };
+    });
+    if (sourcePhotoPool.length) {
+      listEl.querySelectorAll("[data-sceneimg]").forEach((el) => {
+        el.onclick = () => openImagePicker(Number(el.dataset.sceneimg));
+      });
+    }
+
+    syncFullScript();
+  }
+
+  function syncFullScript() {
+    const fullScript = currentScenes.map((s) => `[씬 ${s.index}] ${s.caption}`).join("\n\n");
+    const ta = document.getElementById("fullScript");
+    if (ta) ta.value = fullScript;
+    const speakAllBtn = document.getElementById("speakAllBtn");
+    if (speakAllBtn) speakAllBtn.onclick = () => speak(currentScenes.map((s) => s.caption).join(". "));
+  }
+
+  function openImagePicker(sceneIndex) {
+    const overlay = document.createElement("div");
+    overlay.className = "image-picker";
+    overlay.innerHTML = `
+      <div class="image-picker-sheet">
+        <div class="image-picker-close"><button type="button" id="imgPickerCloseBtn">✕</button></div>
+        <div class="section-title" style="margin-top:0;">씬 ${sceneIndex + 1}에 쓸 사진 고르기</div>
+        <div class="image-picker-grid">
+          ${sourcePhotoPool.map((url) => `<img src="${url}" data-pickimg="${escapeHtml(url)}" loading="lazy" />`).join("")}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.onclick = (e) => {
+      if (e.target === overlay) close();
+    };
+    document.getElementById("imgPickerCloseBtn").onclick = close;
+    overlay.querySelectorAll("[data-pickimg]").forEach((img) => {
+      img.onclick = () => {
+        currentScenes[sceneIndex].image = img.dataset.pickimg;
+        close();
+        renderSceneEditor();
+      };
+    });
   }
 
   let selectedBgmId = null;
@@ -438,13 +618,13 @@
     }
   }
 
-  async function loadTemplateSuggestions(scenes) {
+  async function loadTemplateSuggestions() {
     const tplListEl = document.getElementById("tplList");
     try {
       const res = await fetch("/api/shortform/template-suggestions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes }),
+        body: JSON.stringify({ scenes: currentScenes }),
       });
       const data = await res.json();
       selectedTemplateId = data.templates[0]?.id || "bold-black";
@@ -467,13 +647,13 @@
     document.querySelectorAll(".tpl-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === id));
   }
 
-  async function loadBgmSuggestions(scenes) {
+  async function loadBgmSuggestions() {
     const bgmListEl = document.getElementById("bgmList");
     try {
       const res = await fetch("/api/shortform/bgm-suggestions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes }),
+        body: JSON.stringify({ scenes: currentScenes }),
       });
       const data = await res.json();
       selectedBgmId = data.tracks[0]?.id || null;
@@ -531,7 +711,7 @@
     }
   }
 
-  async function loadRecommendations(scenes) {
+  async function loadRecommendations() {
     const recommendBtn = document.getElementById("recommendBtn");
     const recommendResultEl = document.getElementById("recommendResult");
     recommendBtn.disabled = true;
@@ -542,7 +722,7 @@
       const res = await fetch("/api/shortform/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes, frameStyle: selectedFrameStyle || "polaroid" }),
+        body: JSON.stringify({ scenes: currentScenes, frameStyle: selectedFrameStyle || "polaroid" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "추천 실패");
@@ -586,7 +766,7 @@
     document.getElementById("renderBtn").scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  async function renderVideo(scenes) {
+  async function renderVideo() {
     const renderBtn = document.getElementById("renderBtn");
     const renderResultEl = document.getElementById("renderResult");
     const bgmInput = document.getElementById("bgmInput");
@@ -600,7 +780,7 @@
     renderResultEl.innerHTML = "";
 
     const form = new FormData();
-    form.append("scenes", JSON.stringify(scenes));
+    form.append("scenes", JSON.stringify(currentScenes));
     form.append("durationPerScene", durationInput.value || "3");
     form.append("animate", animateInput.checked ? "true" : "false");
     form.append("frameStyle", selectedFrameStyle || "polaroid");

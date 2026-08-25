@@ -111,6 +111,7 @@ async function planShortform(url, source = "blog", sceneCount = 6) {
     sourceTitle: page.title,
     price,
     imagesFound: images.length,
+    sourceImages: images, // 씬 에디터에서 "다른 사진으로 교체"할 때 고를 수 있는 원문 사진 후보 전체
     scenes,
     fullScript,
     hashtags: extractHashtags(page.title + " " + page.description, HASHTAG_EXTRA_BY_SOURCE[src]),
@@ -210,6 +211,7 @@ async function planFromPhotos(photos, topic, { source = "blog", summaryText = ""
     sourceTitle: cleanTopic,
     price: null,
     imagesFound: photos.length,
+    sourceImages: photos.map((p) => p.url).filter(Boolean), // 씬 에디터에서 다른 업로드 사진으로 바꿔 쓸 수 있게 전체 목록도 같이 줍니다
     scenes,
     fullScript,
     hashtags: extractHashtags(cleanTopic, HASHTAG_EXTRA_BY_SOURCE[src]),
