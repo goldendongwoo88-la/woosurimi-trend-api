@@ -183,6 +183,28 @@ function buildCaptionSrt(text, duration) {
   return srt;
 }
 
+// 같은 사진을 여러 번 내려받지 않도록 임시 폴더에 캐시해 둡니다.
+// "AI 추천 5개"는 똑같은 장면 2개를 자막 디자인만 바꿔 5번 렌더링하는데, 캐시가 없으면
+// 같은 사진을 10번(2장 × 5회) 다시 내려받게 됩니다. 무료 서버는 네트워크도 느려서
+// 이게 미리보기 생성 시간의 상당 부분을 차지했습니다.
+const IMAGE_CACHE_DIR = path.join(os.tmpdir(), "woosurimi-img-cache");
+
+async function downloadToFileCached(url) {
+  if (!fs.existsSync(IMAGE_CACHE_DIR)) fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+  let ext = ".jpg";
+  try {
+    ext = path.extname(new URL(url).pathname) || ".jpg";
+  } catch {
+    /* 확장자를 못 알아내면 .jpg로 두고 진행 — ffmpeg는 내용을 보고 형식을 판단합니다 */
+  }
+  const key = crypto.createHash("sha1").update(url).digest("hex");
+  const cachePath = path.join(IMAGE_CACHE_DIR, `${key}${ext}`);
+  // 이미 받아둔 게 있으면 그대로 씁니다(0바이트로 깨진 캐시는 무시하고 다시 받습니다).
+  if (fs.existsSync(cachePath) && fs.statSync(cachePath).size > 0) return cachePath;
+  const ok = await downloadToFile(url, cachePath);
+  return ok ? cachePath : null;
+}
+
 async function downloadToFile(url, destPath) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
@@ -580,10 +602,8 @@ async function renderShortformVideo(
       let imagePath = null;
       if (scene.image) {
         if (/^https?:\/\//i.test(scene.image)) {
-          // 외부 링크(블로그 등)에서 가져온 사진 — 내려받아서 씁니다.
-          const candidate = path.join(workDir, `img${i}${path.extname(new URL(scene.image).pathname) || ".jpg"}`);
-          const ok = await downloadToFile(scene.image, candidate);
-          if (ok) imagePath = candidate;
+          // 외부 링크(블로그 등)에서 가져온 사진 — 내려받아서 씁니다(같은 주소는 캐시 재사용).
+          imagePath = await downloadToFileCached(scene.image);
         } else {
           // "자동컷" 모드처럼 사용자가 이 서버에 직접 업로드한 사진 — /uploads/... 같은
           // 상대 경로이므로 내려받을 필요 없이 public 폴더에서 바로 읽습니다.
