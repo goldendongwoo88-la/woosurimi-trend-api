@@ -23,6 +23,84 @@
     max-width: 640px;
     margin: 0 auto 60px auto;
   }
+  .layout-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (min-width: 900px) {
+    main { max-width: 1080px; }
+    .layout-grid { grid-template-columns: 1fr 360px; }
+    .col-right {
+      position: sticky;
+      top: 16px;
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+  }
+  .cat-dropdown { position: relative; margin-bottom: 10px; }
+  .cat-dropdown-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 170px;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    color: #222;
+    cursor: pointer;
+  }
+  .cat-dropdown-btn .chevron { color: #999; font-size: 12px; }
+  .cat-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 10;
+    min-width: 190px;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    overflow: hidden;
+  }
+  .cat-dropdown-menu.open { display: block; }
+  .cat-dropdown-item { padding: 10px 14px; font-size: 13px; color: #444; cursor: pointer; }
+  .cat-dropdown-item:hover { background: #f5f6f8; }
+  .cat-dropdown-item.active { background: #eafaf1; color: #03c75a; font-weight: bold; }
+  .cat-desc { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .topic-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+  .topic-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .topic-row:hover { background: #f7f7f7; }
+  .topic-row.selected { border-color: #03c75a; background: #eafaf1; }
+  .topic-row .topic-name { font-weight: bold; color: #333; }
+  .topic-row .topic-meta { color: #999; font-size: 11px; }
+  .topic-rank { color: #03c75a; font-weight: bold; margin-right: 6px; }
+  .topic-hot-badge {
+    display: inline-block;
+    background: #ffe3e3;
+    color: #e0334f;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
   .note {
     background: #fff8e1;
     border: 1px solid #ffe08a;
@@ -274,48 +352,68 @@
 캡컷의 "자동컷"처럼, <b>링크 하나</b> 또는 <b>직접 고른 사진들</b>로 AI가 장면(씬)별 기획안을 짜고 <b>실제 mp4 영상</b>까지 만들어줘요. 사진 슬라이드에 <b>켄번즈 확대·축소 애니메이션</b> + 5가지 <b>자막 디자인 템플릿</b> + 어울리는 <b>배경음악 5곡</b> + (키가 있으면) <b>AI 성우 나레이션</b>을 조합해서, AI가 알아서 5가지 스타일을 추천해주고 그중 마음에 드는 걸 골라 완성할 수 있어요. 완성되면 <b>QR 코드</b>로 바로 휴대폰에서 받을 수 있습니다.
   </div>
 
-  <div class="panel">
-    <div class="mode-tabs">
-      <div class="mode-tab-btn active" data-mode="link">
-        <span class="mode-emoji">🔗</span>
-        <span class="mode-title">링크컷</span>
-        <span class="mode-desc">블로그·쇼핑·여행 링크</span>
+  <div class="layout-grid">
+    <div class="col-left">
+      <div class="panel">
+        <div class="mode-tabs">
+          <div class="mode-tab-btn active" data-mode="link">
+            <span class="mode-emoji">🔗</span>
+            <span class="mode-title">링크컷</span>
+            <span class="mode-desc">블로그·쇼핑·여행 링크</span>
+          </div>
+          <div class="mode-tab-btn" data-mode="photo">
+            <span class="mode-emoji">🖼️</span>
+            <span class="mode-title">자동컷</span>
+            <span class="mode-desc">사진 직접 선택</span>
+          </div>
+        </div>
+
+        <div class="mode-panel active" id="modePanel-link">
+          <div class="tabs">
+            <div class="tab-btn active" data-source="blog">블로그 링크</div>
+            <div class="tab-btn" data-source="shopping">쇼핑 커넥트</div>
+            <div class="tab-btn" data-source="travel">여행 커넥트</div>
+          </div>
+          <input type="url" id="urlInput" placeholder="https://blog.naver.com/... 링크를 붙여넣어 주세요" />
+          <button class="primary" id="generateBtn">숏폼 기획안 생성하기</button>
+        </div>
+
+        <div class="mode-panel" id="modePanel-photo">
+          <div class="tabs">
+            <div class="tab-btn active" data-photosource="blog">블로그 톤</div>
+            <div class="tab-btn" data-photosource="shopping">쇼핑 톤</div>
+            <div class="tab-btn" data-photosource="travel">여행 톤</div>
+          </div>
+          <label class="field-label">영상 사진 (최대 12장, 순서대로 장면이 됩니다)</label>
+          <input type="file" id="photoInput" accept="image/*" multiple />
+          <div id="photoPreview" class="photo-grid"></div>
+          <label class="field-label">영상 주제 (한 줄, 필수)</label>
+          <input type="text" id="topicInput" placeholder="예) 서울 감성 카페 투어" />
+          <label class="field-label">본문 요약(선택) — 캡션을 직접 안 적은 사진은 AI가 사진을 직접 보고, 이 본문 내용과 자연스럽게 이어지는 자막을 자동으로 만들어요</label>
+          <textarea id="summaryInput" placeholder="블로그 본문 등을 붙여넣으면, 이미지 인식 AI가 각 사진을 실제로 보면서 이 본문 내용과 어울리는 자막을 새로 씁니다(서버에 ANTHROPIC_API_KEY 등록 필요). 키가 없거나 비워두면 본문 문장을 그대로 쓰거나, 그마저 없으면 주제를 짧게 변형한 일반 문구로 채워져요."></textarea>
+          <button class="primary" id="generatePhotoBtn">사진으로 숏폼 기획안 생성하기</button>
+        </div>
       </div>
-      <div class="mode-tab-btn" data-mode="photo">
-        <span class="mode-emoji">🖼️</span>
-        <span class="mode-title">자동컷</span>
-        <span class="mode-desc">사진 직접 선택</span>
-      </div>
+
+      <div id="result"></div>
     </div>
 
-    <div class="mode-panel active" id="modePanel-link">
-      <div class="tabs">
-        <div class="tab-btn active" data-source="blog">블로그 링크</div>
-        <div class="tab-btn" data-source="shopping">쇼핑 커넥트</div>
-        <div class="tab-btn" data-source="travel">여행 커넥트</div>
+    <div class="col-right">
+      <div class="panel">
+        <div class="section-title">주제 카테고리</div>
+        <div class="cat-dropdown" id="catDropdown">
+          <button type="button" class="cat-dropdown-btn" id="catDropdownBtn">
+            <span id="catDropdownLabel">불러오는 중...</span>
+            <span class="chevron">▾</span>
+          </button>
+          <div class="cat-dropdown-menu" id="catDropdownMenu"></div>
+        </div>
+        <div class="cat-desc" id="catDesc"></div>
+        <div class="section-title">📈 실시간 트렌드 주제! <span style="font-weight:normal;color:#999;">— 눌러서 자동컷 주제로 쓰기</span></div>
+        <div class="topic-list" id="topicList"><div class="status">불러오는 중...</div></div>
       </div>
-      <input type="url" id="urlInput" placeholder="https://blog.naver.com/... 링크를 붙여넣어 주세요" />
-      <button class="primary" id="generateBtn">숏폼 기획안 생성하기</button>
-    </div>
-
-    <div class="mode-panel" id="modePanel-photo">
-      <div class="tabs">
-        <div class="tab-btn active" data-photosource="blog">블로그 톤</div>
-        <div class="tab-btn" data-photosource="shopping">쇼핑 톤</div>
-        <div class="tab-btn" data-photosource="travel">여행 톤</div>
-      </div>
-      <label class="field-label">영상 사진 (최대 12장, 순서대로 장면이 됩니다)</label>
-      <input type="file" id="photoInput" accept="image/*" multiple />
-      <div id="photoPreview" class="photo-grid"></div>
-      <label class="field-label">영상 주제 (한 줄, 필수)</label>
-      <input type="text" id="topicInput" placeholder="예) 서울 감성 카페 투어" />
-      <label class="field-label">본문 요약(선택) — 캡션을 직접 안 적은 사진은 AI가 사진을 직접 보고, 이 본문 내용과 자연스럽게 이어지는 자막을 자동으로 만들어요</label>
-      <textarea id="summaryInput" placeholder="블로그 본문 등을 붙여넣으면, 이미지 인식 AI가 각 사진을 실제로 보면서 이 본문 내용과 어울리는 자막을 새로 씁니다(서버에 ANTHROPIC_API_KEY 등록 필요). 키가 없거나 비워두면 본문 문장을 그대로 쓰거나, 그마저 없으면 주제를 짧게 변형한 일반 문구로 채워져요."></textarea>
-      <button class="primary" id="generatePhotoBtn">사진으로 숏폼 기획안 생성하기</button>
     </div>
   </div>
-
-  <div id="result"></div>
 </main>
 
 <script>
@@ -866,6 +964,89 @@
     }
     generateBtn.click();
   })();
+
+  // ===================== 오른쪽 실시간 트렌드 주제 패널 =====================
+  // 블로그 글쓰기 페이지와 같은 카테고리·트렌드 데이터를 재사용합니다. 여기서는 눌렀을 때
+  // "자동컷" 모드로 전환하고 영상 주제 입력칸에 바로 채워 넣는 용도로 씁니다(링크컷은
+  // 링크 자체가 주제라 트렌드 목록을 채워 넣을 자리가 없어요).
+  let currentCategory = "";
+  let categoriesData = [];
+
+  async function loadCategories() {
+    const res = await fetch("/api/blog/categories");
+    const data = await res.json();
+    categoriesData = data.categories;
+    currentCategory = categoriesData[0]?.id || "";
+
+    const btn = document.getElementById("catDropdownBtn");
+    const menu = document.getElementById("catDropdownMenu");
+    const label = document.getElementById("catDropdownLabel");
+
+    label.textContent = categoriesData[0]?.label || "카테고리";
+    document.getElementById("catDesc").textContent = categoriesData[0]?.description || "";
+    menu.innerHTML = categoriesData
+      .map((c, i) => `<div class="cat-dropdown-item ${i === 0 ? "active" : ""}" data-id="${c.id}">${escapeHtml(c.label)}</div>`)
+      .join("");
+
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      menu.classList.toggle("open");
+    };
+    document.addEventListener("click", () => menu.classList.remove("open"));
+    menu.onclick = (e) => e.stopPropagation();
+
+    menu.querySelectorAll(".cat-dropdown-item").forEach((item) => {
+      item.onclick = () => {
+        menu.querySelectorAll(".cat-dropdown-item").forEach((i) => i.classList.remove("active"));
+        item.classList.add("active");
+        currentCategory = item.dataset.id;
+        label.textContent = item.textContent;
+        const catInfo = categoriesData.find((c) => c.id === currentCategory);
+        document.getElementById("catDesc").textContent = catInfo?.description || "";
+        menu.classList.remove("open");
+        loadTopics();
+      };
+    });
+
+    loadTopics();
+  }
+
+  async function loadTopics() {
+    const listEl = document.getElementById("topicList");
+    listEl.innerHTML = `<div class="status">불러오는 중...</div>`;
+    try {
+      const res = await fetch(`/api/blog/topics?category=${encodeURIComponent(currentCategory)}`);
+      const data = await res.json();
+      if (!data.items || !data.items.length) {
+        listEl.innerHTML = `<div class="status">${escapeHtml(data.note || "표시할 주제가 없어요. 잠시 후 다시 시도해 주세요.")}</div>`;
+        return;
+      }
+      listEl.innerHTML = data.items
+        .map(
+          (it, i) => `
+        <div class="topic-row" data-topic="${escapeHtml(it.topic)}">
+          <span><span class="topic-rank">${i + 1}</span><span class="topic-name">${escapeHtml(it.topic)}</span>${
+            it.hot ? '<span class="topic-hot-badge">급상승</span>' : ""
+          }</span>
+          <span class="topic-meta">${escapeHtml(it.meta || "")}</span>
+        </div>`
+        )
+        .join("");
+      document.querySelectorAll(".topic-row").forEach((row) => {
+        row.onclick = () => {
+          document.querySelectorAll(".topic-row").forEach((r) => r.classList.remove("selected"));
+          row.classList.add("selected");
+          // 자동컷 모드로 전환하고 영상 주제 칸에 채워 넣습니다.
+          document.querySelector('.mode-tab-btn[data-mode="photo"]').click();
+          document.getElementById("topicInput").value = row.dataset.topic;
+        };
+      });
+    } catch (err) {
+      listEl.innerHTML = `<div class="status error">트렌드 주제를 불러오지 못했어요.</div>`;
+    }
+  }
+
+  loadCategories();
 
   document.getElementById("generatePhotoBtn").onclick = async () => {
     const topic = document.getElementById("topicInput").value.trim();
