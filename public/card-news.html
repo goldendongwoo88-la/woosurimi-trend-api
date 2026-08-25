@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 카드뉴스 생성 데모</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+  }
+  header {
+    background: #fff;
+    padding: 16px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  h1 { font-size: 18px; margin: 0; }
+  main {
+    padding: 16px;
+    max-width: 640px;
+    margin: 0 auto 60px auto;
+  }
+  .note {
+    background: #fff8e1;
+    border: 1px solid #ffe08a;
+    color: #7a5c00;
+    font-size: 13px;
+    padding: 12px 14px;
+    margin: 16px 0;
+    border-radius: 6px;
+    line-height: 1.6;
+  }
+  .panel {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .section-title { font-size: 14px; font-weight: bold; margin: 0 0 10px 0; color: #444; }
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    margin-bottom: 10px;
+    font-family: inherit;
+  }
+  textarea { min-height: 64px; resize: vertical; }
+  button.primary {
+    width: 100%;
+    padding: 13px;
+    background: #7b3ff2;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  button.primary:disabled { background: #bcbcbc; cursor: default; }
+  button.secondary {
+    padding: 8px 12px;
+    background: #f0f0f0;
+    color: #333;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip {
+    padding: 8px 12px;
+    border: 2px solid #eee;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #555;
+    background: #fafafa;
+  }
+  .chip.selected { border-color: #7b3ff2; background: #f2ebff; color: #7b3ff2; font-weight: bold; }
+  .style-swatch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 2px solid #eee;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .style-swatch.selected { border-color: #7b3ff2; background: #f8f5ff; }
+  .style-swatch .dot { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+  .style-swatch .label { font-size: 13px; font-weight: bold; }
+  .style-swatch .desc { font-size: 11px; color: #888; }
+  .page-card { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .page-role-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    background: #eee;
+    color: #666;
+  }
+  .page-role-badge.cover { background: #f2ebff; color: #7b3ff2; }
+  .page-role-badge.outro { background: #eafaf1; color: #03c75a; }
+  .page-card input[type="file"] { font-size: 12px; margin-top: 4px; }
+  .status { text-align: center; color: #999; font-size: 13px; padding: 20px 0; }
+  .error { color: #d33; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card-grid img { width: 100%; border-radius: 8px; display: block; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .card-grid .cell { text-align: center; }
+  .card-grid a.dl { display: inline-block; margin-top: 4px; font-size: 11px; color: #7b3ff2; text-decoration: none; }
+  .layout-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 2px solid #eee;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .layout-option.selected { border-color: #7b3ff2; background: #f8f5ff; }
+  .layout-option .icon { font-size: 22px; flex: none; width: 28px; text-align: center; }
+  .layout-option .label { font-size: 13px; font-weight: bold; }
+  .layout-option .desc { font-size: 11px; color: #888; }
+  .photo-source-tabs { display: flex; gap: 6px; margin: 6px 0; }
+  .photo-source-tab {
+    padding: 5px 10px;
+    font-size: 11px;
+    border: 1px solid #ddd;
+    border-radius: 14px;
+    cursor: pointer;
+    color: #666;
+    background: #fafafa;
+  }
+  .photo-source-tab.active { border-color: #7b3ff2; background: #f2ebff; color: #7b3ff2; font-weight: bold; }
+  .stock-search-row { display: flex; gap: 6px; }
+  .stock-search-row input { flex: 1; margin-bottom: 0; }
+  .stock-search-row button { flex: none; }
+  .stock-results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+  .stock-thumb { cursor: pointer; border: 2px solid transparent; border-radius: 6px; overflow: hidden; }
+  .stock-thumb.selected { border-color: #7b3ff2; }
+  .stock-thumb img { width: 100%; height: 72px; object-fit: cover; display: block; }
+  .stock-credit { font-size: 9px; color: #999; text-align: center; padding: 2px; background: #fafafa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a>
+  <h1>우수리미 · AI 카드뉴스 생성 (데모)</h1>
+</header>
+<main>
+  <div class="note">
+  주제를 입력하면 <b>Claude API</b>로 페이지별 대본(제목+본문)을 먼저 짜드려요. 대본을 직접 수정한 뒤 <b>카드뉴스 이미지 생성</b>을 누르면, 고른 디자인 스타일로 실제 PNG 카드 이미지가 페이지 수만큼 만들어져요. 페이지별로 사진을 올리면 그 페이지는 배경 사진 위에 텍스트가 얹혀요(사진 없는 페이지는 스타일 그라디언트 배경).
+  </div>
+  <div id="generatorStatusNote"></div>
+
+  <div class="panel">
+    <div class="section-title">주제</div>
+    <input type="text" id="topicInput" placeholder="예) 제주도 가을 여행" />
+
+    <div class="section-title">페이지 수</div>
+    <div class="chip-row" id="pageCountChips"></div>
+
+    <div class="section-title">비율</div>
+    <div class="chip-row" id="ratioChips"></div>
+
+    <div class="section-title">레이아웃 구성</div>
+    <div id="layoutList" class="layout-list"><div class="status">불러오는 중...</div></div>
+
+    <div class="section-title">색상 팔레트</div>
+    <div id="styleList"><div class="status">불러오는 중...</div></div>
+
+    <button class="primary" id="planBtn">📝 카드뉴스 대본 만들기</button>
+  </div>
+
+  <div id="planResult"></div>
+  <div id="renderResult"></div>
+</main>
+
+<script>
+  function escapeHtml(str) {
+    return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  let styles = [];
+  let layouts = [];
+  let ratios = [];
+  let currentPageCount = 6;
+  let currentRatio = "4:5";
+  let currentStyleId = "midnight-purple";
+  let currentLayoutId = "stack";
+  let currentPlan = null;
+  let stockPhotosReady = false;
+  // 페이지별로 고른 스톡 사진(선택 시): { [pageIndex]: { url, thumbUrl, photographer } }
+  const pageStockPhoto = {};
+
+  const LAYOUT_ICON = { stack: "📚", banner: "🎫", "editorial-center": "🗞️", framed: "🖼️" };
+
+  async function loadStyles() {
+    const res = await fetch("/api/cardnews/styles");
+    const data = await res.json();
+    styles = data.styles;
+    layouts = data.layouts || [];
+    ratios = data.aspectRatios;
+
+    document.getElementById("pageCountChips").innerHTML = [4, 5, 6, 7, 8]
+      .map((n) => `<div class="chip ${n === currentPageCount ? "selected" : ""}" data-count="${n}">${n}장</div>`)
+      .join("");
+    document.querySelectorAll("#pageCountChips .chip").forEach((chip) => {
+      chip.onclick = () => {
+        document.querySelectorAll("#pageCountChips .chip").forEach((c) => c.classList.remove("selected"));
+        chip.classList.add("selected");
+        currentPageCount = Number(chip.dataset.count);
+      };
+    });
+
+    document.getElementById("ratioChips").innerHTML = ratios
+      .map((r) => `<div class="chip ${r.id === currentRatio ? "selected" : ""}" data-ratio="${r.id}">${escapeHtml(r.label)}</div>`)
+      .join("");
+    document.querySelectorAll("#ratioChips .chip").forEach((chip) => {
+      chip.onclick = () => {
+        document.querySelectorAll("#ratioChips .chip").forEach((c) => c.classList.remove("selected"));
+        chip.classList.add("selected");
+        currentRatio = chip.dataset.ratio;
+      };
+    });
+
+    renderStyleList(styles);
+    renderLayoutList(layouts);
+  }
+
+  function renderLayoutList(list) {
+    document.getElementById("layoutList").innerHTML = list
+      .map(
+        (l) => `
+      <div class="layout-option ${l.id === currentLayoutId ? "selected" : ""}" data-layout="${l.id}">
+        <div class="icon">${LAYOUT_ICON[l.id] || "🗂️"}</div>
+        <div>
+          <div class="label">${escapeHtml(l.label)}</div>
+          <div class="desc">${escapeHtml(l.description)}</div>
+        </div>
+      </div>`
+      )
+      .join("");
+    document.querySelectorAll(".layout-option").forEach((el) => {
+      el.onclick = () => {
+        document.querySelectorAll(".layout-option").forEach((s) => s.classList.remove("selected"));
+        el.classList.add("selected");
+        currentLayoutId = el.dataset.layout;
+      };
+    });
+  }
+
+  function renderStyleList(list) {
+    document.getElementById("styleList").innerHTML = list
+      .map(
+        (s) => `
+      <div class="style-swatch ${s.id === currentStyleId ? "selected" : ""}" data-style="${s.id}">
+        <div class="dot" style="background:${swatchColor(s.id)};"></div>
+        <div>
+          <div class="label">${escapeHtml(s.label)}</div>
+          <div class="desc">${escapeHtml(s.description)}</div>
+        </div>
+      </div>`
+      )
+      .join("");
+    document.querySelectorAll(".style-swatch").forEach((el) => {
+      el.onclick = () => {
+        document.querySelectorAll(".style-swatch").forEach((s) => s.classList.remove("selected"));
+        el.classList.add("selected");
+        currentStyleId = el.dataset.style;
+      };
+    });
+  }
+
+  // 서버 스타일 정의(bgFrom/bgTo)를 노출하지 않으므로, 미리보기 점 색상은 화면에서 대충 매칭해둡니다.
+  function swatchColor(id) {
+    return (
+      {
+        "midnight-purple": "linear-gradient(135deg,#1b1436,#3a1f5c)",
+        "cream-editorial": "linear-gradient(135deg,#f5ecdf,#ead9bd)",
+        "bold-mono": "linear-gradient(135deg,#0a0a0a,#1c1c1c)",
+        "soft-pastel": "linear-gradient(135deg,#ffd9e6,#cdeee0)",
+        "clean-corporate": "linear-gradient(135deg,#ffffff,#eef3fb)",
+      }[id] || "#ccc"
+    );
+  }
+
+  document.getElementById("planBtn").onclick = async () => {
+    const topic = document.getElementById("topicInput").value.trim();
+    if (!topic) {
+      alert("주제를 입력해 주세요.");
+      return;
+    }
+    const btn = document.getElementById("planBtn");
+    btn.disabled = true;
+    btn.textContent = "대본 만드는 중...";
+    document.getElementById("planResult").innerHTML = `<div class="status">대본을 짜는 중이에요...</div>`;
+    document.getElementById("renderResult").innerHTML = "";
+
+    try {
+      const res = await fetch("/api/cardnews/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topic, pageCount: currentPageCount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "대본 생성 실패");
+      currentPlan = data;
+      if (data.recommendedStyles && data.recommendedStyles[0] && data.recommendedStyles[0].score > 0) {
+        currentStyleId = data.recommendedStyles[0].id;
+      }
+      renderStyleList(styles);
+      renderPlan(data);
+    } catch (err) {
+      document.getElementById("planResult").innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "📝 카드뉴스 대본 만들기";
+    }
+  };
+
+  const ROLE_LABEL = { cover: "표지", content: "본문", outro: "마무리" };
+
+  function renderPlan(plan) {
+    Object.keys(pageStockPhoto).forEach((k) => delete pageStockPhoto[k]); // 새 대본이면 이전 선택 초기화
+
+    const pagesHtml = plan.pages
+      .map((p, i) => {
+        const stockTabHtml = stockPhotosReady
+          ? `
+        <div class="photo-source-tabs">
+          <div class="photo-source-tab active" data-sourcetab="upload" data-page="${i}">📁 내 사진 업로드</div>
+          <div class="photo-source-tab" data-sourcetab="stock" data-page="${i}">🔍 스톡 사진 검색</div>
+        </div>
+        <div data-source-upload="${i}">
+          <input type="file" accept="image/*" data-photo="${i}" />
+        </div>
+        <div data-source-stock="${i}" style="display:none;">
+          <div class="stock-search-row">
+            <input type="text" data-stockquery="${i}" placeholder="검색어 (예: 홈트레이닝, 카페, 여행)" />
+            <button type="button" class="secondary" data-stocksearch="${i}">검색</button>
+          </div>
+          <div class="stock-results" data-stockresults="${i}"></div>
+        </div>`
+          : `<input type="file" accept="image/*" data-photo="${i}" />`;
+
+        return `
+      <div class="page-card">
+        <span class="page-role-badge ${p.role}">${i + 1}번째 · ${ROLE_LABEL[p.role] || p.role}</span>
+        <input type="text" data-title="${i}" value="${escapeHtml(p.title)}" placeholder="제목" />
+        <textarea data-body="${i}">${escapeHtml(p.body)}</textarea>
+        <label style="font-size:11px;color:#888;">배경 사진(선택) — 없으면 스타일 그라디언트 배경</label>
+        ${stockTabHtml}
+      </div>`;
+      })
+      .join("");
+
+    document.getElementById("planResult").innerHTML = `
+      <div class="panel">
+        <div class="section-title">대본 (직접 수정 가능)</div>
+        <div class="note" style="margin-top:0;">${escapeHtml(plan.note)}</div>
+        ${pagesHtml}
+        <button class="primary" id="renderBtn">🎨 카드뉴스 이미지 생성</button>
+      </div>
+    `;
+    document.getElementById("renderBtn").onclick = () => renderCardNews(plan.pages.length);
+    wirePhotoSourceControls();
+  }
+
+  function wirePhotoSourceControls() {
+    document.querySelectorAll(".photo-source-tab").forEach((tab) => {
+      tab.onclick = () => {
+        const i = tab.dataset.page;
+        document.querySelectorAll(`.photo-source-tab[data-page="${i}"]`).forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        const isUpload = tab.dataset.sourcetab === "upload";
+        document.querySelector(`[data-source-upload="${i}"]`).style.display = isUpload ? "block" : "none";
+        document.querySelector(`[data-source-stock="${i}"]`).style.display = isUpload ? "none" : "block";
+      };
+    });
+    document.querySelectorAll("[data-stocksearch]").forEach((btn) => {
+      btn.onclick = () => searchStockPhotos(btn.dataset.stocksearch);
+    });
+  }
+
+  async function searchStockPhotos(pageIndex) {
+    const queryInput = document.querySelector(`[data-stockquery="${pageIndex}"]`);
+    const query = (queryInput.value || "").trim();
+    const resultsEl = document.querySelector(`[data-stockresults="${pageIndex}"]`);
+    if (!query) {
+      alert("검색어를 입력해 주세요.");
+      return;
+    }
+    resultsEl.innerHTML = `<div class="status" style="padding:8px 0;">검색 중...</div>`;
+    try {
+      const res = await fetch(`/api/cardnews/stock-photos?query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "검색 실패");
+      if (!data.photos || !data.photos.length) {
+        resultsEl.innerHTML = `<div class="status" style="padding:8px 0;">검색 결과가 없어요.</div>`;
+        return;
+      }
+      resultsEl.innerHTML = data.photos
+        .map(
+          (photo) => `
+        <div class="stock-thumb" data-stockphoto="${pageIndex}" data-url="${escapeHtml(photo.fullUrl)}" data-thumb="${escapeHtml(photo.thumbUrl)}" data-credit="${escapeHtml(photo.photographer)}">
+          <img src="${photo.thumbUrl}" />
+          <div class="stock-credit">${escapeHtml(photo.photographer)}</div>
+        </div>`
+        )
+        .join("");
+      document.querySelectorAll(`.stock-thumb[data-stockphoto="${pageIndex}"]`).forEach((thumb) => {
+        thumb.onclick = () => {
+          document.querySelectorAll(`.stock-thumb[data-stockphoto="${pageIndex}"]`).forEach((t) => t.classList.remove("selected"));
+          thumb.classList.add("selected");
+          pageStockPhoto[pageIndex] = { url: thumb.dataset.url, thumbUrl: thumb.dataset.thumb, photographer: thumb.dataset.credit };
+        };
+      });
+    } catch (err) {
+      resultsEl.innerHTML = `<div class="status error" style="padding:8px 0;">오류: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function renderCardNews(pageCount) {
+    const titles = Array.from(document.querySelectorAll("[data-title]"));
+    const bodies = Array.from(document.querySelectorAll("[data-body]"));
+    const pages = titles.map((t, i) => ({
+      role: currentPlan.pages[i].role,
+      title: t.value,
+      body: bodies[i].value,
+    }));
+    const plan = { topic: currentPlan.topic, pages };
+
+    const btn = document.getElementById("renderBtn");
+    btn.disabled = true;
+    btn.textContent = "이미지 만드는 중...";
+    document.getElementById("renderResult").innerHTML = `<div class="status">카드 ${pageCount}장을 그리는 중이에요...</div>`;
+
+    const form = new FormData();
+    form.append("plan", JSON.stringify(plan));
+    form.append("styleId", currentStyleId);
+    form.append("layoutId", currentLayoutId);
+    form.append("ratio", currentRatio);
+    // 사진을 올린 페이지만 실제 파일로 보내고, 그 페이지 번호를 별도로 같이 보냅니다
+    // (사진 없는 페이지까지 빈 자리로 보내면 서버에서 "깨진 이미지 파일"로 렌더링을
+    // 시도하게 되니, 아예 존재하는 페이지 번호만 명시적으로 알려주는 방식입니다).
+    // 업로드 파일이 있으면 그 페이지는 스톡 사진 선택을 무시합니다(서버에서도 같은 우선순위).
+    const imagePageIndexes = [];
+    const imagePageUrls = {};
+    for (let i = 0; i < pageCount; i++) {
+      const fileInput = document.querySelector(`[data-photo="${i}"]`);
+      if (fileInput && fileInput.files[0]) {
+        form.append("images", fileInput.files[0]);
+        imagePageIndexes.push(i);
+      } else if (pageStockPhoto[i]) {
+        imagePageUrls[i] = pageStockPhoto[i].url;
+      }
+    }
+    form.append("imagePageIndexes", JSON.stringify(imagePageIndexes));
+    form.append("imagePageUrls", JSON.stringify(imagePageUrls));
+
+    try {
+      const res = await fetch("/api/cardnews/render", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "이미지 생성 실패");
+      renderImages(data);
+    } catch (err) {
+      document.getElementById("renderResult").innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🎨 카드뉴스 이미지 생성";
+    }
+  }
+
+  function renderImages(data) {
+    const cellsHtml = data.pages
+      .map(
+        (p) => `
+      <div class="cell">
+        <img src="${p.url}" />
+        <br/><a class="dl" href="${p.url}" download>다운로드</a>
+      </div>`
+      )
+      .join("");
+    document.getElementById("renderResult").innerHTML = `
+      <div class="panel">
+        <div class="section-title">완성된 카드뉴스</div>
+        <div class="card-grid">${cellsHtml}</div>
+        <div class="note">${escapeHtml(data.note)}</div>
+      </div>
+    `;
+  }
+
+  async function loadGeneratorStatus() {
+    try {
+      const res = await fetch("/api/cardnews/generator-status");
+      const data = await res.json();
+      const el = document.getElementById("generatorStatusNote");
+      el.innerHTML = data.ready
+        ? `<div class="note" style="margin-top:0;">✅ Claude API(${escapeHtml(data.model)})가 서버에 설정되어 있어요 — 대본이 실제 문장으로 생성됩니다.</div>`
+        : `<div class="note" style="margin-top:0;">⚠️ 서버에 ANTHROPIC_API_KEY가 아직 설정되지 않았어요 — 이대로 만들면 실제 문장 대신 빈칸(✏️)만 채우면 되는 대본 틀로 만들어져요.</div>`;
+    } catch (err) {
+      /* 상태를 못 가져와도 계속 진행 가능하게 조용히 무시 */
+    }
+  }
+
+  async function loadStockPhotoStatus() {
+    try {
+      const res = await fetch("/api/cardnews/stock-photos-status");
+      const data = await res.json();
+      stockPhotosReady = !!data.ready;
+    } catch (err) {
+      stockPhotosReady = false;
+    }
+  }
+
+  (async () => {
+    await loadStockPhotoStatus(); // 대본 카드를 그리기 전에 먼저 알아야 "스톡 사진 검색" 탭을 보여줄지 정할 수 있음
+    await loadStyles();
+    loadGeneratorStatus();
+  })();
+</script>
+</body>
+</html>

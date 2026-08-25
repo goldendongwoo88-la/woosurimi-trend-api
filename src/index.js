@@ -13,6 +13,8 @@ const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
+const cardNewsGenerator = require("./cardNewsGenerator");
+const stockPhotoSearch = require("./stockPhotoSearch");
 const QRCode = require("qrcode");
 const cache = require("./cache");
 const fs = require("fs");
@@ -54,6 +56,10 @@ const blogImageStorage = multer.diskStorage({
   },
 });
 const uploadBlogImages = multer({ storage: blogImageStorage, limits: { fileSize: 15 * 1024 * 1024, files: 8 } });
+
+// "AI 카드뉴스 생성" 모드용 — 페이지별 배경 사진(선택)을 임시로 받아둡니다. 사진이 없는
+// 페이지는 스타일 그라디언트 배경으로 대신 렌더링됩니다.
+const cardUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 15 * 1024 * 1024, files: 8 } });
 
 // 네이버 "엔터" 홈 화면의 탭(드라마/영화/뮤직/연애)을 흉내낸 소분류 → 검색어 매핑입니다.
 // "전체"/"최신뉴스" 탭은 아래 이 4개를 실제로 합쳐서(중복 제거 + 최신순 정렬) 보여줍니다.
@@ -496,6 +502,112 @@ app.post("/api/blog/draft", uploadBlogImages.array("images", 8), async (req, res
     res.json(draft);
   } catch (err) {
     res.status(400).json({ error: "draft_failed", message: err.message });
+  }
+});
+
+// ===================== AI 카드뉴스 생성 =====================
+// 주제를 넣으면 1) Claude API로 페이지별 제목/본문 대본을 짜고(generatePlan), 2) 그
+// 대본을 sharp로 실제 PNG 카드 이미지로 렌더링합니다(renderCardNewsSet). 두 단계로
+// 나눈 이유는 AI 자동화 글쓰기와 같습니다 — 렌더링(이미지 생성) 전에 사용자가 대본
+// 텍스트를 먼저 검토/수정할 수 있게 하기 위해서입니다.
+
+app.get("/api/cardnews/styles", (req, res) => {
+  res.json({
+    styles: cardNewsGenerator.getStyles(),
+    layouts: cardNewsGenerator.getLayouts(),
+    aspectRatios: cardNewsGenerator.getAspectRatios(),
+  });
+});
+
+// 배경 사진을 다양하게 고를 수 있도록, 무료 스톡 사진(Pexels)을 검색합니다.
+app.get("/api/cardnews/stock-photos-status", (req, res) => {
+  res.json({ ready: stockPhotoSearch.isConfigured() });
+});
+
+app.get("/api/cardnews/stock-photos", async (req, res) => {
+  try {
+    const photos = await stockPhotoSearch.searchPhotos(req.query.query || "");
+    res.json({ query: req.query.query, photos });
+  } catch (err) {
+    res.status(400).json({ error: "search_failed", message: err.message });
+  }
+});
+
+app.get("/api/cardnews/generator-status", (req, res) => {
+  res.json(cardNewsGenerator.getGeneratorStatus());
+});
+
+// POST /api/cardnews/plan  body: { topic, pageCount }
+app.post("/api/cardnews/plan", async (req, res) => {
+  const { topic, pageCount } = req.body || {};
+  try {
+    const plan = await cardNewsGenerator.generatePlan({ topic, pageCount });
+    const recommendedStyles = cardNewsGenerator.recommendStyles(topic || "");
+    res.json({ ...plan, recommendedStyles });
+  } catch (err) {
+    res.status(400).json({ error: "plan_failed", message: err.message });
+  }
+});
+
+// 대본(plan, 사용자가 수정했을 수도 있음)을 실제 카드 이미지(PNG) 세트로 렌더링합니다.
+// multipart/form-data로 보내주세요:
+//   - plan: JSON 문자열 — { topic, pages: [{role,title,body}] } (/api/cardnews/plan 응답을 그대로 또는 수정해서)
+//   - styleId, layoutId, ratio: (선택) 스타일/레이아웃/비율 id — 기본 midnight-purple, stack, 4:5
+//   - images: (선택) 페이지 순서에 맞춰 배경으로 쓸 사진 파일들(직접 업로드) — imagePageIndexes와 짝을 맞춰서 보내주세요
+//   - imagePageIndexes: (선택) JSON 배열 — images의 각 파일이 몇 번째 페이지(0부터)용인지
+//   - imagePageUrls: (선택) JSON 객체 — { "페이지번호": "스톡 사진 URL" } (/api/cardnews/stock-photos에서 고른 사진)
+//     업로드 파일과 스톡 URL이 같은 페이지에 동시에 오면 업로드 파일이 우선합니다.
+app.post("/api/cardnews/render", cardUpload.array("images", 8), async (req, res) => {
+  let plan;
+  try {
+    plan = JSON.parse(req.body.plan || "{}");
+  } catch {
+    return res.status(400).json({ error: "invalid_plan", message: "plan 필드가 올바른 JSON이 아닙니다." });
+  }
+  const files = req.files || [];
+  let pageIndexes = [];
+  try {
+    pageIndexes = JSON.parse(req.body.imagePageIndexes || "[]");
+  } catch {
+    pageIndexes = [];
+  }
+  let pageUrls = {};
+  try {
+    pageUrls = JSON.parse(req.body.imagePageUrls || "{}");
+  } catch {
+    pageUrls = {};
+  }
+  // 사진이 있는 페이지만 그 페이지 번호에 맞춰 채우고, 나머지는 null로 비워둡니다
+  // (renderCardNewsSet은 images[i]가 없으면 스타일 그라디언트 배경으로 그립니다).
+  const pageCount = Array.isArray(plan.pages) ? plan.pages.length : 0;
+  const images = new Array(pageCount).fill(null);
+  Object.entries(pageUrls).forEach(([idx, url]) => {
+    const i = Number(idx);
+    if (Number.isInteger(i) && i >= 0 && i < pageCount && typeof url === "string" && url) images[i] = url;
+  });
+  files.forEach((f, i) => {
+    const targetIndex = pageIndexes[i];
+    if (Number.isInteger(targetIndex) && targetIndex >= 0 && targetIndex < pageCount) {
+      images[targetIndex] = f.path; // 업로드 파일이 스톡 사진 URL보다 우선
+    }
+  });
+  const allPaths = files.map((f) => f.path);
+
+  try {
+    const result = await cardNewsGenerator.renderCardNewsSet(plan, {
+      styleId: req.body.styleId,
+      layoutId: req.body.layoutId,
+      ratio: req.body.ratio,
+      images,
+    });
+    res.json({
+      ...result,
+      note: "카드뉴스 이미지가 완성되었습니다. 무료 서버(Render)는 재시작되면 이 파일이 사라질 수 있으니 바로 다운로드해 두세요.",
+    });
+  } catch (err) {
+    res.status(500).json({ error: "render_failed", message: err.message });
+  } finally {
+    allPaths.forEach((p) => fs.unlink(p, () => {}));
   }
 });
 
