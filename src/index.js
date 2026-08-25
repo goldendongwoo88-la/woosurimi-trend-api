@@ -555,7 +555,24 @@ app.post("/api/shortform/render-job", upload.single("bgm"), (req, res) => {
 
   (async () => {
     try {
-      const result = await renderShortformVideo(scenes, { durationPerScene, bgmPath, animate, voice, templateId, frameStyle, hookText });
+      const result = await renderShortformVideo(scenes, {
+        durationPerScene,
+        bgmPath,
+        animate,
+        voice,
+        templateId,
+        frameStyle,
+        hookText,
+        // 진행 단계와 메모리 사용량을 잡에 기록해 둡니다 — 렌더링 도중 서버가 죽었을 때
+        // 마지막으로 어디까지 갔는지 확인할 수 있게 하려는 목적입니다.
+        onPhase: (phase, memMb) => {
+          const job = renderJobs.get(jobId);
+          if (job) {
+            job.phase = phase;
+            job.memMb = memMb;
+          }
+        },
+      });
       const absoluteUrl = `${origin}${result.publicPath}`;
       const qrDataUrl = await QRCode.toDataURL(absoluteUrl, { width: 260, margin: 1 });
 
@@ -600,6 +617,8 @@ app.get("/api/shortform/render-job/:jobId", (req, res) => {
   }
   res.json({
     status: job.status,
+    phase: job.phase,
+    memMb: job.memMb,
     elapsedSec: Math.round((Date.now() - job.createdAt) / 1000),
     result: job.result,
     error: job.error,

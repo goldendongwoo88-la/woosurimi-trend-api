@@ -71,11 +71,17 @@ const FRAME_STYLES = [
 // 수 있게(또는 사용자에게 실패로 보여줄 수 있게) 합니다.
 const FFMPEG_TIMEOUT_MS = 90000;
 
-// ⚠️ Render 무료 플랜은 CPU가 0.1개뿐입니다. ffmpeg가 기본값대로 CPU를 최대한 끌어쓰면
-// Node가 CPU를 못 받아 헬스체크(5초 안에 응답)에 실패하고, 60초 이상 실패하면 Render가
-// 인스턴스를 통째로 재시작해 버립니다(실제로 렌더링 도중 서버가 죽고 작업이 사라졌습니다).
-// 그래서 ffmpeg가 쓰는 스레드 수를 제한해 서버가 숨 쉴 틈을 남겨둡니다.
-const FFMPEG_THREADS = process.env.FFMPEG_THREADS || "1";
+// ffmpeg가 쓸 스레드 수입니다.
+//
+// 예전에 Render 무료 플랜(CPU 0.1개)을 쓸 때는 이 값을 1로 묶어둬야 했습니다. ffmpeg가
+// 기본값대로 CPU를 최대한 끌어쓰면 Node가 CPU를 못 받아 헬스체크(5초 안에 응답)에 실패하고,
+// 60초 이상 실패하면 Render가 인스턴스를 통째로 재시작해 버렸거든요(실제로 렌더링 도중
+// 서버가 죽고 작업이 사라졌습니다).
+//
+// 지금은 Starter 플랜(CPU 0.5개)이라 여유가 생겨서 2로 올렸습니다. 0으로 두면 ffmpeg가
+// 알아서 최대한 쓰는데, 그러면 다시 Node가 굶을 수 있어서 일부러 상한을 둡니다.
+// 더 큰 플랜으로 올리면 FFMPEG_THREADS 환경변수로 더 높여도 됩니다.
+const FFMPEG_THREADS = process.env.FFMPEG_THREADS || "2";
 
 function runFfmpeg(args) {
   // -threads는 입력 옵션보다 앞에 두어도 전역으로 적용됩니다.
@@ -579,6 +585,7 @@ async function renderShortformVideo(
     hookText = "", // 영상 내내 상단에 고정으로 붙는 후킹 문구
     fastConcat = false, // true면 크로스페이드 없이 하드컷으로 이어붙여 렌더링 속도를 크게 아낌(미리보기용)
     encodePreset = "veryfast", // 미리보기는 "ultrafast"로 더 빠르게
+    onPhase = null, // (phase, memMb) — 어디까지 진행됐는지 호출부에 알려줍니다
   } = {}
 ) {
   if (!scenes || !scenes.length) throw new Error("장면(scene)이 없습니다.");
@@ -586,6 +593,15 @@ async function renderShortformVideo(
 
   const jobId = crypto.randomUUID();
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `shortform-${jobId}-`));
+
+  // 렌더링 도중 서버가 메모리 부족으로 죽는 일이 있었어서(Render 512MB), 단계마다
+  // 어디까지 갔고 메모리를 얼마나 쓰고 있는지 남깁니다. 죽더라도 마지막으로 보고된
+  // 단계를 보면 어디서 터졌는지 알 수 있습니다.
+  const reportPhase = (phase) => {
+    const memMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    console.log(`[render ${jobId.slice(0, 8)}] ${phase} — RSS ${memMb}MB`);
+    if (onPhase) onPhase(phase, memMb);
+  };
 
   const narrationInfo = { used: false, provider: voice?.provider || null, failedReason: null, scenesWithVoice: 0 };
 
@@ -656,15 +672,18 @@ async function renderShortformVideo(
       });
       segmentPaths.push(segPath);
       durations.push(sceneDuration);
+      reportPhase(`장면 ${i + 1}/${scenes.length} 완료`);
 
       // 장면 사이에 아주 짧은 틈을 둡니다. ffmpeg가 CPU를 계속 붙잡고 있으면 서버가
       // 헬스체크에 제때 응답하지 못해 Render가 인스턴스를 재시작해 버리기 때문에,
       // 중간중간 서버가 숨 쉴 틈을 만들어 주는 용도입니다.
-      await new Promise((r) => setTimeout(r, 400));
+      // (무료 플랜에선 400ms가 필요했지만, Starter로 올린 뒤로는 CPU 여유가 생겨 짧게 줄였습니다.)
+      await new Promise((r) => setTimeout(r, 120));
     }
 
     const concatenatedPath = path.join(workDir, "concat.mp4");
     let totalDuration;
+    reportPhase("장면 합치기 시작");
     if (fastConcat) {
       // 크로스페이드는 장면마다 재인코딩이 필요해서 느립니다 — 미리보기처럼 속도가
       // 중요할 땐 처음부터 하드컷으로 이어붙입니다.
@@ -682,6 +701,8 @@ async function renderShortformVideo(
       }
     }
 
+    reportPhase("장면 합치기 완료");
+
     const fileName = `${jobId}.mp4`;
     const finalPath = path.join(RENDERS_DIR, fileName);
 
@@ -690,6 +711,7 @@ async function renderShortformVideo(
     } else {
       fs.copyFileSync(concatenatedPath, finalPath);
     }
+    reportPhase("마무리 완료");
 
     return { fileName, publicPath: `/renders/${fileName}`, durationSec: totalDuration, narration: narrationInfo };
   } finally {
