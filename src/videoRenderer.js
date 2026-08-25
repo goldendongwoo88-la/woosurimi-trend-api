@@ -450,6 +450,28 @@ async function muxBgmAndNarration(videoPath, bgmPath, totalDuration, outPath) {
   ]);
 }
 
+// Azure 목소리를 대본 내용 기반으로 자동으로 고를 때 쓰는 남성/여성 기본 목소리입니다.
+// (voiceProvider.js의 기본값과 같은 InJoon을 남성 쪽 기준으로 맞춰뒀습니다.)
+const AZURE_MALE_VOICE = "ko-KR-InJoonNeural";
+const AZURE_FEMALE_VOICE = "ko-KR-SunHiNeural";
+
+// 커플/결혼처럼 남녀가 함께 나오는 정보성 콘텐츠는(사장님 지정에 따라) 여자 목소리로
+// 고정합니다 — 이 키워드가 있으면 아래 "남자 vs 여자" 단어 수 비교보다 우선합니다.
+const MIXED_CONTENT_KEYWORDS = /커플|결혼|부부|남녀|웨딩|신혼/;
+
+// 전체 대본(모든 장면 캡션)에 "남자/남성" vs "여자/여성" 단어가 몇 번씩 나오는지 세서,
+// 더 많이 나온 쪽 목소리를 고릅니다(예: "남자 연예인" 기사 → 남성, "여자 연예인" 기사
+// → 여성). 둘 다 없거나 동률이면 null(판단 보류)을 반환해서 호출부가 기본 목소리로
+// 자연스럽게 넘어가게 합니다.
+function detectGenderVoice(scenes) {
+  const text = (scenes || []).map((s) => s.caption || "").join(" ");
+  if (MIXED_CONTENT_KEYWORDS.test(text)) return AZURE_FEMALE_VOICE;
+  const maleHits = (text.match(/남자|남성/g) || []).length;
+  const femaleHits = (text.match(/여자|여성/g) || []).length;
+  if (maleHits === femaleHits) return null;
+  return maleHits > femaleHits ? AZURE_MALE_VOICE : AZURE_FEMALE_VOICE;
+}
+
 /**
  * scenes: [{ caption, image }]  (planShortform이 만든 결과의 scenes 배열)
  * options.durationPerScene: 장면당 기본 길이(초), 기본 3초 (나레이션이 더 길면 자동으로 늘어남)
@@ -485,6 +507,13 @@ async function renderShortformVideo(
       ({ synthesizeVoice } = require("./voiceProvider"));
     }
 
+    // Azure이고 사용자가 목소리를 직접 안 골랐으면(voiceId 빈 값), 대본 내용을 보고
+    // "남자" 관련 콘텐츠인지 "여자" 관련 콘텐츠인지에 따라 자동으로 남성/여성 목소리를
+    // 골라줍니다. 애매하면(둘 다 없거나 동률이면) null로 두고, voiceProvider.js의
+    // 기본 목소리(InJoon)로 자연스럽게 넘어가게 둡니다. 영상 전체에서 목소리가 장면마다
+    // 바뀌면 어색하므로, 장면별이 아니라 영상 전체 기준으로 딱 한 번만 정합니다.
+    const autoVoiceId = voice && voice.provider === "azure" && !voice.voiceId ? detectGenderVoice(scenes) : null;
+
     const segmentPaths = [];
     const durations = [];
 
@@ -512,7 +541,7 @@ async function renderShortformVideo(
       if (synthesizeVoice) {
         const narrCandidate = path.join(workDir, `narr${i}.mp3`);
         try {
-          await synthesizeVoice({ text: scene.caption, provider: voice.provider, voiceId: voice.voiceId, destPath: narrCandidate });
+          await synthesizeVoice({ text: scene.caption, provider: voice.provider, voiceId: voice.voiceId || autoVoiceId, destPath: narrCandidate });
           const dur = await probeDurationSeconds(narrCandidate);
           narrationPath = narrCandidate;
           if (dur) sceneDuration = Math.max(sceneDuration, dur + 0.4);
