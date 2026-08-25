@@ -62,12 +62,20 @@ const FRAME_STYLES = [
   },
 ];
 
+// execFile은 기본적으로 시간 제한이 없어서, ffmpeg가 어떤 이유로든(예: 손상된 입력
+// 파일, 예상 못한 인코더 문제) 멈춰버리면 이 Promise가 영영 끝나지 않고 그 위의
+// 호출부(장면 렌더링 → 미리보기 5개 순서대로 생성 등) 전체가 몇 분이고 멈춰 있게
+// 됩니다. timeout을 걸어서, 정말 멈춘 경우엔 에러로 실패 처리되고 다음 단계로 넘어갈
+// 수 있게(또는 사용자에게 실패로 보여줄 수 있게) 합니다.
+const FFMPEG_TIMEOUT_MS = 90000;
+
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
-    execFile(ffmpegPath, args, { maxBuffer: 1024 * 1024 * 100 }, (err, stdout, stderr) => {
+    execFile(ffmpegPath, args, { maxBuffer: 1024 * 1024 * 100, timeout: FFMPEG_TIMEOUT_MS }, (err, stdout, stderr) => {
       if (err) {
         const tail = (stderr || "").toString().split("\n").slice(-25).join("\n");
-        return reject(new Error(`ffmpeg 처리 중 오류가 발생했습니다: ${tail || err.message}`));
+        const reason = err.killed ? `ffmpeg가 ${FFMPEG_TIMEOUT_MS / 1000}초 안에 끝나지 않아 중단했습니다.` : tail || err.message;
+        return reject(new Error(`ffmpeg 처리 중 오류가 발생했습니다: ${reason}`));
       }
       resolve();
     });
@@ -79,7 +87,7 @@ function runFfmpeg(args) {
 // Duration 줄은 에러 전에 이미 찍혀 있어서 그걸 파싱하면 됩니다).
 function probeDurationSeconds(filePath) {
   return new Promise((resolve) => {
-    execFile(ffmpegPath, ["-i", filePath], { maxBuffer: 1024 * 1024 * 20 }, (err, stdout, stderr) => {
+    execFile(ffmpegPath, ["-i", filePath], { maxBuffer: 1024 * 1024 * 20, timeout: 15000 }, (err, stdout, stderr) => {
       const text = (stderr || "").toString();
       const m = text.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
       if (!m) return resolve(null);
@@ -453,7 +461,15 @@ async function muxBgmAndNarration(videoPath, bgmPath, totalDuration, outPath) {
  */
 async function renderShortformVideo(
   scenes,
-  { durationPerScene = 3, bgmPath = null, animate = true, voice = null, templateId = "bold-black", frameStyle = "polaroid" } = {}
+  {
+    durationPerScene = 3,
+    bgmPath = null,
+    animate = true,
+    voice = null,
+    templateId = "bold-black",
+    frameStyle = "polaroid",
+    fastConcat = false, // true면 크로스페이드 없이 하드컷으로 이어붙여 렌더링 속도를 크게 아낌(미리보기용)
+  } = {}
 ) {
   if (!scenes || !scenes.length) throw new Error("장면(scene)이 없습니다.");
   if (!fs.existsSync(RENDERS_DIR)) fs.mkdirSync(RENDERS_DIR, { recursive: true });
@@ -527,14 +543,21 @@ async function renderShortformVideo(
 
     const concatenatedPath = path.join(workDir, "concat.mp4");
     let totalDuration;
-    try {
-      totalDuration = await concatWithCrossfade(segmentPaths, durations, concatenatedPath, TRANSITION_SEC);
-    } catch (err) {
-      // 크로스페이드 합성이 실패하면(예: ffmpeg 빌드 문제) 영상 자체가 안 만들어지는 것보다는
-      // 낫다고 보고, 예전처럼 하드컷으로 이어붙이는 방식으로 안전하게 대체합니다.
-      console.error("[videoRenderer] 크로스페이드 전환 실패 — 하드컷 이어붙이기로 대체합니다:", err.message);
+    if (fastConcat) {
+      // 크로스페이드는 장면마다 재인코딩이 필요해서 느립니다 — 미리보기처럼 속도가
+      // 중요할 땐 처음부터 하드컷으로 이어붙입니다.
       totalDuration = durations.reduce((a, b) => a + b, 0);
       await concatSegments(segmentPaths, concatenatedPath);
+    } else {
+      try {
+        totalDuration = await concatWithCrossfade(segmentPaths, durations, concatenatedPath, TRANSITION_SEC);
+      } catch (err) {
+        // 크로스페이드 합성이 실패하면(예: ffmpeg 빌드 문제) 영상 자체가 안 만들어지는 것보다는
+        // 낫다고 보고, 예전처럼 하드컷으로 이어붙이는 방식으로 안전하게 대체합니다.
+        console.error("[videoRenderer] 크로스페이드 전환 실패 — 하드컷 이어붙이기로 대체합니다:", err.message);
+        totalDuration = durations.reduce((a, b) => a + b, 0);
+        await concatSegments(segmentPaths, concatenatedPath);
+      }
     }
 
     const fileName = `${jobId}.mp4`;

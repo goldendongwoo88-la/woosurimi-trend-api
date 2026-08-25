@@ -320,14 +320,15 @@ app.get("/api/shortform/frame-styles", (req, res) => {
   res.json({ frameStyles: FRAME_STYLES });
 });
 
-// 캡컷 "자동컷"처럼, 대본(scenes) 하나로 "템플릿 + 배경음악 + 성우 목소리" 조합 5가지를
-// AI가 알아서 짜서, 각각 짧은 미리보기 영상으로 만들어 보여줍니다. 사용자는 5개 중
-// 마음에 드는 걸 골라서 /api/shortform/render 를 그 조합(templateId/bgmId/voiceProvider)
-// 그대로 호출하면 완성도 높은 최종 영상이 나옵니다.
-// - 미리보기는 속도를 위해 앞부분 최대 3개 장면 + 장면당 1.6초 + 나레이션 없이 렌더링합니다
-//   (실제 목소리가 어떻게 나올지는 최종 렌더링에서 확인할 수 있어요).
-// - 서버 부하를 줄이기 위해 5개를 동시에가 아니라 순서대로 하나씩 만듭니다 — 다소 시간이
-//   걸릴 수 있습니다(장면 수·서버 성능에 따라 총 30초~2분 정도).
+// 캡컷 "자동컷"처럼, 대본(scenes) 하나로 "템플릿 + 배경음악 + 성우 목소리" 조합
+// 여러 개를 AI가 알아서 짜서, 각각 짧은 미리보기 영상으로 만들어 보여줍니다. 사용자는
+// 그중 마음에 드는 걸 골라서 /api/shortform/render 를 그 조합(templateId/bgmId/
+// voiceProvider) 그대로 호출하면 완성도 높은 최종 영상이 나옵니다.
+// - 미리보기는 속도를 위해 앞부분 최대 2개 장면 + 장면당 1.3초 + 크로스페이드 없이
+//   하드컷 + 나레이션 없이 렌더링합니다(실제 전환 효과·목소리는 최종 렌더링에서 확인).
+// - 무료 서버는 CPU가 넉넉하지 않아서, 여러 개를 동시에 만들면 오히려 서로 느려집니다
+//   — 순서대로 하나씩 만들되, DEADLINE_MS를 넘기면 그때까지 완성된 것만이라도 즉시
+//   돌려줍니다(완성될 때까지 하염없이 기다리게 두지 않기 위함).
 // POST /api/shortform/recommend  body: { "scenes": [...] }
 app.post("/api/shortform/recommend", async (req, res) => {
   const scenes = Array.isArray(req.body?.scenes) ? req.body.scenes : [];
@@ -342,12 +343,19 @@ app.post("/api/shortform/recommend", async (req, res) => {
     .filter(([, v]) => v.ready)
     .map(([key, v]) => ({ provider: key, label: v.label }));
 
-  const previewScenes = scenes.slice(0, 3); // 미리보기는 앞부분 최대 3장면만
+  const previewScenes = scenes.slice(0, 2); // 미리보기는 앞부분 최대 2장면만
   const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "polaroid";
   const RECIPE_COUNT = 5;
+  const DEADLINE_MS = 60000;
+  const startedAt = Date.now();
   const recipes = [];
+  let timedOut = false;
 
   for (let i = 0; i < RECIPE_COUNT; i++) {
+    if (Date.now() - startedAt > DEADLINE_MS) {
+      timedOut = true;
+      break;
+    }
     const template = templates[i % templates.length];
     const bgm = bgmTracks[i % bgmTracks.length];
     const voiceChoice = readyProviders.length ? readyProviders[i % readyProviders.length] : null;
@@ -356,12 +364,13 @@ app.post("/api/shortform/recommend", async (req, res) => {
     let previewError = null;
     try {
       const result = await renderShortformVideo(previewScenes, {
-        durationPerScene: 1.6,
+        durationPerScene: 1.3,
         bgmPath: getTrackPath(bgm.id),
         animate: true,
         voice: null, // 미리보기는 속도를 위해 나레이션 없이 만듭니다
         templateId: template.id,
         frameStyle,
+        fastConcat: true, // 미리보기는 크로스페이드 없이 하드컷으로(훨씬 빠름)
       });
       previewPath = result.publicPath;
     } catch (err) {
@@ -382,8 +391,9 @@ app.post("/api/shortform/recommend", async (req, res) => {
   }
 
   res.json({
-    note:
-      "5가지 조합(자막 템플릿+배경음악+성우 목소리)을 AI가 자동으로 짜서 짧게 미리보기를 만들었습니다. 마음에 드는 조합을 고르면 그 설정 그대로 최종 영상을 만들 수 있어요. 미리보기는 속도를 위해 앞부분 일부 장면·짧은 길이·나레이션 없이 만들어졌습니다.",
+    note: timedOut
+      ? `서버가 바빠서 ${recipes.length}개까지만 미리보기를 완성했어요. 마음에 드는 조합을 고르거나, 아래 "직접 설정해서 만들기"에서 원하는 템플릿·음악을 직접 골라 최종 영상을 만들어도 돼요.`
+      : "여러 조합(자막 템플릿+배경음악+성우 목소리)을 AI가 자동으로 짜서 짧게 미리보기를 만들었습니다. 마음에 드는 조합을 고르면 그 설정 그대로 최종 영상을 만들 수 있어요. 미리보기는 속도를 위해 앞부분 일부 장면·짧은 길이·나레이션 없이 만들어졌습니다.",
     voiceProvidersReady: readyProviders,
     recipes,
   });

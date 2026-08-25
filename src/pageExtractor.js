@@ -6,10 +6,15 @@
 function decodeHtmlEntities(str) {
   return (str || "")
     .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&gt;/g, ">")
+    // 숫자 참조(&#61; / &#x3D;)도 처리합니다 — 네이버 블로그의 뉴스/외부 콘텐츠 임베드
+    // 위젯은 <img src="..."> 안의 "="/"&"를 리터럴 문자 대신 &#x3D;/&amp; 같은 숫자
+    // 엔티티로 이스케이프해서 넣는 경우가 있어서, 이걸 안 풀면 URL 문법이 깨집니다.
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&amp;/g, "&");
 }
 
 function extractMeta(html, property) {
@@ -39,11 +44,23 @@ function extractMainText(html) {
 // 여기서 걸러냅니다 — 실제 사진이 아니라 텍스트가 그려진 장식 그래픽이라 숏폼 장면
 // 사진으로 쓰기에 부적절하기 때문입니다(스티커는 보통 storep-phinf.pstatic.net 같은
 // 별도 도메인이나 파일명/alt 텍스트에 "sticker"/"스티커"가 들어있습니다).
+// dthumb-phinf.pstatic.net은 본문에 붙여넣은 외부 링크(뉴스 기사 등)의 "링크 카드"
+// 미리보기 썸네일을 만들어주는 프록시 주소라, 블로거가 실제로 찍거나 올린 사진이
+// 아닙니다(게다가 실제로 접속해보면 404가 나는 경우가 많다는 것도 확인했습니다).
 function looksLikeRealPhoto(src, widthAttr, heightAttr, altText) {
   const lower = src.toLowerCase();
   if (/\.(svg)(\?|$)/.test(lower)) return false;
   if (/(icon|logo|sprite|pixel|blank|spacer|badge|button|1x1)/.test(lower)) return false;
-  if (/(sticker|emoticon|ogq_|band[-_]?sticker|stkr[-_]|storep-phinf)/.test(lower)) return false;
+  if (/(sticker|emoticon|ogq_|band[-_]?sticker|stkr[-_]|storep-phinf|dthumb-phinf)/.test(lower)) return false;
+  // 네이버 에디터가 (예: 빈 링크카드 등에) 기본으로 넣는 "제목을 입력해주세요" 같은
+  // 안내문구 플레이스홀더 그래픽 — URL 디코딩된 파일명에 이 문구가 그대로 들어있습니다.
+  let decodedSrc = src;
+  try {
+    decodedSrc = decodeURIComponent(src);
+  } catch {
+    /* 디코딩 실패하면 원본 그대로 검사(어차피 이 필터는 못 걸러도 치명적이지 않음) */
+  }
+  if (/제목을[_ ]?입력해주세요/.test(decodedSrc)) return false;
   const alt = (altText || "").toLowerCase();
   if (/(스티커|이모티콘|sticker|emoticon)/.test(alt)) return false;
   const w = Number(widthAttr);
@@ -90,7 +107,12 @@ function extractImages(html, baseUrl, ogImage, limit = 12) {
 
   const pushImage = (rawSrc, widthAttr, heightAttr, altText) => {
     if (!rawSrc) return;
-    let resolved = resolveUrl(rawSrc, baseUrl);
+    // 일부 페이지(특히 네이버 블로그의 뉴스/외부 콘텐츠 임베드 위젯)는 <img src="...">
+    // 안에 "="/"&"를 리터럴 문자 대신 &#x3D;/&amp; 같은 HTML 엔티티로 이스케이프해서
+    // 넣습니다. 그대로 URL로 쓰면 문법이 깨져서(예: "src&#x3D;..." 그대로 남음) 이미지가
+    // 로드되지 않으므로, 다른 텍스트 필드와 마찬가지로 먼저 엔티티를 디코딩합니다.
+    const src = decodeHtmlEntities(rawSrc);
+    let resolved = resolveUrl(src, baseUrl);
     if (!resolved || seen.has(resolved)) return;
     if (!looksLikeRealPhoto(resolved, widthAttr, heightAttr, altText)) return;
     resolved = upgradeImageResolution(resolved);
@@ -184,13 +206,18 @@ async function fetchPageHtml(url) {
 
 async function extractPageData(url) {
   const fetchUrl = normalizeNaverBlogUrl(url);
+  const isNaverBlog = fetchUrl !== url; // normalizeNaverBlogUrl이 바꿔치기했다면 네이버 블로그 글
   const html = await fetchPageHtml(fetchUrl);
   const titleTag = (html.match(/<title>([^<]*)<\/title>/i) || [])[1] || "";
   const ogImage = extractMeta(html, "og:image");
   const title = extractMeta(html, "og:title") || decodeHtmlEntities(titleTag.trim());
   const description = extractMeta(html, "og:description") || "";
   const bodyText = extractMainText(html);
-  const images = extractImages(html, fetchUrl, ogImage);
+  // ⚠️ 네이버 모바일 블로그의 og:image는 실제 존재하는 이미지 경로와 다르게 인코딩되어
+  // 있어서(레거시 EUC-KR 방식 추정) 거의 항상 404가 납니다 — 실제 확인 결과 본문
+  // <img> 태그들은 멀쩡히 로드되므로, 네이버 블로그일 때는 og:image를 아예 쓰지 않고
+  // 본문 이미지만 사용합니다.
+  const images = extractImages(html, fetchUrl, isNaverBlog ? null : ogImage);
   return { url, title: (title || "").trim(), description: description.trim(), bodyText, images };
 }
 

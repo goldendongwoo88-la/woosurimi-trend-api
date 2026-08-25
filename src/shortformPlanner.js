@@ -25,11 +25,41 @@ function splitSentences(text) {
     .filter(Boolean);
 }
 
-function pickSceneSentences(sentences, count) {
-  const usable = sentences.filter((s) => s.length >= 10 && s.length <= 90);
+// 문장 앞에 "20:08" 같은 읽는시간/시각 표시가 실수로 붙어 들어온 경우 잘라냅니다
+// (네이버 모바일 블로그 본문을 긁을 때, 시간 표시 다음 문단이 붙어서 하나로 잡히는
+// 경우가 있습니다).
+function stripLeadingTimestamp(s) {
+  return s.replace(/^\d{1,2}:\d{2}\s*/, "").trim();
+}
+
+// 한글/영문 글자가 거의 없는(숫자·기호뿐인) "문장"은 의미 있는 내용이 아니라서 뺍니다.
+function isMostlyNoise(s) {
+  const letters = s.replace(/[^가-힣a-zA-Z]/g, "");
+  return letters.length < 4;
+}
+
+function normalizeForCompare(s) {
+  return (s || "").replace(/[\s"'“”‘’.,!?~\-·:()[\]]/g, "").toLowerCase();
+}
+
+// 글 제목을 그대로 반복하는 "문장"(제목이 본문 맨 위에 큰 글씨 헤딩으로 또 들어있는
+// 경우가 흔함)을 본문 씬으로 쓰면, 오프닝 씬과 내용이 거의 똑같아져서 어색합니다.
+function isTitleEcho(sentence, title) {
+  const normSentence = normalizeForCompare(sentence);
+  const normTitle = normalizeForCompare(title);
+  if (!normSentence || !normTitle || normTitle.length < 4) return false;
+  return normSentence.includes(normTitle) || normTitle.includes(normSentence);
+}
+
+function pickSceneSentences(sentences, count, title = "") {
+  const cleaned = sentences
+    .map(stripLeadingTimestamp)
+    .filter((s) => s && !isMostlyNoise(s) && !isTitleEcho(s, title));
+
+  const usable = cleaned.filter((s) => s.length >= 10 && s.length <= 90);
   if (usable.length >= count) return usable.slice(0, count);
   // 적당한 길이 문장이 부족하면 짧더라도 있는 대로 채웁니다.
-  return sentences.filter((s) => s.length >= 4).slice(0, count);
+  return cleaned.filter((s) => s.length >= 4).slice(0, count);
 }
 
 function extractHashtags(text, extra = []) {
@@ -69,13 +99,19 @@ function normalizeSource(source) {
 
 /**
  * source: "blog" | "shopping" | "travel" — 문구 톤(후킹 멘트, CTA)만 살짝 다르게 짭니다.
- * sceneCount: 몇 개의 장면으로 나눌지 (기본 6개 — 숏폼 15~30초 분량 감안)
+ * sceneCountOverride: 장면 수를 직접 지정하고 싶을 때만 넘기세요. 안 넘기면, 원문에
+ *   실제로 있던 사진 수에 맞춰 자동으로 정합니다(최소 6장면, 최대 12장면 — 렌더링이
+ *   지원하는 장면 상한과 동일). 사진이 많은 글일수록 "본문 사진을 최대한 다 써서"
+ *   더 풍성한 영상이 되도록 하기 위함입니다.
  */
-async function planShortform(url, source = "blog", sceneCount = 6) {
+async function planShortform(url, source = "blog", sceneCountOverride = null) {
   const src = normalizeSource(source);
   const page = await extractPageData(url);
+  const images = page.images && page.images.length ? page.images : [];
+  const sceneCount = sceneCountOverride || Math.min(Math.max(images.length, 6), 12);
+
   const sentences = splitSentences(page.bodyText || page.description);
-  const sceneSentences = pickSceneSentences(sentences, sceneCount);
+  const sceneSentences = pickSceneSentences(sentences, sceneCount, page.title);
   const price = src === "shopping" ? findPrice(page.bodyText) : null;
 
   const hook = HOOK_BY_SOURCE[src](page.title);
@@ -88,7 +124,6 @@ async function planShortform(url, source = "blog", sceneCount = 6) {
       ? sceneSentences.slice(0, middleCount)
       : [page.description || "원문에서 핵심 문장을 찾지 못했어요 — 원문을 직접 확인해 주세요."];
 
-  const images = page.images && page.images.length ? page.images : [];
   const pickImage = (idx) => (images.length ? images[idx % images.length] : null);
 
   const scenes = [];
@@ -105,6 +140,10 @@ async function planShortform(url, source = "blog", sceneCount = 6) {
 
   const fullScript = scenes.map((s) => `[씬 ${s.index}] ${s.caption}`).join("\n\n");
 
+  // 장면이 많아질수록(=사진을 많이 써서) 장면당 길이를 짧게 잡아야 숏폼다운 15~20초
+  // 안팎에 맞습니다. 렌더링 화면의 "장면당 길이" 입력칸 기본값으로 씁니다.
+  const recommendedDurationPerScene = scenes.length <= 6 ? 3 : scenes.length <= 8 ? 2.4 : 1.8;
+
   return {
     sourceUrl: url,
     source: src,
@@ -114,6 +153,7 @@ async function planShortform(url, source = "blog", sceneCount = 6) {
     sourceImages: images, // 씬 에디터에서 "다른 사진으로 교체"할 때 고를 수 있는 원문 사진 후보 전체
     scenes,
     fullScript,
+    recommendedDurationPerScene,
     hashtags: extractHashtags(page.title + " " + page.description, HASHTAG_EXTRA_BY_SOURCE[src]),
     note:
       "사진과 문장은 원문 페이지에서 실제로 가져온 것이며, AI가 새로 창작한 내용이 아니라 원문 핵심 문장을 골라 장면 순서로 배치한 초안입니다. 실제 게시 전에는 직접 검수·수정해서 쓰는 걸 권장하고, 본인 소유가 아닌 페이지의 사진을 쓸 때는 저작권/사용권을 꼭 확인해 주세요.",

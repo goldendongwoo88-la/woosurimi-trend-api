@@ -558,7 +558,7 @@
           <label class="field-label">직접 배경음악 업로드(선택, 넣으면 위 추천곡 대신 이 파일이 쓰여요)</label>
           <input type="file" id="bgmInput" accept="audio/*" style="margin-bottom:10px;" />
           <label class="field-label">장면당 길이(초) — AI 나레이션이 더 길면 자동으로 늘어나요</label>
-          <input type="number" id="durationInput" value="3" min="2" max="6" style="margin-bottom:10px;" />
+          <input type="number" id="durationInput" value="3" min="1.5" max="6" step="0.1" style="margin-bottom:10px;" />
           <label class="field-label">사진 프레임 스타일</label>
           <select id="frameStyleSelect" style="margin-bottom:6px;"></select>
           <div id="frameStyleNote" class="note" style="margin:0 0 10px 0;"></div>
@@ -576,6 +576,11 @@
     loadBgmSuggestions();
     loadVoiceProviderStatus();
     loadFrameStyleOptions();
+    // 링크컷 기획안은 사진 수에 맞춰 장면 수를 자동으로 늘리는데, 장면이 많아지면
+    // 장면당 길이를 짧게 잡아야 숏폼다운 15~20초 안팎에 맞습니다.
+    if (plan.recommendedDurationPerScene) {
+      document.getElementById("durationInput").value = plan.recommendedDurationPerScene;
+    }
     document.getElementById("renderBtn").onclick = () => renderVideo();
     document.getElementById("recommendBtn").onclick = () => loadRecommendations();
     document.getElementById("addSceneBtn").onclick = () => {
