@@ -20,6 +20,7 @@ const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptSt
 const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
 const { extractPageData } = require("./pageExtractor");
+const instagramAuth = require("./instagramAuth");
 const QRCode = require("qrcode");
 const cache = require("./cache");
 const fs = require("fs");
@@ -697,6 +698,38 @@ async function warmBlogTopicsCache() {
 // 자동 대체됩니다.
 app.get("/api/blog/writer-status", (req, res) => {
   res.json(getWriterStatus());
+});
+
+// --- 인스타그램(Meta) 계정 연동 ---
+// "인스타그램 연결하기" 버튼이 이 주소로 이동하면 Meta 로그인 화면으로 리다이렉트합니다.
+app.get("/api/instagram/connect", (req, res) => {
+  try {
+    const url = instagramAuth.getAuthUrl();
+    res.redirect(url);
+  } catch (e) {
+    res.status(500).send(`연동 준비 실패: ${e.message}`);
+  }
+});
+
+// Meta 로그인 완료 후 돌아오는 콜백. 페이지 액세스 토큰 + 인스타그램 비즈니스 계정
+// 정보를 저장하고, 결과를 사람이 읽을 수 있는 간단한 안내 페이지로 보여줍니다.
+app.get("/api/instagram/callback", async (req, res) => {
+  const { code, state, error, error_description } = req.query;
+  if (error) {
+    return res.status(400).send(`<h2>연동 취소/실패</h2><p>${error_description || error}</p>`);
+  }
+  try {
+    const connected = await instagramAuth.handleCallback(code, state);
+    const list = connected.map((c) => `<li>@${c.igUsername} (페이지: ${c.pageName})</li>`).join("");
+    res.send(`<h2>인스타그램 연동 완료 ✅</h2><ul>${list}</ul><p>이 창은 닫으셔도 됩니다.</p>`);
+  } catch (e) {
+    res.status(500).send(`<h2>연동 실패</h2><p>${e.message}</p>`);
+  }
+});
+
+// 현재 연동된 인스타그램 계정 목록 (액세스 토큰은 응답에 포함하지 않음)
+app.get("/api/instagram/accounts", (req, res) => {
+  res.json({ configured: instagramAuth.isConfigured(), accounts: instagramAuth.listAccounts() });
 });
 
 // 초안 생성. multipart/form-data로 보내주세요:

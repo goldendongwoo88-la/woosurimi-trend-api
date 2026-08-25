@@ -3,3 +3,4 @@ node_modules/
 *.log
 public/renders/*.mp4
 public/uploads/*
+data/*.json
