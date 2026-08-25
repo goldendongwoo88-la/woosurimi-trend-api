@@ -47,9 +47,6 @@ const TOOLS = [
     inputLabel: "방송 키워드 / 완성된 제목 / 제목+참고 본문",
     inputPlaceholder: "예) 나는솔로 22기 옥순 (또는 완성된 제목, 또는 제목+아는 사실을 함께)",
     system: loadSkillPrompt("broadcast-issue"),
-    // 이 카드는 실제 "방송 이슈" 클로드 스킬(.skill)로 따로 만들어 전달드렸어요 — 계정에 저장해두시면
-    // 클로드 앱에서 아래 트리거 문구만으로 그 스킬이 자동으로 실행돼요.
-    claudeAppTrigger: "방송 이슈 블로그 써줘",
   },
   {
     id: "celebrity-gossip",
@@ -64,8 +61,6 @@ const TOOLS = [
     inputLabel: "가십 키워드 / 완성된 제목 / 제목+참고 본문",
     inputPlaceholder: "예) OOO 열애설 (또는 완성된 제목, 또는 제목+아는 사실을 함께)",
     system: loadSkillPrompt("celebrity-gossip"),
-    // 이 카드도 "연예인 가십" 클로드 스킬(.skill)로 따로 만들어 전달드려요.
-    claudeAppTrigger: "연예인 가십 블로그 써줘",
   },
   {
     id: "celeb-fashion",
@@ -79,7 +74,6 @@ const TOOLS = [
     inputLabel: "연예인 + 패션 키워드",
     inputPlaceholder: "예) 카리나 공항패션",
     system: loadSkillPrompt("celeb-fashion"),
-    claudeAppTrigger: "연예인 패션 블로그 써줘",
   },
   {
     id: "fashion-review",
@@ -93,7 +87,6 @@ const TOOLS = [
     inputLabel: "제품/브랜드 키워드",
     inputPlaceholder: "예) 나이키 v2k 후기",
     system: loadSkillPrompt("fashion-review"),
-    claudeAppTrigger: "패션 후기 블로그 써줘",
   },
   {
     id: "celeb-beauty",
@@ -107,7 +100,6 @@ const TOOLS = [
     inputLabel: "연예인 + 뷰티 키워드",
     inputPlaceholder: "예) 카리나 로우번",
     system: loadSkillPrompt("celeb-beauty"),
-    claudeAppTrigger: "연예인 뷰티 블로그 써줘",
   },
   {
     id: "beauty-review",
@@ -121,7 +113,6 @@ const TOOLS = [
     inputLabel: "제품/시술 키워드",
     inputPlaceholder: "예) 수분크림 후기",
     system: loadSkillPrompt("beauty-review"),
-    claudeAppTrigger: "뷰티 후기 블로그 써줘",
   },
   {
     id: "it-auto",
@@ -137,7 +128,6 @@ const TOOLS = [
     inputLabel: "IT·자동차 키워드 / 완성된 제목 / 제목+참고 정보",
     inputPlaceholder: "예) 테슬라 모델Y (또는 완성된 제목, 또는 제목+아는 내용을 함께)",
     system: loadSkillPrompt("it-auto"),
-    claudeAppTrigger: "IT 자동차 블로그 써줘",
   },
   {
     id: "wealth-life",
@@ -153,9 +143,6 @@ const TOOLS = [
     inputLabel: "재테크 키워드 / 완성된 제목 / 제목+참고 정보",
     inputPlaceholder: "예) 삼성전자 (또는 완성된 제목, 또는 제목+아는 내용을 함께)",
     system: loadSkillPrompt("wealth-life"),
-    // 이 카드는 실제 "재테크·경제" 클로드 스킬(.skill)로 따로 만들어 전달드려요 — 계정에 저장해두시면
-    // 클로드 앱에서 아래 트리거 문구만으로 그 스킬이 자동으로 실행돼요.
-    claudeAppTrigger: "재테크 경제 블로그 써줘",
   },
   {
     id: "living-life",
@@ -171,7 +158,6 @@ const TOOLS = [
     inputLabel: "리빙 키워드 / 완성된 제목 / 제목+참고 정보",
     inputPlaceholder: "예) 다이소 신상 (또는 완성된 제목, 또는 제목+아는 내용을 함께)",
     system: loadSkillPrompt("living-life"),
-    claudeAppTrigger: "리빙 라이프 블로그 써줘",
   },
   {
     id: "sports-issue",
@@ -187,7 +173,6 @@ const TOOLS = [
     inputLabel: "스포츠 키워드 / 완성된 제목 / 제목+참고 정보",
     inputPlaceholder: "예) 손흥민 골 (또는 완성된 제목, 또는 제목+아는 내용을 함께)",
     system: loadSkillPrompt("sports-issue"),
-    claudeAppTrigger: "스포츠 이슈 블로그 써줘",
   },
   {
     id: "health-info",
@@ -203,7 +188,6 @@ const TOOLS = [
     inputLabel: "건강 키워드 / 완성된 제목 / 제목+참고 정보",
     inputPlaceholder: "예) 무릎 통증 (또는 완성된 제목, 또는 제목+아는 내용을 함께)",
     system: loadSkillPrompt("health-info"),
-    claudeAppTrigger: "건강 정보 블로그 써줘",
   },
   {
     id: "knowledge-culture",
@@ -219,7 +203,6 @@ const TOOLS = [
     inputLabel: "지식교양 키워드 / 완성된 제목 / 제목+참고 정보",
     inputPlaceholder: "예) OO 뜻 (또는 완성된 제목, 또는 제목+아는 내용을 함께)",
     system: loadSkillPrompt("knowledge-culture"),
-    claudeAppTrigger: "지식교양 블로그 써줘",
   },
   {
     id: "drama-profile",
@@ -313,33 +296,10 @@ const TOOLS = [
   },
 ];
 
-// "클로드 앱에서 열기" 버튼용 claude://claude.ai/new?q=... 딥링크에 넣을 문구를 만듭니다.
-// - claudeAppTrigger가 있는 카드(사용자가 만든 긴 스킬 원문 기반 카드)는, 그 긴 원문 전체를 넣으면
-//   claude:// 링크 길이 제한(데스크톱 앱 기준 텍스트 약 14,000자 — 한글은 URL 인코딩 시 훨씬 더
-//   부풀어서 실제로는 이보다 훨씬 못 미치는 분량에서부터 잘릴 수 있습니다)을 가볍게 넘겨버립니다.
-//   그래서 그 대신, 계정에 저장된 클로드 스킬이 자동으로 인식하는 짧은 트리거 문구만 보냅니다.
-//   ⚠️ 단, 이 방식은 그 스킬이 실제로 사용자 클로드 계정에 저장되어 있을 때만 의도대로 동작해요.
-// - claudeAppTrigger가 없는 카드는 system 프롬프트 자체가 짧을 때만(안전 마진을 넉넉히 둔
-//   1,200자 이하) 전체를 그대로 프리필하고, 그보다 길면(또는 system이 없으면) 버튼을 아예
-//   숨깁니다 — 잘린 지침을 프리필해서 엉뚱하게 동작하는 것보다는, 안 되는 카드는 솔직하게
-//   안 되는 채로 두는 편이 낫습니다.
-const CLAUDE_APP_FULL_PREFILL_MAX = 1200;
-
-function buildClaudeAppQuery(tool) {
-  if (tool.claudeAppTrigger) return tool.claudeAppTrigger;
-  if (typeof tool.system === "string" && tool.system.length > 0 && tool.system.length <= CLAUDE_APP_FULL_PREFILL_MAX) {
-    return tool.system;
-  }
-  return null;
-}
-
 function getTools() {
-  // 시스템 프롬프트 원문은 클라이언트에 내려줄 필요 없으니 제외하고, 그 대신 "클로드 앱에서
-  // 열기" 버튼에 쓸 짧은 claudeAppQuery만 계산해서 내려줍니다.
-  return TOOLS.map((t) => {
-    const { system, claudeAppTrigger, ...rest } = t;
-    return { ...rest, claudeAppQuery: buildClaudeAppQuery(t) };
-  });
+  // 시스템 프롬프트 원문은 클라이언트에 내려줄 필요가 없으니 제외합니다 — 실제 생성은
+  // /api/prompt-studio/run이 서버에서 이 원문을 그대로 써서 처리합니다.
+  return TOOLS.map(({ system, ...rest }) => rest);
 }
 
 function findTool(id) {
@@ -387,11 +347,14 @@ async function runTool(toolId, messages) {
     throw new Error("서버에 ANTHROPIC_API_KEY가 설정되어 있지 않아서 이 챗봇을 쓸 수 없습니다. README를 참고해 Claude API 키를 등록해 주세요.");
   }
 
+  // 긴 스킬 카드(방송이슈 등)는 시스템 프롬프트가 수만 자라 응답까지 1분 넘게 걸립니다 —
+  // 기본 45초 타임아웃이면 제목을 뽑는 도중에 끊겨버려서 넉넉히 잡습니다.
   return claudeClient.callClaude({
     system: tool.system,
     messages,
     maxTokens: 2200,
     temperature: 0.85,
+    timeoutMs: 150000,
   });
 }
 

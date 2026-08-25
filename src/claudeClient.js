@@ -16,6 +16,10 @@ function getModel() {
   return DEFAULT_MODEL;
 }
 
+// 기본 45초로는 부족한 요청이 있습니다 — "맞춤형 글쓰기 프롬프트"의 긴 클로드 스킬 카드
+// (방송이슈·연예인 가십 등)는 시스템 프롬프트가 수만 자인 데다 제목 45~50개를 한 번에
+// 뽑기 때문에, 실제로 45초를 넘겨 중간에 끊기는 걸 확인했습니다. 호출하는 쪽에서
+// timeoutMs를 올려 잡을 수 있게 두고, 기본값만 유지합니다.
 async function fetchWithTimeout(url, opts = {}, timeoutMs = 45000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -31,7 +35,7 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 45000) {
  * system: (선택) 시스템 프롬프트
  * 반환: 어시스턴트가 만든 텍스트(string)
  */
-async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8 } = {}) {
+async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8, timeoutMs } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("서버에 ANTHROPIC_API_KEY가 설정되어 있지 않습니다.");
   if (!Array.isArray(messages) || !messages.length) throw new Error("messages가 비어 있습니다.");
@@ -50,7 +54,7 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
       ...(system ? { system } : {}),
       messages,
     }),
-  });
+  }, timeoutMs);
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");

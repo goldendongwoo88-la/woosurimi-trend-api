@@ -20,62 +20,47 @@ const { findOpportunities } = require("./opportunityFinder");
 const claudeClient = require("./claudeClient");
 const { extractPageData } = require("./pageExtractor");
 
-// claudeAppTriggerTemplate: "클로드 앱에서 글 생성하기" 버튼이 여는 claude://claude.ai/new?q=...
-// 딥링크에 넣을 문구입니다. {topic} 자리에 사용자가 고르거나 입력한 주제가 그대로 들어갑니다.
-// 이 문구는 사장님이 claude.ai 계정에 저장해두신 해당 스킬의 description 안 트리거 예시 문구와
-// 정확히 겹치도록(또는 아주 가깝도록) 맞춰뒀습니다 — 그래야 클로드가 그 스킬을 자동으로 골라 씁니다.
-// beauty_fashion은 저장된 스킬이 4개(연예인 패션/패션 후기/연예인 뷰티/뷰티 후기)라서, 특정
-// 스킬 이름을 강제하지 않고 평범한 문구만 보내서 클로드가 주제 내용을 보고 알맞은 스킬을 스스로
-// 고르게 했습니다.
 const CATEGORIES = [
   {
     id: "food_review",
     label: "맛집 후기",
     description: "검색은 많은데 아직 블로그 글이 적은 맛집·먹거리 관련 '기회 키워드'예요.",
-    claudeAppTriggerTemplate: "{topic} 맛집 후기 블로그 써줘",
   },
   {
     id: "travel_review",
     label: "여행 후기",
     description: "국내·해외 여행 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
-    claudeAppTriggerTemplate: "{topic} 여행 후기 블로그 써줘",
   },
   {
     id: "info_post",
     label: "정보성 글",
     description: "지금 대한민국에서 실시간으로 가장 많이 검색되는 화제 이슈예요.",
-    claudeAppTriggerTemplate: "{topic} 지식교양 블로그 써줘",
   },
   {
     id: "intro_promo",
     label: "소개/홍보글",
     description:
       "공간·인테리어·라이프스타일 관련 '기회 키워드'예요 — '소개/홍보글'에 정확히 맞는 실시간 데이터가 없어서, 뜻이 가장 가까운 분야로 대신 채웠어요.",
-    claudeAppTriggerTemplate: "{topic} 소개 홍보 블로그 써줘",
   },
   {
     id: "it_review",
     label: "IT·상품리뷰",
     description: "IT 기기·자동차·생활가전 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
-    claudeAppTriggerTemplate: "{topic} IT 자동차 블로그 써줘",
   },
   {
     id: "biz_economy",
     label: "비즈니스/경제",
     description: "재테크·경제·세금 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
-    claudeAppTriggerTemplate: "{topic} 재테크 경제 블로그 써줘",
   },
   {
     id: "beauty_fashion",
     label: "뷰티/패션",
     description: "패션·미용 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
-    claudeAppTriggerTemplate: "{topic} 블로그 써줘",
   },
   {
     id: "daily_hobby",
     label: "일상/취미",
     description: "반려동물·육아·요리·건강·운동 등 일상 관련 키워드 중, 찾는 사람은 많은데 글은 아직 적은 주제예요.",
-    claudeAppTriggerTemplate: "{topic} 리빙 라이프 블로그 써줘",
   },
 ];
 

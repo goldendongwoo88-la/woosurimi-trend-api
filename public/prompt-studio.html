@@ -84,22 +84,7 @@
     text-decoration: none;
   }
   .flow-link-btn:hover { background: #e2e5ff; }
-  .claude-app-btn {
-    display: block;
-    text-align: center;
-    margin-top: 6px;
-    padding: 9px;
-    background: #2b2b2b;
-    color: #fff;
-    border-radius: 8px;
-    font-size: 12.5px;
-    font-weight: bold;
-    text-decoration: none;
-  }
-  .claude-app-btn:hover { background: #1a1a1a; }
   .modal-header-actions { display: flex; align-items: center; gap: 8px; }
-  .modal-header-actions .claude-app-btn { margin-top: 0; padding: 6px 10px; white-space: nowrap; }
-
   .modal-backdrop {
     display: none;
     position: fixed;
@@ -200,9 +185,6 @@
   <div class="note">
 카드를 고르고 <b>챗봇 사용하기</b>를 누르면, 그 역할에 맞게 미리 짜둔 프롬프트로 이 서버에 연동된 <b>Claude API</b>와 바로 대화할 수 있어요(카드마다 별도 가입이나 키 발급이 필요 없어요). <b>이미지 프롬프트 생성기</b> 카드는 프롬프트를 만들어준 뒤 "🎬 Google Flow에서 이미지 만들기" 버튼으로 프롬프트를 복사하고 구글 Flow(labs.google 공식 사이트)를 새 창으로 열어드려요 — 거기서 붙여넣으면 실제 이미지가 만들어져요(구글 Flow는 공개 개발자 API가 없어서, 계정 정보를 넘기지 않는 이 방식이 가장 안전해요). 썸네일/카드뉴스 카드는 문구만 만들어줘요.
   </div>
-  <div class="note">
-🖥️ <b>클로드 앱에서 열기</b> 버튼은 데스크톱에 설치된 클로드 앱을 새 대화창으로 열어드려요(claude://claude.ai/new 딥링크, 데스크톱 앱 전용 — 모바일/웹에서는 동작하지 않을 수 있어요). 짧은 프롬프트 카드는 지침 전체를 미리 채워서 전달하고, 방송이슈·연예인 가십·연예인 패션·골든 패션 후기·연예인 뷰티·골든 뷰티 후기·재테크·경제·리빙·라이프·스포츠 이슈·건강 정보·교육·지식·심리·IT·자동차 홈판처럼 원본 스킬이 아주 긴 카드는 전체 지침을 다 채워 넣을 수 없어서 짧은 트리거 문구만 전달해요 — 그 스킬이 실제로 클로드 계정에 저장되어 있어야 의도대로 동작해요. 프리필만 될 뿐 자동 전송은 되지 않으니, 열린 채팅창에서 직접 전송을 눌러주세요.
-  </div>
   <div id="writerStatusNote"></div>
 
   <div class="grid" id="toolGrid"><div class="status">불러오는 중...</div></div>
@@ -213,7 +195,6 @@
     <div class="modal-header">
       <div class="modal-title" id="modalTitle"></div>
       <div class="modal-header-actions">
-        <a class="claude-app-btn" id="modalClaudeAppBtn" href="#" style="display:none;">🖥️ 클로드 앱에서 열기</a>
         <button class="modal-close" id="modalClose">✕</button>
       </div>
     </div>
@@ -230,12 +211,6 @@
 <script>
   function escapeHtml(str) {
     return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
-
-  // claude://claude.ai/new?q=... 딥링크는 데스크톱 클로드 앱이 설치되어 있을 때만 동작해요.
-  // q에 넣은 문구를 새 대화창에 "미리 채워"주기만 하고, 자동으로 전송하지는 않아요.
-  function claudeAppLink(query) {
-    return "claude://claude.ai/new?q=" + encodeURIComponent(query);
   }
 
   let tools = [];
@@ -260,11 +235,6 @@
           ${
             t.opensExternal
               ? `<a class="flow-link-btn" href="${t.opensExternal.url}" target="_blank" rel="noopener">${escapeHtml(t.opensExternal.label)}</a>`
-              : ""
-          }
-          ${
-            t.claudeAppQuery
-              ? `<a class="claude-app-btn" href="${claudeAppLink(t.claudeAppQuery)}">🖥️ 클로드 앱에서 열기</a>`
               : ""
           }
         </div>`
@@ -296,13 +266,6 @@
     document.getElementById("modalBody").innerHTML = `<div class="status">${escapeHtml(currentTool.desc)}<br>아래에 ${escapeHtml(currentTool.inputLabel)}을(를) 입력하고 생성하기를 눌러주세요.</div>`;
     document.getElementById("chatInput").placeholder = currentTool.inputPlaceholder || "";
     document.getElementById("chatInput").value = "";
-    const appBtn = document.getElementById("modalClaudeAppBtn");
-    if (currentTool.claudeAppQuery) {
-      appBtn.href = claudeAppLink(currentTool.claudeAppQuery);
-      appBtn.style.display = "";
-    } else {
-      appBtn.style.display = "none";
-    }
     document.getElementById("modalBackdrop").classList.add("open");
   }
 

@@ -152,21 +152,6 @@
   }
   .status { text-align: center; color: #999; font-size: 13px; padding: 20px 0; }
   .error { color: #d33; }
-  .claude-app-btn {
-    display: block;
-    width: 100%;
-    text-align: center;
-    padding: 14px;
-    background: #2b2b2b;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: bold;
-    text-decoration: none;
-    cursor: pointer;
-  }
-  .claude-app-btn:hover { background: #1a1a1a; }
   .skill-tag { display: inline-block; background: #eef1ff; color: #4552d6; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
   .draft-title { font-size: 17px; font-weight: bold; margin-bottom: 10px; line-height: 1.4; }
   .draft-section { margin-bottom: 14px; }
@@ -204,8 +189,6 @@
       <div class="panel">
         <div class="section-title">주제 직접 입력(선택, 오른쪽에서 고른 주제 대신 쓰고 싶을 때)</div>
         <input type="text" id="topicInput" placeholder="예) 제주도 가을 여행" />
-        <a class="claude-app-btn" id="claudeAppBtn" href="#">🖥️ 클로드 앱에서 글 생성하기</a>
-        <div id="claudeAppNote" class="status" style="padding-top:10px;"></div>
       </div>
     </div>
 
@@ -235,26 +218,6 @@
   let currentCategory = "";
   let selectedTopic = "";
   let categoriesData = [];
-
-  // claude://claude.ai/new?q=... 딥링크는 데스크톱 클로드 앱이 설치되어 있을 때만 동작해요.
-  function claudeAppLink(query) {
-    return "claude://claude.ai/new?q=" + encodeURIComponent(query);
-  }
-
-  function updateClaudeAppBtn() {
-    const btn = document.getElementById("claudeAppBtn");
-    const noteEl = document.getElementById("claudeAppNote");
-    const topic = document.getElementById("topicInput").value.trim();
-    const catInfo = categoriesData.find((c) => c.id === currentCategory);
-    if (!topic || !catInfo?.claudeAppTriggerTemplate) {
-      btn.href = "#";
-      noteEl.textContent = topic ? "" : "먼저 주제를 고르거나 입력해 주세요.";
-      return;
-    }
-    const query = catInfo.claudeAppTriggerTemplate.replace("{topic}", topic);
-    btn.href = claudeAppLink(query);
-    noteEl.textContent = `"${query}" 문구로 클로드 앱이 열려요.`;
-  }
 
   async function loadCategories() {
     const res = await fetch("/api/blog/categories");
@@ -289,7 +252,6 @@
         document.getElementById("catDesc").textContent = catInfo?.description || "";
         menu.classList.remove("open");
         loadTopics();
-        updateClaudeAppBtn();
       };
     });
 
@@ -324,7 +286,6 @@
           row.classList.add("selected");
           selectedTopic = row.dataset.topic;
           document.getElementById("topicInput").value = selectedTopic;
-          updateClaudeAppBtn();
         };
       });
     } catch (err) {
@@ -332,10 +293,8 @@
     }
   }
 
-  document.getElementById("topicInput").addEventListener("input", updateClaudeAppBtn);
 
   loadCategories();
-  updateClaudeAppBtn();
 
   // ===================== 링크로 만들기 =====================
   // "링크로 콘텐츠 만들기" 허브(link-content.html)에서 ?url=... 로 넘어오면 자동 실행됩니다.
