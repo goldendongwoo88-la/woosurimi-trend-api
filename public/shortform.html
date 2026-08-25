@@ -851,45 +851,71 @@
     }
   }
 
+  // ⚠️ 예전에는 5개를 한 요청으로 만들었는데, 무료 서버에선 오래 걸려서 Render 프록시가
+  // 먼저 연결을 끊어버렸습니다(브라우저엔 빈 응답이 와서 "Unexpected end of JSON input"
+  // 오류). 그래서 조합을 1개씩 따로 요청하고, 완성되는 대로 바로 화면에 붙입니다 —
+  // 오류도 안 나고, 첫 번째 미리보기를 훨씬 빨리 볼 수 있습니다.
+  const RECIPE_TOTAL = 5;
+
   async function loadRecommendations() {
     const recommendBtn = document.getElementById("recommendBtn");
     const recommendResultEl = document.getElementById("recommendResult");
     recommendBtn.disabled = true;
-    recommendBtn.textContent = "5개 조합 미리보기 만드는 중... (최대 2분)";
-    recommendResultEl.innerHTML = `<div class="status">AI가 템플릿·음악·목소리 조합을 짜고 있어요...</div>`;
+    recommendResultEl.innerHTML = `<div class="recipe-grid" id="recipeGrid"></div><div class="status" id="recipeProgress"></div>`;
+    const gridEl = document.getElementById("recipeGrid");
+    const progressEl = document.getElementById("recipeProgress");
 
-    try {
-      const res = await fetch("/api/shortform/recommend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes: currentScenes, frameStyle: selectedFrameStyle || "full", hookText: currentHookText }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "추천 실패");
-
-      recommendResultEl.innerHTML = `
-        <div class="recipe-grid">
-          ${data.recipes
-            .map(
-              (r, i) => `
-            <div class="recipe-card">
-              ${r.previewUrl ? `<video controls muted src="${r.previewUrl}"></video>` : `<div class="status error">미리보기 생성 실패: ${escapeHtml(r.previewError || "")}</div>`}
-              <div class="recipe-meta">
-                <b>조합 ${i + 1}</b> · 자막 ${escapeHtml(r.templateLabel)} · 음악 ${escapeHtml(r.bgmLabel)} · 목소리 ${escapeHtml(r.voiceLabel)}
-              </div>
-              <button class="primary" onclick='useRecipe(${JSON.stringify(r)})'>이 스타일로 최종 영상 만들기</button>
-            </div>`
-            )
-            .join("")}
-        </div>
-        <div class="note" style="margin-top:12px;">${escapeHtml(data.note)}</div>
-      `;
-    } catch (err) {
-      recommendResultEl.innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
-    } finally {
-      recommendBtn.disabled = false;
-      recommendBtn.textContent = "AI 추천 5개 만들기";
+    let done = 0;
+    let failed = 0;
+    for (let i = 0; i < RECIPE_TOTAL; i++) {
+      recommendBtn.textContent = `미리보기 만드는 중... (${i + 1}/${RECIPE_TOTAL})`;
+      progressEl.textContent = `${i + 1}번째 조합을 만들고 있어요... (완성되는 대로 위에 하나씩 나타나요)`;
+      try {
+        const res = await fetch("/api/shortform/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scenes: currentScenes,
+            frameStyle: selectedFrameStyle || "full",
+            hookText: currentHookText,
+            recipeIndex: i,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "추천 실패");
+        appendRecipeCard(gridEl, data.recipe, i);
+        done++;
+      } catch (err) {
+        failed++;
+        // 하나가 실패해도 나머지는 계속 만들어 봅니다.
+        console.error("recipe", i, err.message);
+      }
     }
+
+    progressEl.innerHTML = done
+      ? `<div class="note" style="margin-top:12px;">${done}개 조합을 만들었어요${
+          failed ? ` (${failed}개는 실패)` : ""
+        }. 마음에 드는 걸 고르면 그 설정 그대로 최종 영상을 만들 수 있어요. 미리보기는 속도를 위해 앞부분 2장면·짧은 길이·나레이션 없이 만들어졌어요 — 성우 목소리는 최종 영상에서 들어갑니다.</div>`
+      : `<div class="status error">미리보기를 만들지 못했어요. 아래 "직접 설정해서 만들기"에서 템플릿·음악을 직접 골라 최종 영상을 만들어 보세요.</div>`;
+    recommendBtn.disabled = false;
+    recommendBtn.textContent = "AI 추천 5개 만들기";
+  }
+
+  function appendRecipeCard(gridEl, r, i) {
+    const card = document.createElement("div");
+    card.className = "recipe-card";
+    card.innerHTML = `
+      ${r.previewUrl ? `<video controls muted src="${r.previewUrl}"></video>` : `<div class="status error">미리보기 생성 실패: ${escapeHtml(r.previewError || "")}</div>`}
+      <div class="recipe-meta">
+        <b>조합 ${i + 1}</b> · 자막 ${escapeHtml(r.templateLabel)} · 음악 ${escapeHtml(r.bgmLabel)} · 목소리 ${escapeHtml(r.voiceLabel)}
+      </div>
+    `;
+    const btn = document.createElement("button");
+    btn.className = "primary";
+    btn.textContent = "이 스타일로 최종 영상 만들기";
+    btn.onclick = () => useRecipe(r);
+    card.appendChild(btn);
+    gridEl.appendChild(card);
   }
 
   function useRecipe(recipe) {

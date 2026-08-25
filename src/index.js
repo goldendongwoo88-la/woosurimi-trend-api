@@ -330,10 +330,13 @@ app.get("/api/shortform/frame-styles", (req, res) => {
 // voiceProvider) 그대로 호출하면 완성도 높은 최종 영상이 나옵니다.
 // - 미리보기는 속도를 위해 앞부분 최대 2개 장면 + 장면당 1.3초 + 크로스페이드 없이
 //   하드컷 + 나레이션 없이 렌더링합니다(실제 전환 효과·목소리는 최종 렌더링에서 확인).
-// - 무료 서버는 CPU가 넉넉하지 않아서, 여러 개를 동시에 만들면 오히려 서로 느려집니다
-//   — 순서대로 하나씩 만들되, DEADLINE_MS를 넘기면 그때까지 완성된 것만이라도 즉시
-//   돌려줍니다(완성될 때까지 하염없이 기다리게 두지 않기 위함).
-// POST /api/shortform/recommend  body: { "scenes": [...] }
+// - ⚠️ 한 요청 안에서 5개를 다 만들면, 무료 서버에선 시간이 오래 걸려 Render 프록시가
+//   먼저 연결을 끊어버립니다(그러면 브라우저에 빈 응답이 와서 "Unexpected end of JSON
+//   input" 오류가 납니다 — 실제로 겪었습니다). 그래서 recipeIndex를 받아 "한 번에 한 개씩"
+//   만들 수 있게 했고, 화면에서는 5번 나눠 불러서 완성되는 대로 하나씩 보여줍니다.
+// POST /api/shortform/recommend  body: { "scenes": [...], "recipeIndex": 0 }
+//   recipeIndex를 주면 그 번호 조합 하나만 만들어 { recipe } 로 돌려줍니다.
+//   안 주면 예전처럼 여러 개를 순서대로 만들되, 프록시 타임아웃 전에 끊고 돌려줍니다.
 app.post("/api/shortform/recommend", async (req, res) => {
   const scenes = Array.isArray(req.body?.scenes) ? req.body.scenes : [];
   if (!scenes.length) {
@@ -351,19 +354,9 @@ app.post("/api/shortform/recommend", async (req, res) => {
   const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "full";
   const hookText = (req.body.hookText || "").trim();
   const RECIPE_COUNT = 5;
-  // 무료 Render 서버는 CPU가 느려서 5개를 다 만들려면 시간이 꽤 걸립니다. 아래
-  // renderShortformVideo 옵션(ultrafast 인코딩 + 애니메이션 끄기 + 하드컷)으로 장면당
-  // 렌더링을 최대한 가볍게 만들고, 데드라인도 5개를 채울 수 있을 만큼 넉넉히 줍니다.
-  const DEADLINE_MS = 150000;
-  const startedAt = Date.now();
-  const recipes = [];
-  let timedOut = false;
 
-  for (let i = 0; i < RECIPE_COUNT; i++) {
-    if (Date.now() - startedAt > DEADLINE_MS) {
-      timedOut = true;
-      break;
-    }
+  // 조합 하나를 만드는 공통 함수 — recipeIndex 방식과 예전 방식이 같이 씁니다.
+  async function buildRecipe(i) {
     const template = templates[i % templates.length];
     const bgm = bgmTracks[i % bgmTracks.length];
     const voiceChoice = readyProviders.length ? readyProviders[i % readyProviders.length] : null;
@@ -387,7 +380,7 @@ app.post("/api/shortform/recommend", async (req, res) => {
       previewError = err.message;
     }
 
-    recipes.push({
+    return {
       recipeId: `recipe-${i + 1}`,
       templateId: template.id,
       templateLabel: template.label,
@@ -397,7 +390,32 @@ app.post("/api/shortform/recommend", async (req, res) => {
       voiceLabel: voiceChoice ? voiceChoice.label : "나레이션 없음 (AI 성우 키 미설정)",
       previewUrl: previewPath ? `${req.protocol}://${req.get("host")}${previewPath}` : null,
       previewError,
-    });
+    };
+  }
+
+  // ① 한 개만 만들어 달라고 한 경우(화면에서 5번 나눠 부르는 기본 방식)
+  const requestedIndex = Number(req.body.recipeIndex);
+  if (Number.isInteger(requestedIndex) && requestedIndex >= 0 && requestedIndex < RECIPE_COUNT) {
+    try {
+      const recipe = await buildRecipe(requestedIndex);
+      return res.json({ recipe, recipeCount: RECIPE_COUNT, voiceProvidersReady: readyProviders });
+    } catch (err) {
+      return res.status(500).json({ error: "recommend_failed", message: err.message });
+    }
+  }
+
+  // ② 예전 방식(한 번에 여러 개) — 외부에서 그냥 호출했을 때를 위해 남겨둡니다.
+  // 무료 서버의 프록시가 오래 걸리는 요청을 끊어버리므로, 그 전에 안전하게 멈춥니다.
+  const DEADLINE_MS = Number(process.env.RECOMMEND_DEADLINE_MS || 40000);
+  const startedAt = Date.now();
+  const recipes = [];
+  let timedOut = false;
+  for (let i = 0; i < RECIPE_COUNT; i++) {
+    if (Date.now() - startedAt > DEADLINE_MS) {
+      timedOut = true;
+      break;
+    }
+    recipes.push(await buildRecipe(i));
   }
 
   res.json({
