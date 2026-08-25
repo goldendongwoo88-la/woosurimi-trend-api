@@ -1,22 +1,40 @@
 // "AI 카드뉴스 생성" 기능입니다. 주제를 넣으면 Claude API로 페이지별 제목/본문을 짜고,
 // sharp(SVG 오버레이 방식)로 각 페이지를 실제 PNG 카드 이미지로 렌더링합니다.
 //
-// 렌더링 방식: ffmpeg-static 빌드에는 drawtext 필터가 없어서(videoRenderer.js 참고)
-// 영상 자막은 libass(subtitles 필터)로 우회했지만, 카드뉴스는 제목/본문/뱃지처럼
-// 레이아웃이 복잡해서 자막 필터로는 한계가 있습니다. 대신 sharp가 쓰는 librsvg로
-// SVG를 직접 그려서 PNG로 뽑습니다 — 프로젝트에 있는 한글 폰트 하나(NotoSansKR-Bold)를
-// base64로 SVG에 직접 embed해서, 서버 OS에 폰트가 따로 설치되어 있지 않아도 항상
-// 같은 모양으로 렌더링되게 했습니다(로컬에서 실제로 렌더 테스트 후 확인함).
+// 렌더링 방식(중요, 실제로 겪은 문제 기록): 처음에는 SVG의 @font-face로 폰트를
+// base64 embed해서 <text> 태그로 그렸는데, 로컬(Windows)에서는 잘 됐지만 실제
+// 배포 환경(Render, Linux)에서는 librsvg가 embed된 폰트를 인식하지 못해 한글이
+// 전부 깨진 16진수 코드 박스로 나오는 문제가 있었습니다(서버에 시스템 폰트/폰트
+// 설정이 없어서로 추정). 그래서 fontkit(Adobe/foliojs, PDFKit이 쓰는 라이브러리)로
+// 폰트 파일(NotoSansKR-Bold.ttf)의 글자 윤곽선을 직접 SVG <path>로 뽑아서 그리는
+// 방식으로 바꿨습니다 — 이러면 시스템 폰트·fontconfig에 전혀 의존하지 않아서 어떤
+// 서버 환경에서도 동일하게 렌더링됩니다(실제로 Render 배포본에서 재현 후 이
+// 방식으로 고쳐서 확인함).
+//
+// ⚠️ 실제로 겪은 함정 두 가지:
+// 1) 여러 글자의 path 데이터를 하나의 <path d="..."> 로 이어붙이면 첫 글자만
+//    보이고 나머지는 사라지는 렌더링 버그가 있었습니다(librsvg의 다중 서브패스
+//    처리 문제로 추정). 그래서 글자마다 별도의 <path> 엘리먼트로 그립니다
+//    (glyphPaths 참고).
+// 2) 처음에 opentype.js를 썼는데, 이 폰트의 일부 한글 글자("방","하","세","서" 등)를
+//    엉뚱한 글리프(동그라미, 사람 아이콘 모양)로 잘못 매핑하는 버그가 있었습니다
+//    (cmap 파싱 이슈로 추정). fontkit으로 바꾸니 같은 문장이 정확히 렌더링됨을
+//    확인했습니다.
+// 둘 다 실제로 렌더링해서 눈으로 확인한 뒤 고친 것입니다.
 
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const sharp = require("sharp");
+const fontkit = require("fontkit");
 const claudeClient = require("./claudeClient");
 
 const FONT_PATH = path.join(__dirname, "..", "assets", "fonts", "NotoSansKR-Bold.ttf");
-const FONT_B64 = fs.readFileSync(FONT_PATH).toString("base64");
-const FONT_FAMILY = "WoosurimiCardFont";
+// ⚠️ 처음에는 opentype.js를 썼는데, 이 폰트의 일부 한글 글자(예: "방","하","세","서")를
+// 엉뚱한 글리프(동그라미, 사람 아이콘 모양 등)로 잘못 매핑하는 버그가 있었습니다
+// (실제로 렌더링해서 발견 — cmap 파싱 이슈로 추정). fontkit(Adobe/foliojs, PDFKit이
+// 쓰는 라이브러리)으로 바꾸니 같은 문장이 정확히 렌더링되는 걸 확인해서 교체했습니다.
+const FONT_OBJ = fontkit.openSync(FONT_PATH);
 const RENDERS_DIR = path.join(__dirname, "..", "public", "renders", "cardnews");
 
 const ASPECT_RATIOS = {
@@ -162,24 +180,66 @@ function recommendStyles(topic = "") {
   return scored;
 }
 
-function escapeXml(str) {
-  return (str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+// ===================== 글자를 벡터 도형(path)으로 직접 그리는 헬퍼 =====================
+// 위 파일 상단 설명 참고 — 시스템 폰트/fontconfig에 의존하지 않기 위해 <text> 대신
+// 이 헬퍼들로 폰트 파일의 글자 윤곽선을 SVG <path>로 직접 그립니다.
+
+const FONT_SCALE_UNIT = FONT_OBJ.unitsPerEm || 1000;
+
+function glyphAdvance(codePoint, fontSize) {
+  return FONT_OBJ.glyphForCodePoint(codePoint).advanceWidth * (fontSize / FONT_SCALE_UNIT);
 }
 
-// 실제 폰트 메트릭 없이 글자 수 기준으로 줄바꿈합니다(videoRenderer.js의
-// wrapCaptionLines와 같은 방식 — 이 프로젝트 전체에서 쓰는 근사치 줄바꿈 규칙).
-function wrapByChars(text, maxCharsPerLine) {
+function measureText(text, fontSize) {
+  let width = 0;
+  for (const ch of text || "") width += glyphAdvance(ch.codePointAt(0), fontSize);
+  return width;
+}
+
+// 글자 하나하나를 별도의 <path> 엘리먼트로 그립니다(opentype.js로 여러 글자를 한
+// path에 이어붙였을 때 첫 글자만 렌더링되던 버그를 피하려고 — 파일 상단 설명 참고).
+// scale(scale,-scale): 폰트 좌표계(1000 unitsPerEm, Y축 위쪽)를 픽셀 크기로 바꾸면서
+// SVG의 Y축 아래쪽 방향에 맞게 뒤집습니다. translate(cx,y): 그 글자를 베이스라인
+// 위치로 옮깁니다.
+function glyphPaths(text, x, y, fontSize, fill, opacity) {
+  const scale = fontSize / FONT_SCALE_UNIT;
+  let cx = x;
+  let out = "";
+  const opacityAttr = opacity != null ? ` opacity="${opacity}"` : "";
+  for (const ch of text || "") {
+    const glyph = FONT_OBJ.glyphForCodePoint(ch.codePointAt(0));
+    if (ch !== " ") {
+      const d = glyph.path.scale(scale, -scale).translate(cx, y).toSVG();
+      if (d) out += `<path d="${d}" fill="${fill}"${opacityAttr}/>`;
+    }
+    cx += glyph.advanceWidth * scale;
+  }
+  return out;
+}
+
+// anchor: "start"(기본) | "middle" | "end" — CSS text-anchor와 같은 의미입니다.
+function alignedText(text, x, y, fontSize, fill, { anchor = "start", opacity } = {}) {
+  const w = measureText(text, fontSize);
+  let startX = x;
+  if (anchor === "middle") startX = x - w / 2;
+  else if (anchor === "end") startX = x - w;
+  return glyphPaths(text, startX, y, fontSize, fill, opacity);
+}
+
+// lines(배열)를 lineHeight 간격으로 세로로 쌓아 그립니다. x/anchor는 모든 줄에 동일 적용.
+function multilineText(lines, x, startY, lineHeight, fontSize, fill, opts = {}) {
+  return lines.map((line, i) => alignedText(line, x, startY + i * lineHeight, fontSize, fill, opts)).join("");
+}
+
+// 실제 폰트 치수(measureText)로 줄바꿈합니다 — 예전엔 글자 수로 대충 추정했는데,
+// 이제 fontkit으로 정확한 폭을 잴 수 있어서 훨씬 정밀하게 줄바꿈됩니다.
+function wrapByWidth(text, fontSize, maxWidthPx) {
   const words = (text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
   const lines = [];
   let current = "";
   for (const w of words) {
     const candidate = current ? `${current} ${w}` : w;
-    if (candidate.length > maxCharsPerLine && current) {
+    if (measureText(candidate, fontSize) > maxWidthPx && current) {
       lines.push(current);
       current = w;
     } else {
@@ -190,23 +250,21 @@ function wrapByChars(text, maxCharsPerLine) {
   return lines.length ? lines : [""];
 }
 
-// wrapByChars + 줄 수 상한. 원래는 그냥 slice(0, maxLines)로 잘랐는데, 그러면 마지막
-// 줄이 통째로 사라져도 화면에 아무 표시가 없어서(예: "…중요해요." 문장이 조용히
-// 없어짐) 사용자가 카드 이미지를 다운로드하기 전까진 눈치채기 어려웠습니다. 잘렸으면
-// 마지막 줄 끝에 "…"을 붙여서 최소한 "여기서 더 있다"는 걸 알 수 있게 합니다.
-function wrapByCharsCapped(text, maxCharsPerLine, maxLines) {
-  const lines = wrapByChars(text, maxCharsPerLine);
+// wrapByWidth + 줄 수 상한. 그냥 slice(0, maxLines)로 자르면 마지막 문장이 통째로
+// 조용히 사라져서(예: "...중요해요." 소실) 눈치채기 어려우니, 잘렸으면 "…"을 붙이고
+// 그 "…"까지 포함해서 실제로 폭 안에 들어오도록 필요하면 더 잘라냅니다.
+function wrapByWidthCapped(text, fontSize, maxWidthPx, maxLines) {
+  const lines = wrapByWidth(text, fontSize, maxWidthPx);
   if (lines.length <= maxLines) return lines;
   const kept = lines.slice(0, maxLines);
-  const last = kept[maxLines - 1];
-  kept[maxLines - 1] = last.endsWith("…") ? last : `${last.replace(/[.,!?~]+$/, "")}…`;
+  let last = kept[maxLines - 1].replace(/[.,!?~]+$/, "");
+  let candidate = `${last}…`;
+  while (measureText(candidate, fontSize) > maxWidthPx && last.length > 1) {
+    last = last.slice(0, -1);
+    candidate = `${last}…`;
+  }
+  kept[maxLines - 1] = candidate;
   return kept;
-}
-
-function tspanLines(lines, x, startDy, lineHeight) {
-  return lines
-    .map((line, i) => `<tspan x="${x}" dy="${i === 0 ? startDy : lineHeight}">${escapeXml(line)}</tspan>`)
-    .join("");
 }
 
 // ===================== 1) Claude API로 페이지별 대본(plan) 짜기 =====================
@@ -346,29 +404,21 @@ async function photoBackgroundBuffer(imagePath, style, w, h, applyScrim = true) 
 
 // 아래 4개의 build*Overlay 함수가 각 레이아웃의 실제 그리기 로직입니다. 전부 같은
 // 시그니처(page, style, w, h, pageIndex, totalPages, topic)를 받아 SVG 오버레이
-// Buffer를 돌려줍니다 — @font-face 임베드 부분만 공통으로 뽑아서 재사용합니다.
-function fontFaceStyle() {
-  return `
-        @font-face {
-          font-family: '${FONT_FAMILY}';
-          src: url(data:font/ttf;base64,${FONT_B64}) format('truetype');
-        }
-        text { font-family: '${FONT_FAMILY}'; }`;
-}
+// Buffer를 돌려줍니다. 텍스트는 전부 위쪽의 glyphPaths/alignedText/multilineText로
+// 그립니다(시스템 폰트에 의존하지 않는 벡터 path 방식).
 
 // [기본] 스택형 — 제목/본문을 role에 따라 위/중앙/왼쪽에 쌓아 올리는 기존 레이아웃.
 function buildStackOverlay(page, style, w, h, pageIndex, totalPages, topic) {
   const pad = Math.round(w * 0.09);
   const isCover = page.role === "cover";
   const isOutro = page.role === "outro";
+  const maxTextWidth = w - pad * 2;
 
   const titleSize = isCover ? Math.round(w * 0.09) : Math.round(w * 0.058);
   const bodySize = isCover ? Math.round(w * 0.04) : Math.round(w * 0.038);
-  const titleMaxChars = isCover ? 9 : 12;
-  const bodyMaxChars = 17;
 
-  const titleLines = wrapByChars(page.title, titleMaxChars);
-  const bodyLines = wrapByCharsCapped(page.body, bodyMaxChars, 8); // 카드 한 장을 넘치게 채우지 않도록 상한
+  const titleLines = wrapByWidth(page.title, titleSize, maxTextWidth);
+  const bodyLines = wrapByWidthCapped(page.body, bodySize, maxTextWidth, 8); // 카드 한 장을 넘치게 채우지 않도록 상한
 
   const titleLineHeight = Math.round(titleSize * 1.28);
   const bodyLineHeight = Math.round(bodySize * 1.55);
@@ -404,15 +454,13 @@ function buildStackOverlay(page, style, w, h, pageIndex, totalPages, topic) {
 
   const bodyX = isOutro ? Math.round(w / 2) : pad;
   const bodyAnchor = isOutro ? "middle" : "start";
-  const maxTextWidth = w - pad * 2;
 
-  // 상단 카테고리 태그(필과 accentColor로 알약 모양). 한글은 폭이 거의 정사각형이라
-  // (라틴 알파벳보다 넓음) 글자당 폭을 넉넉하게(0.98 * fontSize) 잡아서 텍스트가
-  // 알약 밖으로 삐져나오지 않게 합니다.
+  // 상단 카테고리 태그(필과 accentColor로 알약 모양). 실제 폰트 폭(measureText)으로
+  // 정확히 재서, 텍스트가 알약 밖으로 삐져나오지 않게 합니다.
   const tagText = topic.length > 14 ? topic.slice(0, 14) + "…" : topic;
   const tagFontSize = Math.round(w * 0.026);
   const tagPaddingX = Math.round(tagFontSize * 0.9);
-  const tagWidth = Math.round(tagText.length * tagFontSize * 0.98) + tagPaddingX * 2;
+  const tagWidth = Math.round(measureText(tagText, tagFontSize)) + tagPaddingX * 2;
   const tagHeight = Math.round(tagFontSize * 2.1);
   const tagY = Math.round(h * 0.07);
 
@@ -423,31 +471,20 @@ function buildStackOverlay(page, style, w, h, pageIndex, totalPages, topic) {
   // 채우고 카드뉴스다운 디자인 포인트를 줍니다.
   const ghostNumber =
     !isCover && !isOutro
-      ? `<text x="${w - pad * 0.6}" y="${h - Math.round(h * 0.08)}" font-size="${Math.round(w * 0.34)}" font-weight="bold" fill="${style.accentColor}" opacity="0.12" text-anchor="end">${pageIndex}</text>`
+      ? alignedText(String(pageIndex), w - pad * 0.6, h - Math.round(h * 0.08), Math.round(w * 0.34), style.accentColor, {
+          anchor: "end",
+          opacity: 0.12,
+        })
       : "";
 
   return Buffer.from(`
     <svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-      <style>
-        @font-face {
-          font-family: '${FONT_FAMILY}';
-          src: url(data:font/ttf;base64,${FONT_B64}) format('truetype');
-        }
-        text { font-family: '${FONT_FAMILY}'; }
-      </style>
       ${ghostNumber}
       <rect x="${pad}" y="${tagY}" rx="${tagHeight / 2}" ry="${tagHeight / 2}" width="${tagWidth}" height="${tagHeight}" fill="${style.accentColor}" opacity="0.92" />
-      <text x="${pad + tagPaddingX}" y="${tagY + tagHeight * 0.68}" font-size="${tagFontSize}" fill="#ffffff">${escapeXml(tagText)}</text>
-
-      <text x="${titleX}" y="${titleY}" font-size="${titleSize}" font-weight="bold" fill="${style.titleColor}" text-anchor="${titleAnchor}" style="max-width:${maxTextWidth}px">
-        ${tspanLines(titleLines, titleX, 0, titleLineHeight)}
-      </text>
-
-      <text x="${bodyX}" y="${bodyY}" font-size="${bodySize}" fill="${style.bodyColor}" text-anchor="${bodyAnchor}">
-        ${tspanLines(bodyLines, bodyX, 0, bodyLineHeight)}
-      </text>
-
-      <text x="${w - pad}" y="${h - Math.round(h * 0.05)}" font-size="${footerSize}" fill="${style.bodyColor}" text-anchor="end" opacity="0.8">${escapeXml(footerText)}</text>
+      ${alignedText(tagText, pad + tagPaddingX, tagY + tagHeight * 0.68, tagFontSize, "#ffffff")}
+      ${multilineText(titleLines, titleX, titleY, titleLineHeight, titleSize, style.titleColor, { anchor: titleAnchor })}
+      ${multilineText(bodyLines, bodyX, bodyY, bodyLineHeight, bodySize, style.bodyColor, { anchor: bodyAnchor })}
+      ${alignedText(footerText, w - pad, h - Math.round(h * 0.05), footerSize, style.bodyColor, { anchor: "end", opacity: 0.8 })}
     </svg>`);
 }
 
@@ -457,18 +494,19 @@ function buildBannerOverlay(page, style, w, h, pageIndex, totalPages, topic) {
   const pad = Math.round(w * 0.08);
   const isCover = page.role === "cover";
   const isOutro = page.role === "outro";
+  const maxTextWidth = w - pad * 2;
 
   const bandHeight = Math.round(h * (isCover ? 0.42 : isOutro ? 0.3 : 0.32));
   const bandTextColor = pickContrastText(style.accentColor);
 
   const titleSize = isCover ? Math.round(w * 0.08) : Math.round(w * 0.062);
-  const titleLines = wrapByChars(page.title, isCover ? 10 : 11);
+  const titleLines = wrapByWidth(page.title, titleSize, maxTextWidth);
   const titleLineHeight = Math.round(titleSize * 1.25);
   const titleBlockHeight = titleLines.length * titleLineHeight;
   const titleY = Math.round((bandHeight - titleBlockHeight) / 2 + titleLineHeight * 0.8);
 
   const bodySize = Math.round(w * 0.04);
-  const bodyLines = wrapByCharsCapped(page.body, 17, 7);
+  const bodyLines = wrapByWidthCapped(page.body, bodySize, maxTextWidth, 7);
   const bodyLineHeight = Math.round(bodySize * 1.6);
   const bodyZoneTop = bandHeight + Math.round(h * 0.06);
   const bodyZoneBottom = h - Math.round(h * 0.1);
@@ -481,16 +519,11 @@ function buildBannerOverlay(page, style, w, h, pageIndex, totalPages, topic) {
 
   return Buffer.from(`
     <svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-      <style>${fontFaceStyle()}</style>
       <rect x="0" y="0" width="${w}" height="${bandHeight}" fill="${style.accentColor}" />
-      <text x="${pad}" y="${titleY}" font-size="${titleSize}" font-weight="bold" fill="${bandTextColor}">
-        ${tspanLines(titleLines, pad, 0, titleLineHeight)}
-      </text>
-      <text x="${pad}" y="${bodyY}" font-size="${bodySize}" fill="${style.bodyColor}">
-        ${tspanLines(bodyLines, pad, 0, bodyLineHeight)}
-      </text>
-      <text x="${pad}" y="${h - Math.round(h * 0.045)}" font-size="${footerSize}" fill="${style.accentColor}" opacity="0.9">${escapeXml(topicTag)}</text>
-      <text x="${w - pad}" y="${h - Math.round(h * 0.045)}" font-size="${footerSize}" fill="${style.bodyColor}" text-anchor="end" opacity="0.7">${escapeXml(footerText)}</text>
+      ${multilineText(titleLines, pad, titleY, titleLineHeight, titleSize, bandTextColor)}
+      ${multilineText(bodyLines, pad, bodyY, bodyLineHeight, bodySize, style.bodyColor)}
+      ${alignedText(topicTag, pad, h - Math.round(h * 0.045), footerSize, style.accentColor, { opacity: 0.9 })}
+      ${alignedText(footerText, w - pad, h - Math.round(h * 0.045), footerSize, style.bodyColor, { anchor: "end", opacity: 0.7 })}
     </svg>`);
 }
 
@@ -499,13 +532,15 @@ function buildBannerOverlay(page, style, w, h, pageIndex, totalPages, topic) {
 function buildEditorialCenterOverlay(page, style, w, h, pageIndex, totalPages, topic) {
   const isCover = page.role === "cover";
   const cx = Math.round(w / 2);
+  const pad = Math.round(w * 0.12);
+  const maxTextWidth = w - pad * 2;
 
   const titleSize = isCover ? Math.round(w * 0.085) : Math.round(w * 0.065);
-  const titleLines = wrapByChars(page.title, isCover ? 8 : 9);
+  const titleLines = wrapByWidth(page.title, titleSize, maxTextWidth);
   const titleLineHeight = Math.round(titleSize * 1.3);
 
   const bodySize = Math.round(w * 0.036);
-  const bodyLines = wrapByCharsCapped(page.body, 15, 6);
+  const bodyLines = wrapByWidthCapped(page.body, bodySize, maxTextWidth, 6);
   const bodyLineHeight = Math.round(bodySize * 1.6);
 
   const dividerY = Math.round(h * 0.5);
@@ -528,15 +563,10 @@ function buildEditorialCenterOverlay(page, style, w, h, pageIndex, totalPages, t
 
   return Buffer.from(`
     <svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-      <style>${fontFaceStyle()}</style>
-      <text x="${cx}" y="${titleY}" font-size="${titleSize}" font-weight="bold" fill="${style.titleColor}" text-anchor="middle">
-        ${tspanLines(titleLines, cx, 0, titleLineHeight)}
-      </text>
+      ${multilineText(titleLines, cx, titleY, titleLineHeight, titleSize, style.titleColor, { anchor: "middle" })}
       <rect x="${cx - dividerWidth / 2}" y="${dividerY}" width="${dividerWidth}" height="3" fill="${style.accentColor}" />
-      <text x="${cx}" y="${bodyY}" font-size="${bodySize}" fill="${style.bodyColor}" text-anchor="middle">
-        ${tspanLines(bodyLines, cx, 0, bodyLineHeight)}
-      </text>
-      <text x="${cx}" y="${Math.round(h * 0.92)}" font-size="${Math.round(w * 0.026)}" fill="${style.bodyColor}" text-anchor="middle" opacity="0.7">${escapeXml(handleText)}</text>
+      ${multilineText(bodyLines, cx, bodyY, bodyLineHeight, bodySize, style.bodyColor, { anchor: "middle" })}
+      ${alignedText(handleText, cx, Math.round(h * 0.92), Math.round(w * 0.026), style.bodyColor, { anchor: "middle", opacity: 0.7 })}
       ${dots}
     </svg>`);
 }
@@ -548,6 +578,7 @@ function buildFramedOverlay(page, style, w, h, pageIndex, totalPages, topic) {
   const pad = Math.round(w * 0.09);
   const frameInset = Math.round(w * 0.035);
   const isCover = page.role === "cover";
+  const maxTextWidth = w - pad * 2;
 
   const chipSize = Math.round(w * 0.09);
   const chipX = frameInset + Math.round(w * 0.02);
@@ -555,14 +586,14 @@ function buildFramedOverlay(page, style, w, h, pageIndex, totalPages, topic) {
   const chipTextColor = pickContrastText(style.accentColor);
 
   const titleSize = isCover ? Math.round(w * 0.095) : Math.round(w * 0.07);
-  const titleLines = wrapByCharsCapped(page.title, isCover ? 8 : 10, 4);
+  const titleLines = wrapByWidthCapped(page.title, titleSize, maxTextWidth, 4);
   const titleLineHeight = Math.round(titleSize * 1.22);
 
   // 본문이 3~5문장(콘텐츠 장 기준)까지 나올 수 있어서, 3줄까지만 허용하면 마지막
   // 문장이 자주 통째로 잘려나갔습니다(예: "...중요해요." 소실). 6줄까지 넉넉히
   // 허용하고, 그만큼 아래쪽 여백(bottomPad)을 줄여서 카드 안에 다 들어오게 합니다.
   const bodySize = Math.round(w * 0.033);
-  const bodyLines = wrapByCharsCapped(page.body, 19, 6);
+  const bodyLines = wrapByWidthCapped(page.body, bodySize, maxTextWidth, 6);
   const bodyLineHeight = Math.round(bodySize * 1.55);
 
   const bottomPad = Math.round(h * 0.06);
@@ -581,17 +612,12 @@ function buildFramedOverlay(page, style, w, h, pageIndex, totalPages, topic) {
           <stop offset="100%" stop-color="#000000" stop-opacity="0.55" />
         </linearGradient>
       </defs>
-      <style>${fontFaceStyle()}</style>
       <rect x="${frameInset}" y="${frameInset}" width="${w - frameInset * 2}" height="${h - frameInset * 2}" fill="none" stroke="${style.accentColor}" stroke-width="${Math.round(w * 0.006)}" />
       <rect x="0" y="${h - scrimHeight}" width="${w}" height="${scrimHeight}" fill="url(#bottomScrim)" />
       <rect x="${chipX}" y="${chipY}" width="${chipSize}" height="${chipSize}" fill="${style.accentColor}" />
-      <text x="${chipX + chipSize / 2}" y="${chipY + chipSize * 0.68}" font-size="${Math.round(chipSize * 0.5)}" font-weight="bold" fill="${chipTextColor}" text-anchor="middle">${pageIndex + 1}</text>
-      <text x="${pad}" y="${titleY}" font-size="${titleSize}" font-weight="bold" fill="#ffffff">
-        ${tspanLines(titleLines, pad, 0, titleLineHeight)}
-      </text>
-      <text x="${pad}" y="${bodyY}" font-size="${bodySize}" fill="#eaeaea">
-        ${tspanLines(bodyLines, pad, 0, bodyLineHeight)}
-      </text>
+      ${alignedText(String(pageIndex + 1), chipX + chipSize / 2, chipY + chipSize * 0.68, Math.round(chipSize * 0.5), chipTextColor, { anchor: "middle" })}
+      ${multilineText(titleLines, pad, titleY, titleLineHeight, titleSize, "#ffffff")}
+      ${multilineText(bodyLines, pad, bodyY, bodyLineHeight, bodySize, "#eaeaea")}
     </svg>`);
 }
 
