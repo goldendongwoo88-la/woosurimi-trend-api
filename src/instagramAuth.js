@@ -63,7 +63,9 @@ function getAuthUrl() {
 
   const scope = [
     "instagram_basic",
-    "instagram_content_publishing",
+    // ⚠️ Meta 대시보드의 권한 목록에는 "instagram_content_publishing"으로 표시되지만,
+    // 실제 OAuth scope 문자열은 끝의 "ing"이 없는 instagram_content_publish 입니다.
+    "instagram_content_publish",
     "pages_show_list",
     "pages_read_engagement",
     "business_management",
