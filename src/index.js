@@ -416,7 +416,7 @@ app.post("/api/shortform/recommend", async (req, res) => {
 //   - bgmId: (선택) 추천 라이브러리 트랙 id (예: "calm-piano") — bgm 파일이 없을 때 사용
 //   - animate: (선택) "false"를 주면 켄번즈 애니메이션 없이 정지 사진으로 만듦 (기본 true)
 //   - frameStyle: (선택) "polaroid"(기본, 하얀 테두리 포토카드+흐린 확대 배경) | "full"(화면 꽉 채우기)
-//   - voiceProvider: (선택) "clova" | "typecast" | "elevenlabs"
+//   - voiceProvider: (선택) "clova" | "typecast" | "elevenlabs" | "azure"
 //   - voiceId: (선택) 서비스별 목소리 식별자
 app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   let scenes;
@@ -438,7 +438,7 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   const libraryBgmPath = !uploadedBgmPath && req.body.bgmId ? getTrackPath(req.body.bgmId) : null;
   const bgmPath = uploadedBgmPath || libraryBgmPath;
 
-  const voiceProvider = ["clova", "typecast", "elevenlabs"].includes(req.body.voiceProvider) ? req.body.voiceProvider : null;
+  const voiceProvider = ["clova", "typecast", "elevenlabs", "azure"].includes(req.body.voiceProvider) ? req.body.voiceProvider : null;
   const voice = voiceProvider ? { provider: voiceProvider, voiceId: req.body.voiceId || null } : null;
   const templateId = TEMPLATES.some((t) => t.id === req.body.templateId) ? req.body.templateId : "bold-black";
   const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "polaroid";

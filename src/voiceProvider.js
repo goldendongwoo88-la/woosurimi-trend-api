@@ -33,6 +33,11 @@ const PROVIDERS = {
     configured: () => !!process.env.ELEVENLABS_API_KEY,
     defaultVoice: process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM", // ElevenLabs 기본 샘플 보이스(Rachel)
   },
+  azure: {
+    label: "Microsoft Azure Speech",
+    configured: () => !!(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION),
+    defaultVoice: process.env.AZURE_SPEECH_VOICE || "ko-KR-SunHiNeural", // 기본 한국어 여성 뉴럴 보이스
+  },
 };
 
 function getProviderStatus() {
@@ -157,9 +162,39 @@ async function synthesizeElevenLabs(text, voiceId, destPath) {
   await saveBinaryResponse(res, destPath);
 }
 
+function escapeXml(str) {
+  return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
+}
+
+// Azure AI Speech(구 Cognitive Services Speech)는 리전별 엔드포인트를 씁니다
+// (예: "koreacentral", "eastus" 등 — 리소스를 만들 때 고른 리전과 같아야 합니다).
+// REST API는 SSML(XML)로 요청을 보내고, 응답 바디에 mp3 바이너리가 그대로 옵니다.
+async function synthesizeAzure(text, voiceId, destPath) {
+  const key = process.env.AZURE_SPEECH_KEY;
+  const region = process.env.AZURE_SPEECH_REGION;
+  const voice = voiceId || PROVIDERS.azure.defaultVoice;
+  const ssml = `<speak version='1.0' xml:lang='ko-KR'><voice name='${escapeXml(voice)}'>${escapeXml(text)}</voice></speak>`;
+
+  const res = await fetchWithTimeout(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    method: "POST",
+    headers: {
+      "Ocp-Apim-Subscription-Key": key,
+      "Content-Type": "application/ssml+xml",
+      "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3",
+      "User-Agent": "woosurimi-trend-api",
+    },
+    body: ssml,
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Azure Speech API 오류(${res.status}): ${errText.slice(0, 200)}`);
+  }
+  await saveBinaryResponse(res, destPath);
+}
+
 /**
  * text: 나레이션으로 읽을 문장
- * provider: "clova" | "typecast" | "elevenlabs"
+ * provider: "clova" | "typecast" | "elevenlabs" | "azure"
  * voiceId: (선택) 서비스별 목소리 식별자
  * destPath: 결과 mp3를 저장할 로컬 경로
  * 반환: 성공 시 destPath, 키가 없거나 실패하면 예외를 던집니다(호출부에서 잡아서
@@ -174,6 +209,7 @@ async function synthesizeVoice({ text, provider, voiceId, destPath }) {
   if (provider === "clova") return synthesizeClova(text, voiceId, destPath).then(() => destPath);
   if (provider === "typecast") return synthesizeTypecast(text, voiceId, destPath).then(() => destPath);
   if (provider === "elevenlabs") return synthesizeElevenLabs(text, voiceId, destPath).then(() => destPath);
+  if (provider === "azure") return synthesizeAzure(text, voiceId, destPath).then(() => destPath);
   throw new Error(`구현되지 않은 음성 제공자입니다: ${provider}`);
 }
 
