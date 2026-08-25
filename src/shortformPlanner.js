@@ -2,14 +2,21 @@
 //   1) planShortform(url, source)   — 블로그/쇼핑/여행 커넥트 "링크"를 넣으면, 그 페이지에
 //      실제로 있는 사진과 본문 문장을 그대로 가져와서 장면을 짭니다 (= "링크컷" 모드).
 //   2) planFromPhotos(photos, topic, source) — 사용자가 직접 고른 사진들과 한 줄 주제를
-//      넣으면, 그 사진들로 장면을 짭니다 (= "자동컷" 모드). 사진마다 캡션을 직접 안 넣으면
-//      AI가 사진 내용을 알아서 "본" 것처럼 지어내지 않고, 정직하게 주제 문구를 짧게 변형한
-//      일반적인 문구로 채웁니다 — 이미지 인식 AI가 붙어있지 않기 때문입니다.
+//      넣으면, 그 사진들로 장면을 짭니다 (= "자동컷" 모드). 사진마다 캡션을 직접 안 넣으면,
+//      이제는 이미지 인식 AI(Claude Vision, imageCaption.js)가 사진을 실제로 보고 —
+//      본문 요약(summaryText)을 함께 넣어줬다면 그 본문 내용과도 자연스럽게 이어지도록 —
+//      캡션을 자동으로 만들어줍니다. 서버에 ANTHROPIC_API_KEY가 없거나 실패하면(에러로
+//      죽지 않고) 예전처럼 정직하게 주제 문구를 짧게 변형한 일반적인 문구로 대신 채웁니다.
 //
 // ⚠️ 두 방식 모두 "실제 영상 파일(mp4)"이 아니라, 영상을 만들기 위한 기획(대본) 단계입니다.
 // 실제 mp4는 videoRenderer.js(및 /api/shortform/render)가 만듭니다.
 
+const path = require("path");
 const { extractPageData } = require("./pageExtractor");
+const { generateCaptionFromImage } = require("./imageCaption");
+const { isConfigured: isVisionConfigured } = require("./claudeClient");
+
+const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
 function splitSentences(text) {
   return (text || "")
@@ -116,11 +123,17 @@ async function planShortform(url, source = "blog", sceneCount = 6) {
  * "자동컷" 모드 — 사용자가 직접 고른 사진들로 장면을 짭니다(외부 링크 없이).
  * photos: [{ url, caption }]  — url은 이 서버에 업로드된 사진의 경로(/uploads/...), caption은 선택
  * topic: 영상 전체 주제를 한 줄로 적은 것 (필수)
- * summaryText: (선택) 본문 요약을 문단으로 붙여넣으면, 블로그 링크 모드처럼 문장 단위로 잘라서
- *              사진 순서에 맞춰 캡션으로 씁니다. 안 넣으면 사진별 caption을 쓰거나, 그마저도
- *              없으면 "주제 + 포인트 번호" 형태의 일반적인 문구로 채웁니다(내용을 지어내지 않음).
+ * summaryText: (선택) 본문 요약을 문단으로 붙여넣으면, 사진 순서에 맞춰 문장을 매칭해서
+ *              이미지 인식 AI에게 "본문 맥락"으로 함께 전달합니다.
+ *
+ * 사진 한 장당 캡션을 정하는 우선순위:
+ *   1) 사용자가 그 사진에 직접 입력한 caption이 있으면 그대로 사용
+ *   2) 없으면 이미지 인식 AI(Claude Vision)가 그 사진을 실제로 보고, 근처 본문 문장(있으면)과
+ *      자연스럽게 이어지는 캡션을 새로 씀 — ANTHROPIC_API_KEY가 서버에 설정돼 있어야 동작
+ *   3) AI가 못 쓰면(키 없음/일시 오류) 매칭된 본문 문장을 그대로 사용
+ *   4) 그마저도 없으면 "주제 + 포인트 번호" 형태의 일반적인 문구로 채움(내용을 지어내지 않음)
  */
-function planFromPhotos(photos, topic, { source = "blog", summaryText = "" } = {}) {
+async function planFromPhotos(photos, topic, { source = "blog", summaryText = "" } = {}) {
   const src = normalizeSource(source);
   const cleanTopic = (topic || "").trim() || "이 콘텐츠";
   const hook = HOOK_BY_SOURCE[src](cleanTopic);
@@ -133,13 +146,39 @@ function planFromPhotos(photos, topic, { source = "blog", summaryText = "" } = {
   scenes.push({ index: 1, role: "hook", caption: hook, image: middlePhotos[0]?.url || null });
 
   const bodyPhotos = middlePhotos.length > 1 ? middlePhotos.slice(1) : middlePhotos;
-  bodyPhotos.forEach((photo, i) => {
-    const caption =
-      (photo.caption && photo.caption.trim()) ||
-      summarySentences[i] ||
-      `${cleanTopic} 포인트 ${i + 1}`;
+  let userCount = 0;
+  let aiVisionCount = 0;
+  let summaryOnlyCount = 0;
+  let genericCount = 0;
+
+  for (let i = 0; i < bodyPhotos.length; i++) {
+    const photo = bodyPhotos[i];
+    const userCaption = (photo.caption && photo.caption.trim()) || "";
+    const matchedSentence = summarySentences[i] || "";
+    let caption = userCaption;
+
+    if (caption) {
+      userCount++;
+    } else if (photo.url) {
+      const localPath = path.join(PUBLIC_DIR, photo.url.replace(/^\/+/, ""));
+      const aiCaption = await generateCaptionFromImage(localPath, cleanTopic, matchedSentence || summaryText);
+      if (aiCaption) {
+        caption = aiCaption;
+        aiVisionCount++;
+      }
+    }
+
+    if (!caption && matchedSentence) {
+      caption = matchedSentence;
+      summaryOnlyCount++;
+    }
+    if (!caption) {
+      caption = `${cleanTopic} 포인트 ${i + 1}`;
+      genericCount++;
+    }
+
     scenes.push({ index: scenes.length + 1, role: "body", caption, image: photo.url });
-  });
+  }
 
   scenes.push({
     index: scenes.length + 1,
@@ -150,6 +189,21 @@ function planFromPhotos(photos, topic, { source = "blog", summaryText = "" } = {
 
   const fullScript = scenes.map((s) => `[씬 ${s.index}] ${s.caption}`).join("\n\n");
 
+  const noteParts = [];
+  if (userCount) noteParts.push(`직접 입력한 캡션 ${userCount}장`);
+  if (aiVisionCount) {
+    noteParts.push(
+      `AI가 사진을 실제로 보고${summaryText ? " 본문 내용과 자연스럽게 이어지도록" : ""} 자동 생성한 캡션 ${aiVisionCount}장`
+    );
+  }
+  if (summaryOnlyCount) noteParts.push(`본문 문장을 그대로 배치한 캡션 ${summaryOnlyCount}장`);
+  if (genericCount) noteParts.push(`일반 문구로 채운 캡션 ${genericCount}장`);
+  let note = noteParts.length ? `사진별 캡션 구성: ${noteParts.join(", ")}입니다.` : "";
+  if (genericCount && !isVisionConfigured()) {
+    note += " 서버에 ANTHROPIC_API_KEY를 등록하면, 일반 문구 대신 AI가 사진을 직접 보고 캡션을 자동으로 만들어줍니다.";
+  }
+  note += " 실제 게시 전에는 각 장면 캡션을 직접 검수·수정해서 쓰는 걸 권장합니다.";
+
   return {
     sourceUrl: null,
     source: src,
@@ -159,9 +213,7 @@ function planFromPhotos(photos, topic, { source = "blog", summaryText = "" } = {
     scenes,
     fullScript,
     hashtags: extractHashtags(cleanTopic, HASHTAG_EXTRA_BY_SOURCE[src]),
-    note: summaryText
-      ? "본문 요약으로 넣어주신 문단을 문장 단위로 잘라 사진 순서에 맞춰 캡션으로 배치했습니다. 실제 게시 전 직접 검수해서 쓰는 걸 권장합니다."
-      : "사진별로 직접 입력한 캡션이 없는 장면은, AI가 사진 내용을 임의로 판단해서 지어내지 않고 주제 문구를 짧게 변형한 일반적인 문구로 채웠습니다 — 실제 게시 전에 각 장면 캡션을 직접 다듬어서 쓰는 걸 권장합니다.",
+    note: note.trim(),
   };
 }
 

@@ -6,15 +6,22 @@
 //   1) 각 장면(scene)의 사진을 내려받는다 (사진이 없으면 어두운 배경색으로 대신함)
 //   2) (선택) 장면 대사를 AI 성우 목소리(TTS)로 미리 만들어 둔 mp3가 있으면 그 길이에
 //      맞춰 장면 길이를 늘린다 — 목소리가 잘리지 않도록
-//   3) 장면마다 "사진(켄번즈 확대·축소 애니메이션) + 자막(자동 줄바꿈) + 나레이션(또는
-//      무음) + 페이드 인/아웃" 짧은 영상 조각을 만든다
-//   4) 조각들을 순서대로 이어 붙인다 (자동 트랜지션 = 각 장면의 페이드 인/아웃)
+//   3) 장면마다 "사진 + 자막(자동 줄바꿈) + 나레이션(또는 무음) + 애니메이션" 짧은 영상
+//      조각을 만든다. frameStyle이 "polaroid"(기본값)이면 사진을 하얀 테두리 카드로 두고
+//      배경은 같은 사진을 흐리게 확대해서 채우는 "포토카드" 스타일로 만들고(요즘 캡컷
+//      감성 숏폼에서 흔히 쓰는 스타일), "full"이면 예전처럼 사진을 화면 전체에 꽉 채운다.
+//   4) 조각들을 순서대로 이어 붙인다 — 첫 장면 시작과 마지막 장면 끝에만 검은 화면에서
+//      페이드 인/아웃을 넣고, 장면과 장면 사이는 하드컷이 아니라 xfade/acrossfade로
+//      부드럽게 크로스페이드(겹쳐 넘어가는) 전환을 넣는다.
 //   5) 배경음악(BGM)이 있으면, 나레이션(또는 무음) 위에 볼륨을 낮춰 함께 믹싱한다
 //
 // 자막 디자인은 src/videoTemplates.js에 정의된 5가지 템플릿(색상/박스/위치 조합) 중
-// 하나를 골라 적용합니다. 아직 없는 것: 목소리별 감정 톤 세부 조정(성우 API 자체가
-// 지원하는 범위 안에서만 가능), 실제 동영상 클립(사진이 아닌 원본 영상)을 장면으로
-// 쓰는 기능입니다.
+// 하나를 골라 적용합니다.
+//
+// ⚠️ 이 모듈은 "사용자가 고른 사진들"을 가지고 슬라이드/카드 스타일 영상을 자동으로
+// 합성하는 도구입니다 — 사람이 직접 들고 찍은 "실제 촬영 영상(움직이는 손, 셀카 각도
+// 변화 등)"을 새로 만들어내는 기능은 아닙니다. 그런 느낌을 원하면 사용자가 촬영한
+// 영상 클립을 소재로 쓰는 기능이 필요한데, 아직 지원하지 않습니다(README 참고).
 
 const fs = require("fs");
 const path = require("path");
@@ -27,10 +34,33 @@ const { getTemplate } = require("./videoTemplates");
 const WIDTH = 720;
 const HEIGHT = 1280;
 const FPS = 25;
-const FADE_SEC = 0.4;
+const FADE_SEC = 0.4; // 영상 맨 처음/맨 끝에만 쓰는 검은 화면 페이드
+const TRANSITION_SEC = 0.35; // 장면과 장면 사이 크로스페이드 전환 길이
 const FONT_PATH = path.join(__dirname, "..", "assets", "fonts", "NotoSansKR-Bold.ttf");
 const RENDERS_DIR = path.join(__dirname, "..", "public", "renders");
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
+
+// "포토카드(폴라로이드)" 스타일 치수 — 720x1280 화면 기준으로 넉넉하게 잡되, 자막이
+// 들어갈 아래쪽 여백은 남겨둡니다.
+const CARD_CONTENT_W = 640;
+const CARD_CONTENT_H = 980;
+const CARD_BORDER = 20;
+const CARD_W = CARD_CONTENT_W + CARD_BORDER * 2;
+const CARD_H = CARD_CONTENT_H + CARD_BORDER * 2;
+const CARD_Y_OFFSET = 55; // 화면 정중앙보다 이만큼(px) 위로 올려서 아래쪽 자막 공간 확보
+
+const FRAME_STYLES = [
+  {
+    id: "polaroid",
+    label: "포토카드(폴라로이드)",
+    description: "사진을 하얀 테두리 카드로 두고, 배경은 같은 사진을 흐리게 확대해서 채워요 — 요즘 감성 숏폼에서 많이 쓰는 스타일이에요.",
+  },
+  {
+    id: "full",
+    label: "화면 꽉 채우기",
+    description: "사진을 화면 전체에 꽉 채우는 예전 스타일이에요. 사진 안에 이미 여백 없이 꽉 찬 정보(표, 인포그래픽 등)가 있을 때 잘 어울려요.",
+  },
+];
 
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
@@ -145,15 +175,20 @@ function srtTimestamp(seconds) {
   return `${h}:${m}:${s},${msPart}`;
 }
 
+// 사진을 targetW x targetH 크기로 "꽉 채워" 자르는 필터(비율이 안 맞아도 여백 없이 채움).
+function buildCoverCropFilter(targetW, targetH) {
+  return `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${targetW}:${targetH}`;
+}
+
 // 장면 인덱스에 따라 "확대"와 "축소", 좌/우 살짝 팬을 번갈아 적용해서 장면마다
-// 조금씩 다른 느낌의 켄번즈(Ken Burns) 애니메이션을 만듭니다.
-function buildKenBurnsFilter(index, duration) {
+// 조금씩 다른 느낌의 켄번즈(Ken Burns) 애니메이션 필터를 만듭니다. width/height는 이
+// 필터가 최종적으로 출력할 크기(예: 배경은 화면 전체, 카드는 카드 안쪽 크기)입니다.
+function buildKenBurnsFilter(index, duration, { width, height, maxZoom = 1.18, driftRatio = 0.07 } = {}) {
   const totalFrames = Math.max(Math.round(duration * FPS), 1);
-  const maxZoom = 1.18;
   const rate = (maxZoom - 1) / totalFrames;
   const zoomIn = index % 2 === 0;
   const panDir = Math.floor(index / 2) % 2 === 0 ? 1 : -1;
-  const driftPx = 50;
+  const driftPx = Math.round(width * driftRatio);
 
   // z='...' 처럼 필터 옵션 값을 작은따옴표로 감쌌기 때문에, 그 안의 쉼표(,)는
   // 필터 구분자로 해석되지 않고 그대로 문자로 들어갑니다 — 따로 이스케이프하지 않습니다.
@@ -163,7 +198,21 @@ function buildKenBurnsFilter(index, duration) {
   const xExpr = `(iw-iw/zoom)/2+(${panDir}*${driftPx}*on/${totalFrames})`;
   const yExpr = `(ih-ih/zoom)/2`;
 
-  return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=1:s=${WIDTH}x${HEIGHT}:fps=${FPS}`;
+  return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=1:s=${width}x${height}:fps=${FPS}`;
+}
+
+// 사진 한 장을 targetW x targetH로 채운 뒤, animate가 true면 켄번즈 애니메이션까지
+// 적용하는 필터 체인(배열)을 만듭니다. 배경 레이어/카드 레이어에 공통으로 씁니다.
+function buildLayerFilters({ animate, sceneIndex, duration, targetW, targetH, maxZoom, driftRatio }) {
+  if (animate) {
+    const bigW = Math.round(targetW * 1.3);
+    const bigH = Math.round(targetH * 1.3);
+    return [
+      buildCoverCropFilter(bigW, bigH),
+      buildKenBurnsFilter(sceneIndex, duration, { width: targetW, height: targetH, maxZoom, driftRatio }),
+    ];
+  }
+  return [buildCoverCropFilter(targetW, targetH)];
 }
 
 // ⚠️ 이 static ffmpeg 빌드에는 drawtext 필터가 빠져 있어서(라이선스 이유로 종종 제외됨),
@@ -172,8 +221,25 @@ function buildKenBurnsFilter(index, duration) {
 //
 // narrationPath가 있으면 그 오디오를 장면의 소리로 쓰고, 없으면 무음(anullsrc)을 같은
 // 길이로 채워 넣습니다 — 모든 장면 조각의 오디오 스트림 형식을 통일해야 나중에
-// concat(이어붙이기)이 문제없이 됩니다.
-async function renderSceneSegment({ imagePath, captionText, duration, outPath, sceneIndex = 0, animate = true, narrationPath = null, templateId = "bold-black" }) {
+// 이어붙이기(크로스페이드 또는 하드컷)가 문제없이 됩니다.
+//
+// fadeIn/fadeOut: true면 이 장면의 시작/끝에 검은 화면 페이드를 넣습니다. 여러 장면을
+// 이어 붙일 때는 맨 처음 장면만 fadeIn=true, 맨 마지막 장면만 fadeOut=true로 주고
+// 나머지는 둘 다 false로 둬서(장면 사이는 concatWithCrossfade가 자연스럽게 이어줌),
+// 안에서 또 페이드가 겹쳐 어두워지는 걸 막습니다.
+async function renderSceneSegment({
+  imagePath,
+  captionText,
+  duration,
+  outPath,
+  sceneIndex = 0,
+  animate = true,
+  narrationPath = null,
+  templateId = "bold-black",
+  frameStyle = "polaroid",
+  fadeIn = true,
+  fadeOut = true,
+}) {
   const srtFile = outPath.replace(/\.mp4$/, ".srt");
   // 자막 전체를 한 화면에 몰아넣지 않고, 2줄씩 순서대로 바뀌도록 여러 개의 자막
   // 구간(cue)으로 나눠서 만듭니다 — 글자가 잘리지 않으면서도 화면을 덜 가립니다.
@@ -184,33 +250,103 @@ async function renderSceneSegment({ imagePath, captionText, duration, outPath, s
   const forceStyle = getTemplate(templateId).forceStyle;
   const subtitles = `subtitles=filename='${escapeFilterPath(srtFile)}':fontsdir='${fontsDir}':force_style='${forceStyle}'`;
 
-  const fadeOutStart = Math.max(duration - FADE_SEC, 0);
-  const fade = `fade=t=in:st=0:d=${FADE_SEC},fade=t=out:st=${fadeOutStart}:d=${FADE_SEC}`;
+  const fadeSteps = [];
+  if (fadeIn) fadeSteps.push(`fade=t=in:st=0:d=${FADE_SEC}`);
+  if (fadeOut) fadeSteps.push(`fade=t=out:st=${Math.max(duration - FADE_SEC, 0)}:d=${FADE_SEC}`);
 
+  const usePolaroid = Boolean(imagePath) && frameStyle === "polaroid";
+
+  const audioArgs = narrationPath
+    ? ["-i", narrationPath]
+    : ["-f", "lavfi", "-t", String(duration), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"];
+
+  if (usePolaroid) {
+    // === 포토카드(폴라로이드) 스타일: 배경(흐리게 확대) + 하얀 테두리 카드(원본 사진) ===
+    const bgFilters = buildLayerFilters({
+      animate,
+      sceneIndex,
+      duration,
+      targetW: WIDTH,
+      targetH: HEIGHT,
+      maxZoom: 1.2,
+      driftRatio: 0.08,
+    })
+      .concat(["gblur=sigma=24", "eq=brightness=-0.08:saturation=0.85"])
+      .join(",");
+
+    const fgFilters = buildLayerFilters({
+      animate,
+      sceneIndex,
+      duration,
+      targetW: CARD_CONTENT_W,
+      targetH: CARD_CONTENT_H,
+      maxZoom: 1.06,
+      driftRatio: 0.03,
+    })
+      .concat([`pad=w=${CARD_W}:h=${CARD_H}:x=${CARD_BORDER}:y=${CARD_BORDER}:color=white`])
+      .join(",");
+
+    const shadowFilters = "boxblur=16:2,format=yuva420p,colorchannelmixer=aa=0.4";
+
+    const overlayY = `(H-h)/2-${CARD_Y_OFFSET}`;
+    const shadowY = `(H-h)/2-${CARD_Y_OFFSET}+14`;
+    const shadowX = `(W-w)/2+10`;
+
+    const finalSteps = [subtitles, ...fadeSteps, "format=yuv420p"].join(",");
+
+    const filterComplex = [
+      `[0:v]split=2[fgsrc][bgsrc]`,
+      `[bgsrc]${bgFilters}[bglayer]`,
+      `[1:v]${shadowFilters}[shadow]`,
+      `[bglayer][shadow]overlay=x=${shadowX}:y=${shadowY}:format=auto[withshadow]`,
+      `[fgsrc]${fgFilters}[card]`,
+      `[withshadow][card]overlay=x=(W-w)/2:y=${overlayY}[merged]`,
+      `[merged]${finalSteps}[outv]`,
+    ].join(";");
+
+    const args = [
+      "-y",
+      "-loop", "1", "-t", String(duration), "-i", imagePath,
+      "-f", "lavfi", "-t", String(duration), "-i", `color=c=black:s=${CARD_W}x${CARD_H}:r=${FPS}`,
+      ...audioArgs,
+      "-filter_complex", filterComplex,
+      "-map", "[outv]",
+      "-map", "2:a",
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-shortest",
+      outPath,
+    ];
+    await runFfmpeg(args);
+    fs.unlinkSync(srtFile);
+    return;
+  }
+
+  // === 예전 스타일("full"): 사진(또는 색상 배경)을 화면 전체에 꽉 채움 ===
+  const fade = fadeSteps.join(",");
   let vf;
   if (imagePath && animate) {
-    // 팬/줌이 캔버스 밖으로 나가지 않도록, 목표 크기보다 넉넉하게 확대해둔 뒤 켄번즈를 적용합니다.
-    // flags=lanczos는 원본보다 작은 사진을 확대할 때 최대한 덜 뭉개지도록 하는 옵션입니다
-    // (원본 해상도 자체가 너무 낮으면 이 옵션으로도 한계가 있습니다).
-    const bigW = Math.round(WIDTH * 1.3);
-    const bigH = Math.round(HEIGHT * 1.3);
-    const kenBurns = buildKenBurnsFilter(sceneIndex, duration);
-    vf =
-      `scale=${bigW}:${bigH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${bigW}:${bigH},` +
-      `${kenBurns},${subtitles},${fade},format=yuv420p`;
+    const layerFilters = buildLayerFilters({
+      animate: true,
+      sceneIndex,
+      duration,
+      targetW: WIDTH,
+      targetH: HEIGHT,
+      maxZoom: 1.18,
+      driftRatio: 0.07,
+    });
+    vf = [...layerFilters, subtitles, fade, "format=yuv420p"].filter(Boolean).join(",");
+  } else if (imagePath) {
+    vf = [buildCoverCropFilter(WIDTH, HEIGHT), subtitles, fade, `fps=${FPS}`, "format=yuv420p"].filter(Boolean).join(",");
   } else {
-    vf =
-      `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase:flags=lanczos,crop=${WIDTH}:${HEIGHT},` +
-      `${subtitles},${fade},fps=${FPS},format=yuv420p`;
+    vf = [subtitles, fade, `fps=${FPS}`, "format=yuv420p"].filter(Boolean).join(",");
   }
 
   const inputArgs = imagePath
     ? ["-loop", "1", "-t", String(duration), "-i", imagePath]
     : ["-f", "lavfi", "-t", String(duration), "-i", `color=c=0x1c1c2b:s=${WIDTH}x${HEIGHT}:r=${FPS}`];
-
-  const audioArgs = narrationPath
-    ? ["-i", narrationPath]
-    : ["-f", "lavfi", "-t", String(duration), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"];
 
   const args = [
     "-y",
@@ -230,12 +366,59 @@ async function renderSceneSegment({ imagePath, captionText, duration, outPath, s
   fs.unlinkSync(srtFile);
 }
 
+// 하드컷(그냥 순서대로 이어붙이기) — xfade 크로스페이드가 어떤 이유로든 실패했을 때만
+// 안전하게 대체하는 용도로 남겨둡니다.
 async function concatSegments(segmentPaths, outPath) {
   const listPath = outPath.replace(/\.mp4$/, ".list.txt");
   const listContent = segmentPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n");
   fs.writeFileSync(listPath, listContent, "utf8");
   await runFfmpeg(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", "-movflags", "+faststart", outPath]);
   fs.unlinkSync(listPath);
+}
+
+// 장면 조각들을 하드컷이 아니라 xfade(화면)/acrossfade(소리)로 부드럽게 겹쳐 넘어가도록
+// 이어붙입니다. 반환값은 크로스페이드로 겹친 만큼 줄어든 실제 전체 길이(초)입니다.
+async function concatWithCrossfade(segmentPaths, durations, outPath, transitionSec = TRANSITION_SEC) {
+  if (segmentPaths.length === 1) {
+    fs.copyFileSync(segmentPaths[0], outPath);
+    return durations[0];
+  }
+
+  const inputArgs = [];
+  segmentPaths.forEach((p) => inputArgs.push("-i", p));
+
+  const filterParts = [];
+  let vLabel = "0:v";
+  let aLabel = "0:a";
+  let cum = durations[0];
+  for (let i = 1; i < segmentPaths.length; i++) {
+    // 전환 길이가 짧은 장면보다 길면 안 되므로(그러면 offset이 음수가 되어 깨짐),
+    // 두 장면 중 더 짧은 쪽 길이를 넘지 않게 안전하게 제한합니다.
+    const t = Math.max(Math.min(transitionSec, durations[i - 1], durations[i]) - 0.001, 0.05);
+    const offset = Math.max(cum - t, 0);
+    const vOut = `v${i}`;
+    const aOut = `a${i}`;
+    filterParts.push(`[${vLabel}][${i}:v]xfade=transition=fade:duration=${t.toFixed(3)}:offset=${offset.toFixed(3)}[${vOut}]`);
+    filterParts.push(`[${aLabel}][${i}:a]acrossfade=d=${t.toFixed(3)}[${aOut}]`);
+    vLabel = vOut;
+    aLabel = aOut;
+    cum = cum + durations[i] - t;
+  }
+
+  await runFfmpeg([
+    "-y",
+    ...inputArgs,
+    "-filter_complex", filterParts.join(";"),
+    "-map", `[${vLabel}]`,
+    "-map", `[${aLabel}]`,
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    "-movflags", "+faststart",
+    outPath,
+  ]);
+  return cum;
 }
 
 // 기존 오디오(나레이션 또는 무음)와 배경음악(BGM)을 함께 믹싱합니다.
@@ -264,10 +447,14 @@ async function muxBgmAndNarration(videoPath, bgmPath, totalDuration, outPath) {
  * options.durationPerScene: 장면당 기본 길이(초), 기본 3초 (나레이션이 더 길면 자동으로 늘어남)
  * options.bgmPath: 로컬에 저장된 배경음악 파일 경로(선택)
  * options.animate: 켄번즈(확대·축소) 애니메이션 사용 여부, 기본 true
+ * options.frameStyle: "polaroid"(기본, 하얀 테두리 포토카드) | "full"(화면 꽉 채우기)
  * options.voice: { provider, voiceId } — 지정하면 장면별 나레이션을 TTS로 생성해서 입힙니다
  * 반환: { fileName, publicPath, durationSec, narration: { used, provider, failedReason } }
  */
-async function renderShortformVideo(scenes, { durationPerScene = 3, bgmPath = null, animate = true, voice = null, templateId = "bold-black" } = {}) {
+async function renderShortformVideo(
+  scenes,
+  { durationPerScene = 3, bgmPath = null, animate = true, voice = null, templateId = "bold-black", frameStyle = "polaroid" } = {}
+) {
   if (!scenes || !scenes.length) throw new Error("장면(scene)이 없습니다.");
   if (!fs.existsSync(RENDERS_DIR)) fs.mkdirSync(RENDERS_DIR, { recursive: true });
 
@@ -283,7 +470,7 @@ async function renderShortformVideo(scenes, { durationPerScene = 3, bgmPath = nu
     }
 
     const segmentPaths = [];
-    let totalDuration = 0;
+    const durations = [];
 
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
@@ -330,13 +517,25 @@ async function renderShortformVideo(scenes, { durationPerScene = 3, bgmPath = nu
         animate,
         narrationPath,
         templateId,
+        frameStyle,
+        fadeIn: i === 0,
+        fadeOut: i === scenes.length - 1,
       });
       segmentPaths.push(segPath);
-      totalDuration += sceneDuration;
+      durations.push(sceneDuration);
     }
 
     const concatenatedPath = path.join(workDir, "concat.mp4");
-    await concatSegments(segmentPaths, concatenatedPath);
+    let totalDuration;
+    try {
+      totalDuration = await concatWithCrossfade(segmentPaths, durations, concatenatedPath, TRANSITION_SEC);
+    } catch (err) {
+      // 크로스페이드 합성이 실패하면(예: ffmpeg 빌드 문제) 영상 자체가 안 만들어지는 것보다는
+      // 낫다고 보고, 예전처럼 하드컷으로 이어붙이는 방식으로 안전하게 대체합니다.
+      console.error("[videoRenderer] 크로스페이드 전환 실패 — 하드컷 이어붙이기로 대체합니다:", err.message);
+      totalDuration = durations.reduce((a, b) => a + b, 0);
+      await concatSegments(segmentPaths, concatenatedPath);
+    }
 
     const fileName = `${jobId}.mp4`;
     const finalPath = path.join(RENDERS_DIR, fileName);
@@ -353,4 +552,4 @@ async function renderShortformVideo(scenes, { durationPerScene = 3, bgmPath = nu
   }
 }
 
-module.exports = { renderShortformVideo, RENDERS_DIR };
+module.exports = { renderShortformVideo, RENDERS_DIR, FRAME_STYLES };
