@@ -604,7 +604,15 @@ async function renderShortformVideo(
     templateId = "bold-black",
     frameStyle = "full", // 숏폼은 세로 화면을 꽉 채우는 게 기본(폴라로이드 카드는 선택 옵션)
     hookText = "", // 영상 내내 상단에 고정으로 붙는 후킹 문구
-    fastConcat = false, // true면 크로스페이드 없이 하드컷으로 이어붙여 렌더링 속도를 크게 아낌(미리보기용)
+    // 장면 전환 방식: "cut"(하드컷, 기본) | "crossfade"(부드럽게 겹치기)
+    //
+    // 기본이 하드컷인 이유가 두 가지입니다.
+    //  1) 참고하신 숏폼 레퍼런스 영상들이 전부 하드컷 스타일입니다.
+    //  2) 크로스페이드는 전 구간을 다시 인코딩해야 해서 ffmpeg 메모리를 크게 먹는데,
+    //     Render는 컨테이너 전체가 512MB라 장면이 5개만 돼도 서버가 통째로 재시작됐습니다.
+    //     하드컷은 `-c copy`라 디코딩·인코딩이 아예 없어서 메모리를 거의 안 쓰고 훨씬 빠릅니다.
+    transition = "cut",
+    fastConcat = false, // (구버전 호환) true면 transition을 무시하고 하드컷
     encodePreset = "veryfast", // 미리보기는 "ultrafast"로 더 빠르게
     onPhase = null, // (phase, memMb) — 어디까지 진행됐는지 호출부에 알려줍니다
   } = {}
@@ -705,9 +713,8 @@ async function renderShortformVideo(
     const concatenatedPath = path.join(workDir, "concat.mp4");
     let totalDuration;
     reportPhase("장면 합치기 시작");
-    if (fastConcat) {
-      // 크로스페이드는 장면마다 재인코딩이 필요해서 느립니다 — 미리보기처럼 속도가
-      // 중요할 땐 처음부터 하드컷으로 이어붙입니다.
+    if (fastConcat || transition !== "crossfade") {
+      // 하드컷 — `-c copy`라 디코딩·인코딩이 없어서 사실상 순식간이고 메모리도 안 씁니다.
       totalDuration = durations.reduce((a, b) => a + b, 0);
       await concatSegments(segmentPaths, concatenatedPath);
     } else {

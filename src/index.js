@@ -544,6 +544,9 @@ app.post("/api/shortform/render-job", upload.single("bgm"), (req, res) => {
   const templateId = TEMPLATES.some((t) => t.id === req.body.templateId) ? req.body.templateId : "bold-black";
   const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "full";
   const hookText = (req.body.hookText || "").trim();
+  // 장면 전환: 기본은 레퍼런스 숏폼과 같은 하드컷. "crossfade"를 주면 부드럽게 겹칩니다
+  // (단, 크로스페이드는 전 구간 재인코딩이라 느리고 메모리를 많이 씁니다).
+  const transition = req.body.transition === "crossfade" ? "crossfade" : "cut";
   const origin = `${req.protocol}://${req.get("host")}`;
 
   cleanupOldRenderJobs();
@@ -563,6 +566,7 @@ app.post("/api/shortform/render-job", upload.single("bgm"), (req, res) => {
         templateId,
         frameStyle,
         hookText,
+        transition,
         // 진행 단계와 메모리 사용량을 잡에 기록해 둡니다 — 렌더링 도중 서버가 죽었을 때
         // 마지막으로 어디까지 갔는지 확인할 수 있게 하려는 목적입니다.
         onPhase: (phase, memMb) => {
