@@ -497,6 +497,113 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   }
 });
 
+// ===================== 최종 영상: 오래 걸리는 작업이라 "비동기 작업" 방식 =====================
+// ⚠️ 무료 Render 서버에서 7장면 + 나레이션 영상을 만들면 2~4분이 걸리는데, Render 프록시는
+// 그보다 먼저(실측 161초) 연결을 끊고 502를 돌려줍니다. 그래서 위 /render(한 방에 끝내는
+// 방식)만으로는 무료 서버에서 최종 영상을 못 만듭니다.
+// 대신 여기서는 "작업만 시작하고 바로 응답 → 화면이 주기적으로 진행상황을 물어보는" 방식을
+// 씁니다. 서버는 백그라운드에서 계속 렌더링하므로 프록시가 끊어도 작업은 살아있습니다.
+//
+// ⚠️ 작업 정보는 메모리에만 두므로 서버가 재시작되면 사라집니다(무료 서버는 유휴 상태에서
+// 잠들 수 있음). 완성된 mp4는 public/renders에 남으니, 주소만 알면 계속 받을 수 있습니다.
+const renderJobs = new Map();
+const RENDER_JOB_TTL_MS = 60 * 60 * 1000; // 1시간 지난 작업 기록은 정리
+
+function cleanupOldRenderJobs() {
+  const now = Date.now();
+  for (const [id, job] of renderJobs) {
+    if (now - job.createdAt > RENDER_JOB_TTL_MS) renderJobs.delete(id);
+  }
+}
+
+// POST /api/shortform/render-job — /api/shortform/render와 완전히 같은 입력을 받고,
+// 곧바로 { jobId }를 돌려줍니다. 진행상황은 아래 GET으로 확인하세요.
+app.post("/api/shortform/render-job", upload.single("bgm"), (req, res) => {
+  let scenes;
+  try {
+    scenes = JSON.parse(req.body.scenes || "[]");
+  } catch {
+    return res.status(400).json({ error: "invalid_scenes", message: "scenes 필드가 올바른 JSON이 아닙니다." });
+  }
+  if (!Array.isArray(scenes) || !scenes.length) {
+    return res.status(400).json({ error: "missing_scenes", message: "scenes 배열이 비어 있습니다. 먼저 /api/shortform/plan을 호출해 주세요." });
+  }
+  if (scenes.length > 12) {
+    return res.status(400).json({ error: "too_many_scenes", message: "장면은 최대 12개까지만 지원합니다." });
+  }
+
+  const durationPerScene = Number(req.body.durationPerScene) > 0 ? Number(req.body.durationPerScene) : 3;
+  const animate = req.body.animate !== "false";
+  const uploadedBgmPath = req.file ? req.file.path : null;
+  const libraryBgmPath = !uploadedBgmPath && req.body.bgmId ? getTrackPath(req.body.bgmId) : null;
+  const bgmPath = uploadedBgmPath || libraryBgmPath;
+  const voiceProvider = ["clova", "typecast", "elevenlabs", "azure"].includes(req.body.voiceProvider) ? req.body.voiceProvider : null;
+  const voice = voiceProvider ? { provider: voiceProvider, voiceId: req.body.voiceId || null } : null;
+  const templateId = TEMPLATES.some((t) => t.id === req.body.templateId) ? req.body.templateId : "bold-black";
+  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "full";
+  const hookText = (req.body.hookText || "").trim();
+  const origin = `${req.protocol}://${req.get("host")}`;
+
+  cleanupOldRenderJobs();
+  const jobId = crypto.randomUUID();
+  renderJobs.set(jobId, { status: "running", createdAt: Date.now(), result: null, error: null });
+
+  // 응답을 먼저 보내고(프록시가 기다리지 않도록), 렌더링은 뒤에서 계속 진행합니다.
+  res.json({ jobId, status: "running", note: "영상을 만들기 시작했어요. 진행상황은 이 jobId로 확인하세요." });
+
+  (async () => {
+    try {
+      const result = await renderShortformVideo(scenes, { durationPerScene, bgmPath, animate, voice, templateId, frameStyle, hookText });
+      const absoluteUrl = `${origin}${result.publicPath}`;
+      const qrDataUrl = await QRCode.toDataURL(absoluteUrl, { width: 260, margin: 1 });
+
+      let narrationNote = null;
+      if (voice && !result.narration.used) {
+        narrationNote = `AI 성우 음성이 빠진 채로 만들어졌습니다 — ${result.narration.failedReason || "API 키가 설정되지 않았습니다"}.`;
+      } else if (voice && result.narration.used) {
+        narrationNote = `${result.narration.scenesWithVoice}/${scenes.length}개 장면에 AI 성우 나레이션이 삽입되었습니다.`;
+      }
+
+      const job = renderJobs.get(jobId);
+      if (job) {
+        job.status = "done";
+        job.result = {
+          ...result,
+          videoUrl: absoluteUrl,
+          qrDataUrl,
+          narrationNote,
+          note: `사진 ${frameStyle === "polaroid" ? "포토카드" : "세로 꽉 채우기"} + 자막(상단 후킹 + 하단 멘트) + 배경음악(+선택 시 AI 나레이션)이 들어간 실제 mp4 영상입니다. 무료 서버(Render)는 재시작되면 이 파일이 사라질 수 있으니 바로 다운로드해 두세요.`,
+        };
+      }
+    } catch (err) {
+      const job = renderJobs.get(jobId);
+      if (job) {
+        job.status = "failed";
+        job.error = err.message;
+      }
+    } finally {
+      if (uploadedBgmPath) fs.unlink(uploadedBgmPath, () => {});
+    }
+  })();
+});
+
+// GET /api/shortform/render-job/:jobId — { status: running | done | failed, result?, error? }
+app.get("/api/shortform/render-job/:jobId", (req, res) => {
+  const job = renderJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({
+      error: "job_not_found",
+      message: "그 작업을 찾을 수 없어요. 서버가 재시작되면 진행 기록이 사라집니다 — 영상 만들기를 다시 눌러 주세요.",
+    });
+  }
+  res.json({
+    status: job.status,
+    elapsedSec: Math.round((Date.now() - job.createdAt) / 1000),
+    result: job.result,
+    error: job.error,
+  });
+});
+
 // ===================== 링크로 콘텐츠 만들기 =====================
 // 링크 하나를 넣으면 그 페이지의 실제 제목/설명/사진을 미리 보여주는 허브 기능입니다.
 // 이 자체로 콘텐츠를 만들지는 않고, 미리보기 후 "블로그 글" / "카드뉴스" / "숏폼 영상" 중

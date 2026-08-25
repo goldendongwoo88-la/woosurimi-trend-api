@@ -962,10 +962,24 @@
       if (voiceIdInput.value.trim()) form.append("voiceId", voiceIdInput.value.trim());
     }
 
+    // ⚠️ 최종 영상은 무료 서버에서 2~4분씩 걸리는데, Render 프록시는 그 전에(실측 161초)
+    // 연결을 끊고 502를 돌려줍니다. 그래서 "만들어줘"만 먼저 보내고(작업 시작), 진행상황은
+    // 몇 초마다 따로 물어보는 방식으로 처리합니다 — 서버는 뒤에서 계속 만들고 있습니다.
     try {
-      const res = await fetch("/api/shortform/render", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "영상 생성 실패");
+      const startRes = await fetch("/api/shortform/render-job", { method: "POST", body: form });
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error(startData.message || "영상 생성 시작 실패");
+
+      renderResultEl.innerHTML = `<div class="status" id="renderProgress">영상을 만들고 있어요... (0초)</div>`;
+      const progressEl = document.getElementById("renderProgress");
+
+      const data = await pollRenderJob(startData.jobId, (sec) => {
+        renderBtn.textContent = `영상 만드는 중... (${sec}초)`;
+        if (progressEl) {
+          progressEl.textContent = `영상을 만들고 있어요... (${sec}초 경과) — 장면마다 사진·자막·성우 목소리를 합치는 중이라 2~4분 정도 걸릴 수 있어요.`;
+        }
+      });
+
       renderResultEl.innerHTML = `
         <video controls style="width:100%;border-radius:8px;background:#000;" src="${data.publicPath}"></video>
         <div class="toolbar">
@@ -984,6 +998,28 @@
       renderBtn.disabled = false;
       renderBtn.textContent = "영상 생성하기";
     }
+  }
+
+  // 작업이 끝날 때까지 3초마다 상태를 물어봅니다. 최대 10분까지 기다립니다.
+  async function pollRenderJob(jobId, onTick) {
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 10 * 60 * 1000;
+    while (Date.now() - startedAt < MAX_WAIT_MS) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const sec = Math.round((Date.now() - startedAt) / 1000);
+      if (onTick) onTick(sec);
+      let job;
+      try {
+        const res = await fetch(`/api/shortform/render-job/${jobId}`);
+        job = await res.json();
+      } catch (err) {
+        continue; // 일시적인 네트워크 오류는 무시하고 다음 차례에 다시 물어봅니다
+      }
+      if (job.status === "done") return job.result;
+      if (job.status === "failed") throw new Error(job.error || "영상 생성에 실패했어요.");
+      if (job.error && !job.status) throw new Error(job.message || job.error);
+    }
+    throw new Error("영상 생성이 10분 안에 끝나지 않았어요. 장면 수를 줄이거나 나레이션을 끄고 다시 시도해 보세요.");
   }
 
   function copyScript() {
