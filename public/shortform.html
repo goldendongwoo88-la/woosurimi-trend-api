@@ -672,6 +672,21 @@
     }
   };
 
+  // "링크로 콘텐츠 만들기" 허브(link-content.html)에서 ?url=...&source=... 로 넘어온
+  // 경우, 링크컷 모드로 자동 전환하고 URL을 채운 뒤 바로 기획안을 생성합니다.
+  (function prefillFromQuery() {
+    const params = new URLSearchParams(location.search);
+    const urlParam = params.get("url");
+    if (!urlParam) return;
+    urlInput.value = urlParam;
+    const sourceParam = params.get("source");
+    if (sourceParam && ["blog", "shopping", "travel"].includes(sourceParam)) {
+      currentSource = sourceParam;
+      tabs.forEach((t) => t.classList.toggle("active", t.dataset.source === sourceParam));
+    }
+    generateBtn.click();
+  })();
+
   document.getElementById("generatePhotoBtn").onclick = async () => {
     const topic = document.getElementById("topicInput").value.trim();
     if (!selectedPhotoFiles.length) {

@@ -229,6 +229,7 @@
   let currentLayoutId = "stack";
   let currentPlan = null;
   let stockPhotosReady = false;
+  let currentSourceUrl = "";
   // 페이지별로 고른 스톡 사진(선택 시): { [pageIndex]: { url, thumbUrl, photographer } }
   const pageStockPhoto = {};
 
@@ -348,39 +349,67 @@
     );
   }
 
-  document.getElementById("planBtn").onclick = async () => {
+  async function generatePlan() {
     const topic = document.getElementById("topicInput").value.trim();
-    if (!topic) {
+    if (!topic && !currentSourceUrl) {
       alert("주제를 입력해 주세요.");
       return;
     }
     const btn = document.getElementById("planBtn");
     btn.disabled = true;
     btn.textContent = "대본 만드는 중...";
-    document.getElementById("planResult").innerHTML = `<div class="status">대본을 짜는 중이에요...</div>`;
+    document.getElementById("planResult").innerHTML = `<div class="status">${
+      currentSourceUrl ? "링크 내용을 읽고 대본을 짜는 중이에요..." : "대본을 짜는 중이에요..."
+    }</div>`;
     document.getElementById("renderResult").innerHTML = "";
 
     try {
       const res = await fetch("/api/cardnews/plan", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topic, pageCount: currentPageCount }),
+        body: JSON.stringify({ topic, pageCount: currentPageCount, sourceUrl: currentSourceUrl || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "대본 생성 실패");
       currentPlan = data;
+      if (data.topic && !topic) document.getElementById("topicInput").value = data.topic;
       if (data.recommendedStyles && data.recommendedStyles[0] && data.recommendedStyles[0].score > 0) {
         currentStyleId = data.recommendedStyles[0].id;
       }
       renderStyleList(styles);
       renderPlan(data);
+      applySourceImages(data.sourceImages);
     } catch (err) {
       document.getElementById("planResult").innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
     } finally {
       btn.disabled = false;
       btn.textContent = "📝 카드뉴스 대본 만들기";
     }
-  };
+  }
+
+  document.getElementById("planBtn").onclick = generatePlan;
+
+  // 링크에서 가져온 원문 사진을, 사진이 필요한 페이지(표지부터 순서대로)에 자동으로
+  // 채워둡니다. 사용자가 원치 않으면 페이지 카드에서 업로드/다른 스톡 사진으로 바꿀 수 있어요.
+  function applySourceImages(sourceImages) {
+    if (!sourceImages || !sourceImages.length || !currentPlan) return;
+    let idx = 0;
+    currentPlan.pages.forEach((_, i) => {
+      if (idx >= sourceImages.length) return;
+      pageStockPhoto[i] = { url: sourceImages[idx], thumbUrl: sourceImages[idx], photographer: "원문 이미지" };
+      idx++;
+      if (stockPhotosReady) {
+        const resultsEl = document.querySelector(`[data-stockresults="${i}"]`);
+        if (resultsEl) {
+          resultsEl.innerHTML = `
+          <div class="stock-thumb selected">
+            <img src="${escapeHtml(pageStockPhoto[i].url)}" />
+            <div class="stock-credit">원문 이미지</div>
+          </div>`;
+        }
+      }
+    });
+  }
 
   const ROLE_LABEL = { cover: "표지", content: "본문", outro: "마무리" };
 
@@ -577,11 +606,29 @@
     }
   }
 
+  // "링크로 콘텐츠 만들기" 허브에서 ?url=... 로 넘어온 경우, 그 링크 내용을 바탕으로
+  // 대본을 만듭니다(빈 주제 입력 대신 실제 페이지 제목/본문/사진을 사용).
+  function prefillFromQuery() {
+    const params = new URLSearchParams(location.search);
+    const urlParam = params.get("url");
+    if (!urlParam) return false;
+    currentSourceUrl = urlParam;
+    const topicInput = document.getElementById("topicInput");
+    topicInput.placeholder = "링크 내용을 바탕으로 자동으로 만들어요 (원하면 직접 입력해도 돼요)";
+    document.getElementById(
+      "generatorStatusNote"
+    ).innerHTML += `<div class="note" style="margin-top:0;">🔗 링크에서 가져온 내용으로 대본을 만들어요: <span style="word-break:break-all;">${escapeHtml(
+      urlParam
+    )}</span></div>`;
+    return true;
+  }
+
   (async () => {
     await loadStockPhotoStatus(); // 대본 카드를 그리기 전에 먼저 알아야 "스톡 사진 검색" 탭을 보여줄지 정할 수 있음
     await loadStyles();
     loadGeneratorStatus();
     updatePreview();
+    if (prefillFromQuery()) generatePlan();
   })();
 </script>
 </body>

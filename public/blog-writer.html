@@ -152,6 +152,13 @@
   }
   .claude-app-btn:hover { background: #1a1a1a; }
   .skill-tag { display: inline-block; background: #eef1ff; color: #4552d6; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+  .draft-title { font-size: 17px; font-weight: bold; margin-bottom: 10px; line-height: 1.4; }
+  .draft-section { margin-bottom: 14px; }
+  .draft-section .heading { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+  .draft-section .body { font-size: 13px; line-height: 1.7; white-space: pre-wrap; color: #333; }
+  .draft-section img { width: 100%; border-radius: 8px; margin: 6px 0; display: block; }
+  .draft-hashtags { font-size: 12px; color: #4552d6; margin-top: 8px; }
+  input[type="url"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 10px; font-family: inherit; }
 </style>
 </head>
 <body>
@@ -166,6 +173,14 @@
   🖥️ 주제를 고르거나 직접 입력한 뒤 <b>클로드 앱에서 글 생성하기</b>를 누르면, 그 카테고리에 맞는 스킬(사장님이 claude.ai 계정에 미리 저장해두신 홈판 상위노출용 스킬)이 채워진 채팅창으로 데스크톱 클로드 앱이 열려요. 이 방식은 저희 서버의 Claude API를 거치지 않아서 API 비용이 들지 않고, 이미 쓰고 계신 클로드 구독 안에서 처리돼요. 앱이 열리면 채팅창에 문구가 미리 채워져 있는데, <b>직접 전송 버튼을 눌러야</b> 스킬이 실제로 작동해요(자동 전송은 안 돼요 — 클로드 앱 딥링크 자체의 제한이에요). 데스크톱 앱 전용이라 모바일·웹 브라우저에서는 안 열릴 수 있어요.
   <br><br>
   ⚠️ "소개/홍보글" 카테고리는 정확히 맞는 실시간 데이터가 없어서, 뜻이 가장 가까운 카테고리(인테리어·DIY, 원예·재배 관련 키워드)로 대신 채웠어요 — 화면에 뜨는 문구를 잘 보면 어떤 데이터를 대신 썼는지 안내돼 있어요.
+  </div>
+
+  <div class="panel" id="linkPanel">
+    <div class="section-title">🔗 링크로 만들기</div>
+    <div class="cat-desc" style="margin-top:-4px;">블로그·뉴스·상품 페이지 링크를 넣으면, 그 페이지의 실제 제목·본문·사진을 가져와서(서버의 Claude API로, 없으면 원문 문장 그대로) 바로 초안을 만들어드려요. 위 트렌드 주제 방식과는 별개의 기능이에요.</div>
+    <input type="url" id="linkUrlInput" placeholder="https://blog.naver.com/... 또는 뉴스·상품 페이지 링크" />
+    <button class="primary" id="linkDraftBtn" style="background:#4552d6;">✍️ 링크 내용으로 초안 만들기</button>
+    <div id="linkDraftResult"></div>
   </div>
 
   <div class="panel">
@@ -299,6 +314,80 @@
 
   loadCategories();
   updateClaudeAppBtn();
+
+  // ===================== 링크로 만들기 =====================
+  // "링크로 콘텐츠 만들기" 허브(link-content.html)에서 ?url=... 로 넘어오면 자동 실행됩니다.
+  // 위쪽 트렌드 주제 → 클로드 앱 딥링크 흐름과는 독립적인 기능으로, 서버의 /api/blog/draft를
+  // 직접 호출해 결과를 이 페이지에 바로 표시합니다.
+  async function generateLinkDraft() {
+    const url = document.getElementById("linkUrlInput").value.trim();
+    if (!url) {
+      alert("링크를 먼저 입력해 주세요.");
+      return;
+    }
+    const btn = document.getElementById("linkDraftBtn");
+    btn.disabled = true;
+    btn.textContent = "초안 만드는 중...";
+    document.getElementById("linkDraftResult").innerHTML = `<div class="status">링크 내용을 읽고 초안을 만드는 중이에요...</div>`;
+
+    try {
+      const form = new FormData();
+      form.append("sourceUrl", url);
+      form.append("category", currentCategory || "info_post");
+      form.append("mode", "text_images");
+      const res = await fetch("/api/blog/draft", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "초안 생성 실패");
+      renderLinkDraft(data);
+    } catch (err) {
+      document.getElementById("linkDraftResult").innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "✍️ 링크 내용으로 초안 만들기";
+    }
+  }
+
+  function renderLinkDraft(draft) {
+    const sectionsHtml = draft.sections
+      .map(
+        (s) => `
+      <div class="draft-section">
+        <div class="heading">${escapeHtml(s.heading)}</div>
+        ${s.image ? `<img src="${s.image}" loading="lazy" />` : ""}
+        <div class="body">${escapeHtml(s.body)}</div>
+      </div>`
+      )
+      .join("");
+
+    document.getElementById("linkDraftResult").innerHTML = `
+      <div class="note" style="margin-top:14px;">${escapeHtml(draft.note)}</div>
+      <div class="draft-title">${escapeHtml(draft.title)}</div>
+      ${draft.thumbnailUrl ? `<img src="${draft.thumbnailUrl}" style="width:100%;border-radius:8px;margin-bottom:12px;" loading="lazy" />` : ""}
+      <div class="draft-section"><div class="body">${escapeHtml(draft.intro)}</div></div>
+      ${sectionsHtml}
+      <div class="draft-section"><div class="body">${escapeHtml(draft.cta)}</div></div>
+      <div class="draft-hashtags">${(draft.hashtags || []).map((h) => escapeHtml(h)).join(" ")}</div>
+      <button type="button" class="secondary" id="copyDraftBtn" style="margin-top:10px;">📋 본문 텍스트 복사</button>
+    `;
+    document.getElementById("copyDraftBtn").onclick = () => {
+      navigator.clipboard.writeText(draft.bodyText).then(() => {
+        const btn = document.getElementById("copyDraftBtn");
+        btn.textContent = "✅ 복사됨";
+        setTimeout(() => (btn.textContent = "📋 본문 텍스트 복사"), 1500);
+      });
+    };
+  }
+
+  document.getElementById("linkDraftBtn").onclick = generateLinkDraft;
+
+  (function prefillLinkFromQuery() {
+    const params = new URLSearchParams(location.search);
+    const urlParam = params.get("url");
+    if (!urlParam) return;
+    document.getElementById("linkUrlInput").value = urlParam;
+    document.getElementById("linkPanel").scrollIntoView({ block: "start" });
+    generateLinkDraft();
+  })();
 </script>
 </body>
 </html>

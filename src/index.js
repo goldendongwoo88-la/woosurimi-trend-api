@@ -15,6 +15,7 @@ const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterSta
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
 const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
+const { extractPageData } = require("./pageExtractor");
 const QRCode = require("qrcode");
 const cache = require("./cache");
 const fs = require("fs");
@@ -457,6 +458,31 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   }
 });
 
+// ===================== 링크로 콘텐츠 만들기 =====================
+// 링크 하나를 넣으면 그 페이지의 실제 제목/설명/사진을 미리 보여주는 허브 기능입니다.
+// 이 자체로 콘텐츠를 만들지는 않고, 미리보기 후 "블로그 글" / "카드뉴스" / "숏폼 영상" 중
+// 원하는 형식으로 넘어가면 각 기능이 이 URL을 그대로 받아(sourceUrl 파라미터) 실제 내용을
+// 다시 가져와서 만듭니다 — pageExtractor.js를 그대로 재사용합니다(코드/개념 중복 방지).
+app.get("/api/link-content/preview", async (req, res) => {
+  const url = req.query.url;
+  if (!url) {
+    return res.status(400).json({ error: "missing_url", message: "url 쿼리 파라미터가 필요합니다." });
+  }
+  try {
+    const page = await extractPageData(url);
+    res.json({
+      url,
+      title: page.title,
+      description: page.description,
+      bodyTextSnippet: (page.bodyText || "").slice(0, 400),
+      wordCount: (page.bodyText || "").length,
+      images: (page.images || []).slice(0, 12),
+    });
+  } catch (err) {
+    res.status(400).json({ error: "preview_failed", message: err.message });
+  }
+});
+
 // ===================== AI 자동화 글쓰기 =====================
 // 오른쪽 화면에 주제별(네이버 홈판 유력 / 여행 커넥트 / 쇼핑 커넥트) 카테고리를 보여주고,
 // 실시간 트렌드 주제를 고르면(또는 직접 입력하면) 초안(제목+본문+이미지)을 만들어줍니다.
@@ -499,20 +525,23 @@ app.get("/api/blog/writer-status", (req, res) => {
 });
 
 // 초안 생성. multipart/form-data로 보내주세요:
-//   - topic: 주제(필수, 트렌드 목록에서 고르거나 직접 입력)
+//   - topic: 주제(필수 — sourceUrl을 안 쓸 때만. 트렌드 목록에서 고르거나 직접 입력)
 //   - category: "food_review" | "travel_review" | "info_post" | "intro_promo" | "it_review" | "biz_economy" | "beauty_fashion" | "daily_hobby"
 //   - mode: "text"(글만) | "text_images"(글+이미지, 첫 이미지가 자동으로 썸네일이 됨)
 //   - images: (mode가 text_images일 때) 이미지 파일 5~8장
+//   - sourceUrl: (선택, "링크로 콘텐츠 만들기" 기능용) 있으면 topic 대신 이 URL의 실제
+//     내용(제목/본문)을 가져와 그걸 바탕으로 초안을 씁니다. mode가 text_images인데 이미지를
+//     안 올렸으면 원문 페이지의 실제 사진을 대신 씁니다.
 // 서버에 ANTHROPIC_API_KEY가 설정되어 있으면 Claude API로 실제 문장을 생성하고,
 // 없거나 호출이 실패하면 자동으로 "빈칸(✏️)만 채우면 되는 글쓰기 틀"로 대체됩니다.
 app.post("/api/blog/draft", uploadBlogImages.array("images", 8), async (req, res) => {
-  const { topic, category, mode } = req.body || {};
+  const { topic, category, mode, sourceUrl } = req.body || {};
   const files = req.files || [];
   const jobId = req._blogJobId;
   const images = files.map((f) => ({ url: `/uploads/blog/${jobId}/${path.basename(f.path)}` }));
 
   try {
-    const draft = await generateDraft({ topic, category, mode, images });
+    const draft = await generateDraft({ topic, category, mode, images, sourceUrl: sourceUrl || undefined });
     res.json(draft);
   } catch (err) {
     res.status(400).json({ error: "draft_failed", message: err.message });
@@ -568,12 +597,14 @@ app.get("/api/cardnews/generator-status", (req, res) => {
   res.json(cardNewsGenerator.getGeneratorStatus());
 });
 
-// POST /api/cardnews/plan  body: { topic, pageCount }
+// POST /api/cardnews/plan  body: { topic, pageCount, sourceUrl }
+// sourceUrl: (선택, "링크로 콘텐츠 만들기" 기능용) 있으면 topic 대신 이 URL의 실제 내용을
+// 가져와 대본을 씁니다. 응답에 sourceImages(원문 실제 사진 URL 목록)가 함께 옵니다.
 app.post("/api/cardnews/plan", async (req, res) => {
-  const { topic, pageCount } = req.body || {};
+  const { topic, pageCount, sourceUrl } = req.body || {};
   try {
-    const plan = await cardNewsGenerator.generatePlan({ topic, pageCount });
-    const recommendedStyles = cardNewsGenerator.recommendStyles(topic || "");
+    const plan = await cardNewsGenerator.generatePlan({ topic, pageCount, sourceUrl: sourceUrl || undefined });
+    const recommendedStyles = cardNewsGenerator.recommendStyles(plan.topic || topic || "");
     res.json({ ...plan, recommendedStyles });
   } catch (err) {
     res.status(400).json({ error: "plan_failed", message: err.message });

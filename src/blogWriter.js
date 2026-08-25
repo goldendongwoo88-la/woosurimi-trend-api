@@ -18,6 +18,7 @@
 const cache = require("./cache");
 const { findOpportunities } = require("./opportunityFinder");
 const claudeClient = require("./claudeClient");
+const { extractPageData } = require("./pageExtractor");
 
 // claudeAppTriggerTemplate: "클로드 앱에서 글 생성하기" 버튼이 여는 claude://claude.ai/new?q=...
 // 딥링크에 넣을 문구입니다. {topic} 자리에 사용자가 고르거나 입력한 주제가 그대로 들어갑니다.
@@ -226,6 +227,81 @@ async function callClaude(topic, cat, imageCount) {
   return parsed;
 }
 
+// ===================== "링크로 콘텐츠 만들기" — 원문 URL 내용 기반 초안 =====================
+// 위 callClaude는 주제 키워드 하나만 주고 Claude가 처음부터 창작하게 하는 방식이라 구체적
+// 사실이 ✏️ 로 많이 비워집니다. 여기는 pageExtractor로 실제 원문(제목/설명/본문)을 먼저
+// 가져온 뒤, 그 진짜 내용을 Claude에게 "요약·재구성"만 시키는 방식이라 실제 사실을 그대로
+// 활용할 수 있어 빈칸이 훨씬 적습니다(원문을 그대로 베끼지 말라고 명시적으로 지시함).
+
+function splitSentences(text) {
+  return (text || "")
+    .split(/(?<=[.!?])\s+|(?<=다\.)\s+|(?<=요\.)\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function callClaudeFromUrl(pageData, cat) {
+  const sectionCount = 4;
+  const context = [
+    `원문 제목: ${pageData.title || "(제목 없음)"}`,
+    pageData.description ? `원문 요약: ${pageData.description}` : "",
+    pageData.bodyText ? `원문 본문 발췌:\n${pageData.bodyText.slice(0, 2000)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const prompt =
+    `당신은 네이버 블로그에 올릴 "${CATEGORY_TONE[cat]}" 글을 쓰는 한국어 블로그 작가입니다.\n` +
+    `아래는 실제 원문 페이지에서 가져온 내용입니다. 이 내용에 담긴 사실을 바탕으로 블로그 글을 쓰세요 ` +
+    `(원문 문장을 그대로 베끼지 말고, 자연스러운 당신만의 문장으로 요약·재구성해 주세요):\n\n${context}\n\n` +
+    `아래 JSON 형식으로만 응답하세요(다른 설명 없이 JSON 객체 하나만):\n` +
+    `{\n` +
+    `  "title": "클릭하고 싶어지는 블로그 제목 (30자 내외)",\n` +
+    `  "intro": "두세 문장의 도입부(후킹)",\n` +
+    `  "sections": [ { "heading": "소제목", "body": "3~5문장 본문" } 총 ${sectionCount}개 ],\n` +
+    `  "cta": "마무리 인사말 겸 CTA 한두 문장",\n` +
+    `  "hashtags": ["#해시태그", ... 5~6개]\n` +
+    `}\n\n` +
+    `⚠️ 중요: 위 원문에 실제로 나온 사실(가격/날짜/스펙 등)은 자유롭게 활용해서 재구성해도 됩니다. ` +
+    `다만 원문에 없는 구체적 사실은 지어내지 말고 "✏️(확인 후 채워주세요)" 형태로 표시하세요.`;
+
+  const text = await claudeClient.callClaude({
+    messages: [{ role: "user", content: prompt }],
+    maxTokens: 2000,
+    temperature: 0.8,
+  });
+  const parsed = claudeClient.extractJson(text);
+  if (!parsed.title || !Array.isArray(parsed.sections)) {
+    throw new Error("Claude 응답 형식이 예상과 달랐습니다.");
+  }
+  return parsed;
+}
+
+// Claude API 없이(또는 실패 시) 원문에서 실제로 뽑아온 문장으로 섹션을 채웁니다 — 지어내는
+// ✏️ 틀 대신, shortformPlanner.js의 링크컷 모드와 같은 원칙(원문 사실 그대로 사용)입니다.
+function buildTemplateContentFromUrl(pageData, cat) {
+  const sentences = splitSentences(pageData.bodyText || pageData.description).filter((s) => s.length >= 8);
+  const list = SECTION_TEMPLATES[cat] || SECTION_TEMPLATES.info_post;
+  const perSection = Math.max(Math.ceil(sentences.length / list.length), 1);
+  const cleanTopic = pageData.title || "(원문 제목을 찾지 못했어요)";
+
+  const sections = list.map((s, i) => {
+    const chunk = sentences.slice(i * perSection, (i + 1) * perSection).join(" ");
+    return {
+      heading: s.heading(cleanTopic),
+      body: chunk || `✏️ ${s.hint(cleanTopic)} (원문에서 관련 문장을 찾지 못해 직접 채워주세요)`,
+    };
+  });
+
+  return {
+    title: cleanTopic,
+    intro: pageData.description || sentences[0] || "✏️ 도입부를 적어주세요",
+    sections,
+    cta: CTA_BY_CATEGORY[cat],
+    hashtags: extractHashtags(cleanTopic),
+  };
+}
+
 // ===================== 템플릿 기반 대체(폴백) =====================
 
 const TITLE_BY_CATEGORY = {
@@ -369,17 +445,72 @@ function assembleDraft(cleanTopic, cat, content, mode, images, note) {
 }
 
 /**
- * topic: 글 주제(카테고리 트렌드 목록에서 고르거나 직접 입력)
+ * topic: 글 주제(카테고리 트렌드 목록에서 고르거나 직접 입력) — sourceUrl이 있으면 무시됩니다.
  * category: CATEGORIES에 있는 id 중 하나 (food_review/travel_review/info_post/intro_promo/
  *           it_review/biz_economy/beauty_fashion/daily_hobby)
  * mode: "text" | "text_images" — 이미지 포함 여부
  * images: [{url}] — 업로드된 이미지 목록(선택). mode가 text_images인데 images가 없으면
  *         이미지 없이 "이미지를 첨부해 주세요"라는 안내만 넣습니다(가짜 이미지를 지어내지 않음).
+ * sourceUrl: (선택, "링크로 콘텐츠 만들기" 기능용) 넣으면 그 원문 페이지에서 실제 제목/본문을
+ *            가져와 그 내용을 바탕으로 초안을 씁니다. mode가 text_images인데 사용자가 이미지를
+ *            안 올렸으면, 원문 페이지에 실제로 있던 사진을 대신 씁니다.
  */
-async function generateDraft({ topic, category, mode = "text", images = [] } = {}) {
+async function generateDraft({ topic, category, mode = "text", images = [], sourceUrl } = {}) {
   const cat = CATEGORIES.some((c) => c.id === category) ? category : "info_post";
+
+  if (sourceUrl) {
+    let pageData;
+    try {
+      pageData = await extractPageData(sourceUrl);
+    } catch (err) {
+      throw new Error(`링크에서 내용을 가져오지 못했습니다: ${err.message}`);
+    }
+    const cleanTopic = pageData.title || sourceUrl;
+    const usedOwnImages = mode === "text_images" && images.length > 0;
+    const effectiveImages = usedOwnImages ? images : (mode === "text_images" ? (pageData.images || []).slice(0, 8).map((url) => ({ url })) : []);
+    const imageNote =
+      mode === "text_images" && !usedOwnImages && effectiveImages.length
+        ? " 이미지는 원문 페이지에 실제로 있던 사진을 그대로 가져왔어요 — 본인 소유가 아니라면 게시 전에 사용 권한을 꼭 확인해 주세요."
+        : "";
+
+    if (writerConfigured()) {
+      try {
+        const content = await callClaudeFromUrl(pageData, cat);
+        return assembleDraft(
+          cleanTopic,
+          cat,
+          content,
+          mode,
+          effectiveImages,
+          `Claude API로 원문 링크의 실제 내용을 요약·재구성해 만든 초안입니다. ✏️ 표시는 원문에 없는 구체적 사실이라 비워둔 자리입니다.${imageNote}`
+        );
+      } catch (err) {
+        console.error("[blogWriter] URL 기반 Claude 호출 실패, 원문 발췌로 대체합니다:", err.message);
+        const content = buildTemplateContentFromUrl(pageData, cat);
+        return assembleDraft(
+          cleanTopic,
+          cat,
+          content,
+          mode,
+          effectiveImages,
+          `Claude API 호출에 실패해서(${err.message}) 원문에서 실제로 가져온 문장으로 대신 채웠습니다.${imageNote}`
+        );
+      }
+    }
+
+    const content = buildTemplateContentFromUrl(pageData, cat);
+    return assembleDraft(
+      cleanTopic,
+      cat,
+      content,
+      mode,
+      effectiveImages,
+      `서버에 ANTHROPIC_API_KEY가 없어서, 원문 링크에서 실제로 가져온 문장으로 초안을 채웠습니다(창작이 아닙니다).${imageNote} README를 참고해 Claude API 키를 등록하면 더 자연스러운 문장으로 재구성됩니다.`
+    );
+  }
+
   const cleanTopic = (topic || "").trim();
-  if (!cleanTopic) throw new Error("주제를 입력해 주세요.");
+  if (!cleanTopic) throw new Error("주제를 입력하거나 링크를 넣어주세요.");
 
   if (writerConfigured()) {
     try {

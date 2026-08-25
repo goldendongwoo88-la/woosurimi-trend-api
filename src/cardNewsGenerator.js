@@ -28,6 +28,7 @@ const crypto = require("crypto");
 const sharp = require("sharp");
 const fontkit = require("fontkit");
 const claudeClient = require("./claudeClient");
+const { extractPageData } = require("./pageExtractor");
 
 const FONT_PATH = path.join(__dirname, "..", "assets", "fonts", "NotoSansKR-Bold.ttf");
 // ⚠️ 처음에는 opentype.js를 썼는데, 이 폰트의 일부 한글 글자(예: "방","하","세","서")를
@@ -320,15 +321,128 @@ function buildTemplatePlan(topic, pageCount) {
   return pages.slice(0, pageCount);
 }
 
+// ===================== "링크로 콘텐츠 만들기" — 원문 URL 내용 기반 대본 =====================
+// blogWriter.js의 같은 기능과 같은 원칙: pageExtractor로 실제 원문(제목/본문)을 먼저 가져온
+// 뒤, 그 진짜 내용을 요약·재구성해서 카드뉴스 대본을 짭니다 — 주제 키워드만 주고 처음부터
+// 창작하게 하는 것보다 빈칸(✏️)이 훨씬 적습니다.
+
+function splitSentencesForCards(text) {
+  return (text || "")
+    .split(/(?<=[.!?])\s+|(?<=다\.)\s+|(?<=요\.)\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function callClaudeForPlanFromUrl(pageData, pageCount) {
+  const context = [
+    `원문 제목: ${pageData.title || "(제목 없음)"}`,
+    pageData.description ? `원문 요약: ${pageData.description}` : "",
+    pageData.bodyText ? `원문 본문 발췌:\n${pageData.bodyText.slice(0, 2000)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const prompt =
+    `당신은 인스타그램/블로그에 올릴 "카드뉴스"(여러 장으로 이어지는 이미지 슬라이드) 대본을 쓰는 한국어 콘텐츠 작가입니다.\n` +
+    `아래는 실제 원문 페이지에서 가져온 내용입니다. 이 내용에 담긴 사실을 바탕으로 총 ${pageCount}장짜리 카드뉴스 대본을 쓰세요 ` +
+    `(원문 문장을 그대로 베끼지 말고, 자연스러운 당신만의 문장으로 요약·재구성해 주세요):\n\n${context}\n\n` +
+    `1번째 장은 반드시 role="cover"(강렬한 후킹 제목, body는 짧은 부제 한 줄), ` +
+    `마지막 장은 반드시 role="outro"(요약 또는 CTA 한두 문장), 나머지는 role="content"(소제목 + 핵심 내용 2~4문장)입니다.\n\n` +
+    `아래 JSON 형식으로만 응답하세요(다른 설명 없이 JSON 객체 하나만):\n` +
+    `{\n` +
+    `  "pages": [ { "role": "cover|content|outro", "title": "각 장의 짧은 제목(12자 내외)", "body": "본문(각 장의 role에 맞는 길이)" } 총 ${pageCount}개 ]\n` +
+    `}\n\n` +
+    `⚠️ 중요: 위 원문에 실제로 나온 사실은 자유롭게 활용해서 재구성해도 됩니다. 다만 원문에 없는 구체적 사실은 지어내지 말고 ` +
+    `"✏️(확인 후 채워주세요)" 형태로 표시하세요. 각 장의 body는 카드 이미지 한 장 분량이니 content 장은 3~5문장, cover/outro 장은 1~2문장으로 짧게 쓰세요.`;
+
+  const text = await claudeClient.callClaude({
+    messages: [{ role: "user", content: prompt }],
+    maxTokens: 2200,
+    temperature: 0.85,
+  });
+  const parsed = claudeClient.extractJson(text);
+  if (!Array.isArray(parsed.pages) || !parsed.pages.length) {
+    throw new Error("Claude 응답 형식이 예상과 달랐습니다.");
+  }
+  return parsed.pages;
+}
+
+// Claude API 없이(또는 실패 시) 원문에서 실제로 뽑아온 문장으로 페이지를 채웁니다.
+function buildTemplatePlanFromUrl(pageData, pageCount) {
+  const cleanTopic = pageData.title || "(원문 제목을 찾지 못했어요)";
+  const sentences = splitSentencesForCards(pageData.bodyText || pageData.description).filter((s) => s.length >= 8);
+  const pages = [];
+  pages.push({ role: "cover", title: cleanTopic, body: pageData.description || sentences[0] || "지금 꼭 알아야 할 이야기" });
+
+  const contentCount = Math.max(pageCount - 2, 1);
+  const perPage = Math.max(Math.ceil(sentences.length / contentCount), 1);
+  for (let i = 0; i < contentCount; i++) {
+    const chunk = sentences.slice(i * perPage, (i + 1) * perPage).join(" ");
+    pages.push({
+      role: "content",
+      title: `${i + 1}. 핵심 포인트`,
+      body: chunk || `✏️ "${cleanTopic}"에 대한 핵심 내용을 이 장에 채워주세요`,
+    });
+  }
+  pages.push({ role: "outro", title: "정리하면", body: "자세한 내용은 원문 링크에서 확인해보세요." });
+  return pages.slice(0, pageCount);
+}
+
 /**
- * topic: 카드뉴스 주제(필수)
+ * topic: 카드뉴스 주제 — sourceUrl이 있으면 무시됩니다.
  * pageCount: 3~8 (기본 6)
- * 반환: { pages: [{role,title,body}], note }
+ * sourceUrl: (선택, "링크로 콘텐츠 만들기" 기능용) 넣으면 그 원문 페이지의 실제 제목/본문을
+ *            바탕으로 대본을 씁니다.
+ * 반환: { topic, pages: [{role,title,body}], note, sourceImages? }
+ *   sourceImages: sourceUrl을 썼을 때만 있음 — 원문에 실제로 있던 사진 URL 목록(페이지 수만큼).
+ *   렌더링할 때 이 URL들을 renderCardNewsSet의 images 배열로 그대로 넘기면 배경 사진으로 쓸 수 있습니다.
  */
-async function generatePlan({ topic, pageCount = 6 } = {}) {
-  const cleanTopic = (topic || "").trim();
-  if (!cleanTopic) throw new Error("주제를 입력해 주세요.");
+async function generatePlan({ topic, pageCount = 6, sourceUrl } = {}) {
   const count = Math.min(Math.max(Number(pageCount) || 6, 3), 8);
+
+  if (sourceUrl) {
+    let pageData;
+    try {
+      pageData = await extractPageData(sourceUrl);
+    } catch (err) {
+      throw new Error(`링크에서 내용을 가져오지 못했습니다: ${err.message}`);
+    }
+    const cleanTopic = pageData.title || sourceUrl;
+    const sourceImages = (pageData.images || []).slice(0, count);
+    const imageNote = sourceImages.length
+      ? " 배경 사진 후보로 원문 페이지에 실제로 있던 사진을 가져왔어요 — 본인 소유가 아니라면 사용 전에 권한을 꼭 확인해 주세요."
+      : "";
+
+    if (writerConfigured()) {
+      try {
+        const pages = await callClaudeForPlanFromUrl(pageData, count);
+        return {
+          topic: cleanTopic,
+          pages,
+          sourceImages,
+          note: `Claude API로 원문 링크의 실제 내용을 요약·재구성해 만든 대본입니다. ✏️ 표시는 원문에 없는 구체적 사실이라 비워둔 자리입니다.${imageNote}`,
+        };
+      } catch (err) {
+        console.error("[cardNewsGenerator] URL 기반 Claude 호출 실패, 원문 발췌로 대체합니다:", err.message);
+        return {
+          topic: cleanTopic,
+          pages: buildTemplatePlanFromUrl(pageData, count),
+          sourceImages,
+          note: `Claude API 호출에 실패해서(${err.message}) 원문에서 실제로 가져온 문장으로 대신 채웠습니다.${imageNote}`,
+        };
+      }
+    }
+
+    return {
+      topic: cleanTopic,
+      pages: buildTemplatePlanFromUrl(pageData, count),
+      sourceImages,
+      note: `서버에 ANTHROPIC_API_KEY가 없어서, 원문 링크에서 실제로 가져온 문장으로 대본을 채웠습니다(창작이 아닙니다).${imageNote}`,
+    };
+  }
+
+  const cleanTopic = (topic || "").trim();
+  if (!cleanTopic) throw new Error("주제를 입력하거나 링크를 넣어주세요.");
 
   if (writerConfigured()) {
     try {
