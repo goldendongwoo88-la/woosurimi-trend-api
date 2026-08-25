@@ -466,15 +466,38 @@
     photoPreview.innerHTML = selectedPhotoFiles.map((f) => `<img src="${URL.createObjectURL(f)}" />`).join("");
   };
 
+  // 같은 문구를 재생 중에 다시 누르면 끄고(토글), 다른 문구를 누르면 그걸로 바꿔서
+  // 재생합니다(예: 전체 듣기 재생 중에 특정 씬의 "듣기"를 누르면 그 씬으로 전환).
+  let activeSpeechText = null;
   function speak(text) {
     if (!("speechSynthesis" in window)) {
       alert("이 브라우저는 음성 읽기를 지원하지 않아요. 크롬 최신 버전을 이용해 보세요.");
       return;
     }
+    if (window.speechSynthesis.speaking && activeSpeechText === text) {
+      window.speechSynthesis.cancel();
+      activeSpeechText = null;
+      updateSpeakAllBtnLabel();
+      return;
+    }
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "ko-KR";
+    utter.onend = () => {
+      if (activeSpeechText === text) activeSpeechText = null;
+      updateSpeakAllBtnLabel();
+    };
+    utter.onerror = utter.onend;
+    activeSpeechText = text;
     window.speechSynthesis.speak(utter);
+    updateSpeakAllBtnLabel();
+  }
+
+  function updateSpeakAllBtnLabel() {
+    const btn = document.getElementById("speakAllBtn");
+    if (!btn) return;
+    const fullText = currentScenes.map((s) => s.caption).join(". ");
+    btn.textContent = activeSpeechText === fullText ? "⏹ 듣기 중지" : "🔊 전체 듣기";
   }
 
   function escapeHtml(str) {
