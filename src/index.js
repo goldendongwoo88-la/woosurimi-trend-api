@@ -722,7 +722,38 @@ app.get("/api/instagram/callback", async (req, res) => {
   try {
     const connected = await instagramAuth.handleCallback(code, state);
     const list = connected.map((c) => `<li>@${c.igUsername} (페이지: ${c.pageName})</li>`).join("");
-    res.send(`<h2>인스타그램 연동 완료 ✅</h2><ul>${list}</ul><p>이 창은 닫으셔도 됩니다.</p>`);
+
+    // Render 무료 플랜은 재배포/재시작 때 디스크가 초기화되므로, 이 값을 환경변수에
+    // 넣어두지 않으면 다음 배포 때 연동이 통째로 풀립니다.
+    const envValue = instagramAuth.getAccountsJson();
+    const alreadyPersisted = !!process.env.IG_ACCOUNTS_JSON;
+
+    res.send(`<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>인스타그램 연동 완료</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; line-height:1.6; max-width:760px; margin:40px auto; padding:0 20px; }
+  textarea { width:100%; height:120px; font-family:monospace; font-size:12px; }
+  .warn { background:#fff8e1; border:1px solid #e0c34d; padding:12px 16px; border-radius:6px; }
+  .ok { background:#e8f5e9; border:1px solid #81c784; padding:12px 16px; border-radius:6px; }
+  code { background:#eee; padding:2px 5px; border-radius:3px; }
+</style></head><body>
+<h2>인스타그램 연동 완료 ✅</h2>
+<ul>${list}</ul>
+${
+  alreadyPersisted
+    ? `<div class="ok">이미 <code>IG_ACCOUNTS_JSON</code> 환경변수를 쓰고 있어요. 토큰을 새로 발급한 경우에만 아래 값으로 갱신하면 됩니다.</div>`
+    : `<div class="warn">
+         <b>한 번만 더 해주세요 — 안 하면 다음 배포 때 연동이 풀립니다.</b><br/>
+         무료 서버는 재배포·재시작할 때 저장된 파일이 지워져요. 아래 값을 Render 대시보드
+         → Environment에 <code>IG_ACCOUNTS_JSON</code> 이름으로 등록해두면, 그 뒤로는 다시
+         연결할 필요가 없습니다.
+       </div>`
+}
+<p style="margin-top:20px;"><b>환경변수 값</b> (아래 상자를 클릭하면 전체 선택돼요)</p>
+<textarea readonly onclick="this.select()">${envValue.replace(/</g, "&lt;")}</textarea>
+<p style="color:#a33;font-size:13px;">⚠️ 이 값에는 계정 액세스 토큰이 들어 있습니다. 다른 사람에게 공유하지 마세요.</p>
+<p>이 창은 닫으셔도 됩니다.</p>
+</body></html>`);
   } catch (e) {
     res.status(500).send(`<h2>연동 실패</h2><p>${e.message}</p>`);
   }

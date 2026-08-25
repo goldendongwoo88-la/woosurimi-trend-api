@@ -1,10 +1,16 @@
 // 인스타그램(Meta) 계정 연동 — OAuth 로그인으로 페이지 액세스 토큰을 받아
-// data/instagram-accounts.json에 저장합니다. 그 토큰으로 나중에 카드뉴스/릴스를
-// 자동 게시(instagramPublish.js, 다음 단계에서 작성)할 수 있게 됩니다.
+// 저장합니다. 그 토큰으로 instagramPublish.js가 카드뉴스/릴스를 자동 게시합니다.
 //
-// ⚠️ Render 무료 플랜은 디스크가 영구 저장이 아닙니다 — 서버가 재배포되거나
-// (알려진 문제로) 크래시 후 재시작되면 이 파일에 저장된 연동 정보가 사라질 수
-// 있습니다. 그러면 "인스타그램 연결하기"를 다시 눌러서 재연동해야 합니다.
+// 연동 정보를 두 군데에서 읽습니다:
+//   1) 환경변수 IG_ACCOUNTS_JSON  ← 영구 보관용(권장)
+//   2) data/instagram-accounts.json 파일  ← 방금 연동한 직후의 임시 보관
+//
+// ⚠️ 왜 환경변수까지 필요한가: Render 무료 플랜은 디스크가 영구 저장이 아니라서,
+// 재배포하거나 서버가 재시작되면 (1)번이 없을 경우 파일에 저장된 연동 정보가
+// 통째로 사라집니다. 실제로 배포 한 번에 날아가는 걸 확인했습니다.
+// 다행히 페이지 액세스 토큰은 만료되지 않으므로, 연동 직후 안내 화면에 나오는
+// JSON을 Render 환경변수 IG_ACCOUNTS_JSON에 한 번만 넣어두면 그 뒤로는 재배포와
+// 재시작을 넘어서 계속 유지됩니다.
 
 const fs = require("fs");
 const path = require("path");
@@ -27,18 +33,46 @@ function getRedirectUri() {
   return `${process.env.PUBLIC_BASE_URL}/api/instagram/callback`;
 }
 
-function loadAccounts() {
+// 환경변수에 넣어둔 영구 연동 정보를 읽습니다.
+function loadAccountsFromEnv() {
+  const raw = process.env.IG_ACCOUNTS_JSON;
+  if (!raw) return {};
   try {
-    const raw = fs.readFileSync(ACCOUNTS_FILE, "utf8");
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    console.warn("IG_ACCOUNTS_JSON 값을 JSON으로 읽지 못했습니다 — 무시하고 파일만 씁니다.");
+    return {};
+  }
+}
+
+function loadAccountsFromFile() {
+  try {
+    return JSON.parse(fs.readFileSync(ACCOUNTS_FILE, "utf8"));
   } catch {
     return {};
   }
 }
 
+// 파일에 방금 연동한 값이 있으면 그걸 우선합니다(재연동으로 토큰을 갱신한 경우).
+function loadAccounts() {
+  return { ...loadAccountsFromEnv(), ...loadAccountsFromFile() };
+}
+
+// 파일 저장은 "이번 서버가 살아있는 동안" 쓰기 위한 임시 보관입니다. 읽기 전용
+// 파일시스템이라 실패하더라도 연동 자체는 성공한 것이므로 죽이지 않습니다.
 function saveAccounts(accounts) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2), "utf8");
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2), "utf8");
+  } catch (e) {
+    console.warn(`연동 정보를 파일에 저장하지 못했습니다: ${e.message}`);
+  }
+}
+
+// Render 환경변수 IG_ACCOUNTS_JSON에 그대로 붙여넣을 수 있는 한 줄 JSON을 만듭니다.
+function getAccountsJson() {
+  return JSON.stringify(loadAccounts());
 }
 
 function getAccount(igUsername) {
@@ -154,4 +188,12 @@ async function handleCallback(code, state) {
   return connected;
 }
 
-module.exports = { isConfigured, getAuthUrl, handleCallback, loadAccounts, getAccount, listAccounts };
+module.exports = {
+  isConfigured,
+  getAuthUrl,
+  handleCallback,
+  loadAccounts,
+  getAccount,
+  listAccounts,
+  getAccountsJson,
+};
