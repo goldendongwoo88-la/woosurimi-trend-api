@@ -478,46 +478,67 @@ async function concatSegments(segmentPaths, outPath) {
 
 // 장면 조각들을 하드컷이 아니라 xfade(화면)/acrossfade(소리)로 부드럽게 겹쳐 넘어가도록
 // 이어붙입니다. 반환값은 크로스페이드로 겹친 만큼 줄어든 실제 전체 길이(초)입니다.
+// ⚠️ 예전에는 장면 파일을 전부 한 번에 열어(-i × N) xfade 필터 체인을 하나로 만들었습니다.
+// 그러면 ffmpeg가 1080x1920 스트림 N개를 동시에 디코딩하느라 메모리를 많이 쓰는데,
+// Render는 컨테이너 전체가 512MB라 장면이 5개만 돼도 ffmpeg가 그 한도를 넘겨서 서버가
+// 통째로 재시작됐습니다(Node 자체는 118MB밖에 안 썼는데도 죽었습니다).
+//
+// 그래서 지금은 "두 개씩 차례로" 합칩니다. 한 번에 열리는 파일이 항상 2개뿐이라 장면이
+// 몇 개든 메모리 사용량이 일정합니다. 대신 중간 결과가 여러 번 재인코딩되므로, 중간
+// 파일만 crf 18(눈으로는 차이를 못 느끼는 수준)로 떠서 화질 손실을 막습니다.
 async function concatWithCrossfade(segmentPaths, durations, outPath, transitionSec = TRANSITION_SEC) {
   if (segmentPaths.length === 1) {
     fs.copyFileSync(segmentPaths[0], outPath);
     return durations[0];
   }
 
-  const inputArgs = [];
-  segmentPaths.forEach((p) => inputArgs.push("-i", p));
-
-  const filterParts = [];
-  let vLabel = "0:v";
-  let aLabel = "0:a";
+  const tmpDir = path.dirname(outPath);
+  const tempFiles = [];
+  let currentPath = segmentPaths[0];
   let cum = durations[0];
-  for (let i = 1; i < segmentPaths.length; i++) {
-    // 전환 길이가 짧은 장면보다 길면 안 되므로(그러면 offset이 음수가 되어 깨짐),
-    // 두 장면 중 더 짧은 쪽 길이를 넘지 않게 안전하게 제한합니다.
-    const t = Math.max(Math.min(transitionSec, durations[i - 1], durations[i]) - 0.001, 0.05);
-    const offset = Math.max(cum - t, 0);
-    const vOut = `v${i}`;
-    const aOut = `a${i}`;
-    filterParts.push(`[${vLabel}][${i}:v]xfade=transition=fade:duration=${t.toFixed(3)}:offset=${offset.toFixed(3)}[${vOut}]`);
-    filterParts.push(`[${aLabel}][${i}:a]acrossfade=d=${t.toFixed(3)}[${aOut}]`);
-    vLabel = vOut;
-    aLabel = aOut;
-    cum = cum + durations[i] - t;
+
+  try {
+    for (let i = 1; i < segmentPaths.length; i++) {
+      // 전환 길이가 짧은 장면보다 길면 안 되므로(그러면 offset이 음수가 되어 깨짐),
+      // 두 장면 중 더 짧은 쪽 길이를 넘지 않게 안전하게 제한합니다.
+      const t = Math.max(Math.min(transitionSec, durations[i - 1], durations[i]) - 0.001, 0.05);
+      const offset = Math.max(cum - t, 0);
+      const isLast = i === segmentPaths.length - 1;
+      const stepOut = isLast ? outPath : path.join(tmpDir, `xfade-step-${i}.mp4`);
+      if (!isLast) tempFiles.push(stepOut);
+
+      await runFfmpeg([
+        "-y",
+        "-i", currentPath,
+        "-i", segmentPaths[i],
+        "-filter_complex",
+        `[0:v][1:v]xfade=transition=fade:duration=${t.toFixed(3)}:offset=${offset.toFixed(3)}[v];` +
+          `[0:a][1:a]acrossfade=d=${t.toFixed(3)}[a]`,
+        "-map", "[v]",
+        "-map", "[a]",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        // 중간 파일은 여러 번 다시 인코딩되므로 화질을 넉넉히 잡고, 최종 출력만 기본값을 씁니다.
+        ...(isLast ? [] : ["-crf", "18"]),
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+        stepOut,
+      ]);
+
+      cum = cum + durations[i] - t;
+
+      // 직전 중간 파일은 더 안 쓰므로 바로 지워서 디스크도 아낍니다.
+      if (currentPath !== segmentPaths[0] && currentPath !== outPath) {
+        fs.unlink(currentPath, () => {});
+      }
+      currentPath = stepOut;
+    }
+  } catch (err) {
+    tempFiles.forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
+    throw err;
   }
 
-  await runFfmpeg([
-    "-y",
-    ...inputArgs,
-    "-filter_complex", filterParts.join(";"),
-    "-map", `[${vLabel}]`,
-    "-map", `[${aLabel}]`,
-    "-c:v", "libx264",
-    "-preset", "veryfast",
-    "-pix_fmt", "yuv420p",
-    "-c:a", "aac",
-    "-movflags", "+faststart",
-    outPath,
-  ]);
   return cum;
 }
 
