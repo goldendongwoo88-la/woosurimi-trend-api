@@ -313,6 +313,7 @@
   </div>
 </main>
 
+<script src="/instagram-publish.js"></script>
 <script>
   function escapeHtml(str) {
     return (str || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -678,7 +679,29 @@
         <div class="card-grid">${cellsHtml}</div>
         <div class="note">${escapeHtml(data.note)}</div>
       </div>
+      <div id="igPublishArea"></div>
     `;
+
+    // 만든 카드뉴스를 바로 인스타그램에 올릴 수 있게 게시 패널을 붙입니다.
+    // 1장이면 일반 게시물, 2장 이상이면 캐러셀(슬라이드)로 올립니다.
+    const imageUrls = data.pages.map((p) => p.url);
+    window.IgPublish.mount(document.getElementById("igPublishArea"), {
+      kind: imageUrls.length > 1 ? "carousel" : "image",
+      imageUrls,
+      defaultCaption: buildDefaultCaption(),
+    });
+  }
+
+  // 대본에서 캡션 초안을 만듭니다 — 제목들을 이어 붙이고 주제를 해시태그로 답니다.
+  function buildDefaultCaption() {
+    if (!currentPlan) return "";
+    const lines = (currentPlan.pages || [])
+      .map((p) => (p.title || "").trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    const topic = (currentPlan.topic || "").trim();
+    const tag = topic ? `\n\n#${topic.replace(/\s+/g, "")}` : "";
+    return lines.join("\n") + tag;
   }
 
   async function loadGeneratorStatus() {

@@ -21,6 +21,7 @@ const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
 const { extractPageData } = require("./pageExtractor");
 const instagramAuth = require("./instagramAuth");
+const instagramPublish = require("./instagramPublish");
 const QRCode = require("qrcode");
 const cache = require("./cache");
 const fs = require("fs");
@@ -730,6 +731,120 @@ app.get("/api/instagram/callback", async (req, res) => {
 // 현재 연동된 인스타그램 계정 목록 (액세스 토큰은 응답에 포함하지 않음)
 app.get("/api/instagram/accounts", (req, res) => {
   res.json({ configured: instagramAuth.isConfigured(), accounts: instagramAuth.listAccounts() });
+});
+
+// 오늘 남은 게시 가능 횟수 (인스타그램은 24시간에 50개 제한)
+app.get("/api/instagram/publishing-limit", async (req, res) => {
+  const { igUsername } = req.query;
+  if (!igUsername) {
+    return res.status(400).json({ error: "missing_username", message: "igUsername 쿼리 파라미터가 필요합니다." });
+  }
+  try {
+    res.json(await instagramPublish.getPublishingLimit(igUsername));
+  } catch (e) {
+    res.status(500).json({ error: "limit_failed", message: e.message });
+  }
+});
+
+// --- 인스타그램 자동 게시 ---
+// 게시는 (특히 릴스가) 몇 분씩 걸릴 수 있어서, 영상 렌더링과 같은 비동기 잡 패턴을 씁니다:
+// 여기서는 jobId만 바로 돌려주고, 실제 게시는 뒤에서 진행합니다.
+//
+// POST /api/instagram/publish-job
+// body(JSON): {
+//   igUsername: "golden__k_",
+//   kind: "image" | "carousel" | "reel",
+//   caption: "본문 문구",
+//   imageUrl:  (kind=image)    "/renders/cardnews/<jobId>/page1.png",
+//   imageUrls: (kind=carousel) ["/renders/.../page1.png", ...]  // 2~10장
+//   videoUrl:  (kind=reel)     "/renders/xxx.mp4",
+//   coverUrl:  (kind=reel, 선택) 커버 이미지
+// }
+app.post("/api/instagram/publish-job", (req, res) => {
+  const { igUsername, kind, caption, imageUrl, imageUrls, videoUrl, coverUrl, shareToFeed } = req.body || {};
+
+  if (!igUsername) {
+    return res.status(400).json({ error: "missing_username", message: "igUsername이 필요합니다." });
+  }
+  if (!["image", "carousel", "reel"].includes(kind)) {
+    return res.status(400).json({ error: "bad_kind", message: "kind는 image / carousel / reel 중 하나여야 합니다." });
+  }
+  if (kind === "image" && !imageUrl) {
+    return res.status(400).json({ error: "missing_image", message: "imageUrl이 필요합니다." });
+  }
+  if (kind === "carousel" && (!Array.isArray(imageUrls) || imageUrls.length < 2)) {
+    return res.status(400).json({ error: "missing_images", message: "캐러셀은 imageUrls가 2장 이상이어야 합니다." });
+  }
+  if (kind === "reel" && !videoUrl) {
+    return res.status(400).json({ error: "missing_video", message: "videoUrl이 필요합니다." });
+  }
+
+  cleanupOldRenderJobs();
+  const jobId = crypto.randomUUID();
+  renderJobs.set(jobId, { status: "running", createdAt: Date.now(), result: null, error: null, phase: "준비 중" });
+
+  res.json({
+    jobId,
+    status: "running",
+    note:
+      kind === "reel"
+        ? "릴스는 인스타그램이 영상을 인코딩하는 시간이 필요해서 1~3분 정도 걸립니다."
+        : "게시 중입니다. 보통 10~30초면 끝납니다.",
+  });
+
+  (async () => {
+    try {
+      let result;
+      if (kind === "image") {
+        result = await instagramPublish.publishImage({ igUsername, imageUrl, caption });
+      } else if (kind === "carousel") {
+        result = await instagramPublish.publishCarousel({ igUsername, imageUrls, caption });
+      } else {
+        result = await instagramPublish.publishReel({
+          igUsername,
+          videoUrl,
+          caption,
+          coverUrl,
+          shareToFeed: shareToFeed !== false,
+          onProgress: (code) => {
+            const job = renderJobs.get(jobId);
+            if (job) job.phase = `인스타그램에서 영상 처리 중 (${code})`;
+          },
+        });
+      }
+
+      const job = renderJobs.get(jobId);
+      if (job) {
+        job.status = "done";
+        job.phase = "완료";
+        job.result = { ...result, igUsername, kind };
+      }
+    } catch (err) {
+      const job = renderJobs.get(jobId);
+      if (job) {
+        job.status = "failed";
+        job.error = err.message;
+      }
+    }
+  })();
+});
+
+// GET /api/instagram/publish-job/:jobId — { status: running | done | failed, phase, result?, error? }
+app.get("/api/instagram/publish-job/:jobId", (req, res) => {
+  const job = renderJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({
+      error: "job_not_found",
+      message: "그 작업을 찾을 수 없어요. 서버가 재시작되면 진행 기록이 사라집니다 — 다시 시도해 주세요.",
+    });
+  }
+  res.json({
+    status: job.status,
+    phase: job.phase,
+    elapsedSec: Math.round((Date.now() - job.createdAt) / 1000),
+    result: job.result,
+    error: job.error,
+  });
 });
 
 // 초안 생성. multipart/form-data로 보내주세요:

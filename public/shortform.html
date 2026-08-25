@@ -416,6 +416,7 @@
   </div>
 </main>
 
+<script src="/instagram-publish.js"></script>
 <script>
   let currentSource = "blog";
   let currentPhotoSource = "blog";
@@ -512,6 +513,13 @@
   let currentHookText = "";
 
   const ROLE_LABEL = { hook: "오프닝 후킹", body: "본문", cta: "마무리 CTA" };
+
+  // 릴스 캡션 초안 — 상단 후킹 문구를 첫 줄로 두고, 장면 자막을 이어 붙입니다.
+  function buildReelCaption() {
+    const lines = currentScenes.map((s) => (s.caption || "").trim()).filter(Boolean);
+    const hook = (currentHookText || "").trim();
+    return [hook, ...lines].filter(Boolean).join("\n");
+  }
 
   function renderResult(plan) {
     currentScenes = plan.scenes.map((s) => ({ ...s }));
@@ -991,7 +999,15 @@
           <div class="qr-caption">휴대폰 카메라로 QR을 찍으면 이 영상 주소로 바로 이동해요</div>
         </div>
         <div class="note" style="margin-top:10px;">${escapeHtml(data.note)}</div>
+        <div id="igPublishArea"></div>
       `;
+
+      // 만든 영상을 바로 인스타그램 릴스로 올릴 수 있게 게시 패널을 붙입니다.
+      window.IgPublish.mount(document.getElementById("igPublishArea"), {
+        kind: "reel",
+        videoUrl: data.publicPath,
+        defaultCaption: buildReelCaption(),
+      });
     } catch (err) {
       renderResultEl.innerHTML = `<div class="status error">오류: ${escapeHtml(err.message)}</div>`;
     } finally {
