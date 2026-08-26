@@ -348,7 +348,12 @@
       ${sectionsHtml}
       <div class="draft-section"><div class="body">${escapeHtml(draft.cta)}</div></div>
       <div class="draft-hashtags">${(draft.hashtags || []).map((h) => escapeHtml(h)).join(" ")}</div>
-      <button type="button" class="secondary" id="copyDraftBtn" style="margin-top:10px;">📋 본문 텍스트 복사</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <button type="button" class="secondary" id="copyDraftBtn">📋 본문 텍스트 복사</button>
+        <button type="button" class="secondary" id="auditDraftBtn" style="background:#eafaf1;color:#03c75a;">🔍 이 글 진단하기</button>
+        <button type="button" class="secondary" id="naverDraftBtn" style="background:#03c75a;color:#fff;">📗 네이버 블로그로</button>
+      </div>
+      <div id="draftToolOut"></div>
     `;
     document.getElementById("copyDraftBtn").onclick = () => {
       navigator.clipboard.writeText(draft.bodyText).then(() => {
@@ -357,6 +362,156 @@
         setTimeout(() => (btn.textContent = "📋 본문 텍스트 복사"), 1500);
       });
     };
+
+    // ── 진단 ──
+    // 초안이 나온 그 자리에서 바로 봐줍니다. 다른 페이지로 옮겨가서 붙여넣게 하면
+    // 아무도 안 씁니다.
+    document.getElementById("auditDraftBtn").onclick = async (e) => {
+      const btn = e.currentTarget;
+      const out = document.getElementById("draftToolOut");
+      btn.disabled = true;
+      btn.textContent = "살펴보는 중...";
+      try {
+        const res = await fetch("/api/post-audit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: draft.title,
+            body: draft.bodyText,
+            tags: (draft.hashtags || []).map((h) => String(h).replace(/^#/, "")),
+            images: (draft.sections || []).filter((s) => s.image).length + (draft.thumbnailUrl ? 1 : 0),
+          }),
+        });
+        const a = await res.json();
+        if (!res.ok) throw new Error(a.message || "진단하지 못했어요.");
+        out.innerHTML = renderDraftAudit(a);
+      } catch (err) {
+        out.innerHTML = `<div class="status error-text" style="margin-top:12px;">${escapeHtml(err.message)}</div>`;
+      }
+      btn.disabled = false;
+      btn.textContent = "🔍 이 글 진단하기";
+    };
+
+    // ── 네이버로 보내기 ──
+    document.getElementById("naverDraftBtn").onclick = async (e) => {
+      const btn = e.currentTarget;
+      const out = document.getElementById("draftToolOut");
+      btn.disabled = true;
+      btn.textContent = "정리하는 중...";
+      try {
+        const res = await fetch("/api/naver-blog/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: `제목: ${draft.title}\n\n${draft.bodyText}\n\n태그: ${(draft.hashtags || []).join(" ")}`,
+            blogId: localStorage.getItem("naverBlogId") || "",
+          }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.message || "정리하지 못했어요.");
+        out.innerHTML = renderNaverSteps(d);
+        bindNaverSteps(d);
+      } catch (err) {
+        out.innerHTML = `<div class="status error-text" style="margin-top:12px;">${escapeHtml(err.message)}</div>`;
+      }
+      btn.disabled = false;
+      btn.textContent = "📗 네이버 블로그로";
+    };
+  }
+
+  /** 진단 결과를 간단히 보여줍니다. 자세히는 도구 페이지에서. */
+  function renderDraftAudit(a) {
+    const color = a.score >= 80 ? "#2f9e5e" : a.score >= 55 ? "#e0952e" : "#d24b4b";
+    const fails = a.checks.filter((c) => !c.ok);
+    return `
+      <div style="margin-top:14px;padding:14px;background:#fafbfc;border:1px solid #e6e8ec;border-radius:9px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="font-size:26px;font-weight:700;color:${color};line-height:1;">${a.score}<span style="font-size:12px;color:#98a0ac;">점</span></div>
+          <div>
+            <div style="font-size:14px;font-weight:700;">${escapeHtml(a.grade)}</div>
+            <div style="font-size:12px;color:#98a0ac;">${escapeHtml(a.summary)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:#5c6470;margin-top:10px;">
+          <span>공백뺀 ${a.stats.charsNoSpace.toLocaleString()}자</span>
+          <span>소제목 ${a.stats.headings}</span>
+          <span>이미지 ${a.stats.images}</span>
+          <span>태그 ${a.stats.tags}</span>
+        </div>
+        ${fails.length ? `<div style="margin-top:10px;">${fails.map((c) => `
+          <div style="font-size:12px;color:#5c6470;padding:5px 0;border-top:1px solid #eef0f3;">
+            ${c.level === "bad" ? "🔴" : "🟡"} <b>${escapeHtml(c.label)}</b> — ${escapeHtml(c.detail)}
+          </div>`).join("")}</div>` : `<div style="margin-top:10px;font-size:12.5px;color:#2f9e5e;">고칠 곳이 없어요.</div>`}
+        ${a.risks && a.risks.length ? `
+          <div style="margin-top:10px;padding:10px 12px;background:#fdeaea;border-radius:7px;font-size:12px;color:#8a3a3a;">
+            ⚠️ 고쳐야 할 표현: ${a.risks.map((r) => r.words.map(escapeHtml).join(", ")).join(" / ")}
+          </div>` : ""}
+        <a href="/toolkit.html?tab=post" target="_blank" rel="noopener"
+           style="display:inline-block;margin-top:12px;font-size:12px;color:#03c75a;text-decoration:none;">
+          도구 페이지에서 고쳐쓰기 →
+        </a>
+      </div>`;
+  }
+
+  /** 네이버 발행 단계. prompt-studio와 같은 방식입니다. */
+  function renderNaverSteps(d) {
+    const cut = (s, n) => (s.length > n ? s.slice(0, n) + "…" : s);
+    const step = (no, label, preview, key) => `
+      <div style="display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:start;padding:10px 0;border-top:1px solid #e3efdd;">
+        <span style="width:22px;height:22px;border-radius:50%;background:#03c75a;color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;">${no}</span>
+        <span>
+          <span style="font-size:12.5px;font-weight:600;color:#33403a;">${escapeHtml(label)}</span>
+          <div style="font-size:11.5px;color:#6b7f68;margin-top:2px;">${escapeHtml(preview)}</div>
+        </span>
+        <button type="button" class="secondary" data-np="${key}" style="background:#03c75a;color:#fff;padding:7px 12px;font-size:12px;">복사</button>
+      </div>`;
+
+    return `
+      <div style="margin-top:14px;padding:16px;background:#f6fbf4;border:1px solid #d8e8d0;border-radius:10px;">
+        <div style="font-size:14px;font-weight:700;color:#1f6b32;">📗 네이버 블로그 발행</div>
+        <div style="font-size:11.5px;color:#6b7f68;margin:4px 0 12px;line-height:1.6;">
+          네이버는 외부에서 글을 자동으로 올리는 기능을 제공하지 않아요.
+          칸마다 복사해 드릴 테니 <b>붙여넣기만</b> 하시면 됩니다.
+        </div>
+        ${step(1, "제목", d.post.title || "(없음)", "title")}
+        ${step(2, "본문 (서식 그대로)", cut(d.plain, 120), "body")}
+        ${step(3, `태그 ${d.stats.tags}개`, d.tagLine || "(없음)", "tags")}
+        <a href="${d.writeUrl}" target="_blank" rel="noopener"
+           style="display:block;text-align:center;margin-top:12px;background:#03c75a;color:#fff;text-decoration:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;">
+          네이버 블로그 글쓰기 창 열기 ↗
+        </a>
+        ${d.audit ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid #e3efdd;font-size:12px;color:#6b7f68;">
+          발행 전 진단: <b style="color:#1f6b32;">${d.audit.score}점 ${escapeHtml(d.audit.grade)}</b>
+          ${d.audit.counts.bad ? ` · 빨간 항목 ${d.audit.counts.bad}개를 고치고 올리시는 게 좋아요` : ""}
+        </div>` : ""}
+      </div>`;
+  }
+
+  function bindNaverSteps(d) {
+    document.querySelectorAll("[data-np]").forEach((b) => {
+      b.onclick = async () => {
+        const k = b.dataset.np;
+        try {
+          if (k === "body" && navigator.clipboard && window.ClipboardItem) {
+            // 서식을 살려서 복사합니다. 글자만 복사하면 소제목이 전부 평범한 문단이 됩니다.
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                "text/html": new Blob([d.html], { type: "text/html" }),
+                "text/plain": new Blob([d.plain], { type: "text/plain" }),
+              }),
+            ]);
+          } else {
+            await navigator.clipboard.writeText(
+              k === "title" ? d.post.title : k === "tags" ? d.tagLine : d.plain
+            );
+          }
+          b.textContent = "복사됨";
+          setTimeout(() => (b.textContent = "복사"), 1500);
+        } catch {
+          alert("복사하지 못했어요.");
+        }
+      };
+    });
   }
 
   document.getElementById("linkDraftBtn").onclick = generateLinkDraft;

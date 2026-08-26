@@ -31,6 +31,13 @@
     text-decoration: none;
     color: #222;
   }
+  .card-link {
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .card-link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0,0,0,.09);
+  }
   .card-link .emoji { font-size: 24px; margin-bottom: 6px; }
   .card-link .title { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
   .card-link .desc { font-size: 13px; color: #777; line-height: 1.5; }
@@ -42,12 +49,30 @@
     padding: 2px 6px;
     border-radius: 4px;
     margin-left: 6px;
+    vertical-align: 2px;
   }
+  .badge.new { background: #fff1e0; color: #c9700f; }
+
+  /* ⚠️ 도구를 그냥 나열하면 무엇부터 써야 할지 알 수가 없습니다.
+     실제로 글을 쓰는 순서대로 묶어서, 흐름이 보이게 했습니다. */
+  .step {
+    display: flex; align-items: center; gap: 10px;
+    margin: 26px 0 10px; font-size: 12px; color: #98a0ac;
+  }
+  .step:first-of-type { margin-top: 6px; }
+  .step .n {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #24282e; color: #fff; font-size: 11px; font-weight: 700;
+    display: grid; place-items: center; flex: 0 0 auto;
+  }
+  .step b { color: #24282e; font-size: 13px; font-weight: 700; }
+  .step .line { flex: 1; height: 1px; background: #e6e8ec; }
+
   .status-note {
     font-size: 12px;
     color: #999;
     text-align: center;
-    margin-top: 24px;
+    margin-top: 28px;
     line-height: 1.6;
   }
 </style>
@@ -55,65 +80,79 @@
 <body>
 <header>
   <h1>우수리미 AI</h1>
-  <div class="sub">블로그 주제를 찾고, 콘텐츠를 만드는 도구 모음</div>
+  <div class="sub">키워드 고르기부터 글 쓰고 진단하고 퍼뜨리기까지</div>
 </header>
 <main>
+  <div class="step"><span class="n">1</span><b>무엇을 쓸지 정하기</b><span class="line"></span></div>
+
   <a class="card-link" href="/toolkit.html">
     <div class="emoji">🔍</div>
-    <div class="title">키워드 진단 · 글 진단<span class="badge">새로 나옴</span></div>
-    <div class="desc">쓰려는 키워드가 쓸 만한지(검색량 대비 글 수), 그리고 다 쓴 글이 이대로 올려도 되는지(길이·구조·광고법 위험)를 봐드려요.</div>
-  </a>
-
-  <a class="card-link" href="/link-content.html">
-    <div class="emoji">🔗</div>
-    <div class="title">링크로 콘텐츠 만들기<span class="badge">데모</span></div>
-    <div class="desc">링크 하나만 넣으면 실제 제목·본문·사진을 가져와서, 그 내용을 바탕으로 블로그 글·카드뉴스·숏폼 영상을 바로 만들어줘요.</div>
-  </a>
-
-  <a class="card-link" href="/card-news.html">
-    <div class="emoji">🗂️</div>
-    <div class="title">AI 카드뉴스 생성<span class="badge">데모</span></div>
-    <div class="desc">주제만 넣으면 페이지별 대본을 짜고, 5가지 디자인 스타일로 실제 카드뉴스 이미지(PNG)를 만들어줘요.</div>
+    <div class="title">키워드 진단<span class="badge new">새로 나옴</span></div>
+    <div class="desc">쓰려는 키워드가 쓸 만한지 봐드려요. 찾는 사람은 많은데 글은 적은 키워드를 골라야 상위에 걸립니다.</div>
   </a>
 
   <a class="card-link" href="/opportunity.html">
     <div class="emoji">🔑</div>
     <div class="title">황금 키워드 찾기</div>
-    <div class="desc">검색은 많은데 블로그 글은 적은 "기회 키워드"를 카테고리별로 찾아드려요.</div>
+    <div class="desc">쓸 키워드가 아직 없다면 여기부터. 카테고리별로 기회 키워드를 찾아드려요.</div>
   </a>
 
   <a class="card-link" href="/entertainment.html">
     <div class="emoji">🎬</div>
     <div class="title">엔터 최신 뉴스</div>
-    <div class="desc">드라마·영화·뮤직·연애 최신 뉴스와 화제성 랭킹을 실시간으로 확인해요.</div>
-  </a>
-
-  <a class="card-link" href="/shortform.html">
-    <div class="emoji">📱</div>
-    <div class="title">숏폼 자동 제작<span class="badge">데모</span></div>
-    <div class="desc">링크컷(블로그·쇼핑·여행 링크) 또는 자동컷(사진 직접 선택)으로 AI가 템플릿·음악·목소리까지 골라 mp4 영상을 만들어줘요.</div>
-  </a>
-
-  <a class="card-link" href="/blog-writer.html">
-    <div class="emoji">✍️</div>
-    <div class="title">AI 자동화 글쓰기<span class="badge">데모</span></div>
-    <div class="desc">실시간 트렌드 주제를 고르면 제목·본문·이미지가 들어간 글쓰기 초안을 만들어줘요.</div>
-  </a>
-
-  <a class="card-link" href="/prompt-studio.html">
-    <div class="emoji">🤖</div>
-    <div class="title">맞춤형 글쓰기 프롬프트<span class="badge">데모</span></div>
-    <div class="desc">이미지 프롬프트, 카드뉴스 문구, 카테고리별 홈판 블로그 생성기 등 역할별 Claude 챗봇 18종을 카드에서 바로 써봐요.</div>
+    <div class="desc">드라마·영화·뮤직 최신 뉴스와 화제성 랭킹. 속보성 글감을 찾을 때 보세요.</div>
   </a>
 
   <a class="card-link" href="/benchmark.html">
     <div class="emoji">📕</div>
-    <div class="title">홈판 벤치마킹 블로거 리스트</div>
-    <div class="desc">카테고리별로 참고할 만한 네이버 블로거·사이트를 정리해뒀어요. 글 쓰기 전에 후킹 패턴과 톤을 참고해보세요.</div>
+    <div class="title">홈판 벤치마킹 블로거</div>
+    <div class="desc">카테고리별로 참고할 만한 블로거를 정리해뒀어요. 후킹 패턴과 톤을 먼저 훑어보세요.</div>
+  </a>
+
+  <div class="step"><span class="n">2</span><b>글 쓰기</b><span class="line"></span></div>
+
+  <a class="card-link" href="/prompt-studio.html">
+    <div class="emoji">🤖</div>
+    <div class="title">맞춤형 글쓰기 프롬프트</div>
+    <div class="desc">카테고리별 홈판 상위노출용 챗봇 18종. 키워드만 넣으면 제목부터 본문까지 단계별로 만들어줘요. 다 쓰면 네이버 블로그로 바로 보낼 수 있어요.</div>
+  </a>
+
+  <a class="card-link" href="/blog-writer.html">
+    <div class="emoji">✍️</div>
+    <div class="title">AI 자동화 글쓰기</div>
+    <div class="desc">실시간 트렌드 주제를 고르거나 링크를 넣으면 제목·본문·이미지가 든 초안을 만들어줘요.</div>
+  </a>
+
+  <a class="card-link" href="/link-content.html">
+    <div class="emoji">🔗</div>
+    <div class="title">링크로 콘텐츠 만들기</div>
+    <div class="desc">링크 하나로 블로그 글·카드뉴스·숏폼까지 한 번에 만들어요.</div>
+  </a>
+
+  <div class="step"><span class="n">3</span><b>올리기 전에 확인</b><span class="line"></span></div>
+
+  <a class="card-link" href="/toolkit.html?tab=post">
+    <div class="emoji">✅</div>
+    <div class="title">글 진단 · 고쳐쓰기<span class="badge new">새로 나옴</span></div>
+    <div class="desc">글자 수·소제목·키워드 위치·어미 반복을 보고, 광고법에 걸릴 표현까지 잡아줘요. 지적된 부분만 골라 고쳐드리기도 합니다.</div>
+  </a>
+
+  <div class="step"><span class="n">4</span><b>퍼뜨리기</b><span class="line"></span></div>
+
+  <a class="card-link" href="/shortform.html">
+    <div class="emoji">📱</div>
+    <div class="title">숏폼 자동 제작</div>
+    <div class="desc">쓴 글을 릴스·쇼츠용 영상으로. 핵심 단어에 색을 입힌 자막까지 자동으로 넣어줘요.</div>
+  </a>
+
+  <a class="card-link" href="/card-news.html">
+    <div class="emoji">🗂️</div>
+    <div class="title">AI 카드뉴스 생성</div>
+    <div class="desc">주제만 넣으면 페이지별 대본을 짜고 5가지 스타일로 카드뉴스 이미지를 만들어줘요.</div>
   </a>
 
   <div class="status-note">
-    이 사이트는 지금 개발 중인 버전입니다. 기능마다 어디까지 실제로 작동하는지는<br />각 페이지 상단의 안내 문구를 확인해 주세요.
+    개발 중인 버전입니다. 기능마다 어디까지 실제로 되는지는<br />각 페이지 위쪽 안내를 봐주세요.
   </div>
 </main>
 </body>
