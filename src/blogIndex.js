@@ -56,13 +56,54 @@ function gradeFor(score) {
  *
  * ⚠️ 판정이 셋입니다. 뭉뚱그리면 사장님이 오해합니다.
  *   - exposed  : 나옴. 정상.
- *   - missing  : 안 나옴. 제목 전체로 검색했는데도 없으면 색인에서 빠진 겁니다.
+ *   - notfound : 제목에서 뽑은 말들로 검색했는데 안 나옴. **누락이라는 뜻이 아닙니다.**
  *   - skipped  : 검사 대상이 아님 (비공개 글, 검색허용 끈 글, 너무 짧은 제목).
  *
  * 특히 skipped를 missing으로 세면 안 됩니다. 본인이 일부러 검색을 꺼둔 글을
  * "누락됐습니다"라고 겁주는 건 거짓말입니다.
  */
-async function checkExposure(blogId, post) {
+/**
+ * 제목에서 검색해볼 만한 말들을 뽑습니다.
+ *
+ * ⚠️ 왜 필요한가 — 값비싼 교훈이 있었습니다.
+ *
+ * 원래는 **제목 전체**를 그대로 검색해서 안 나오면 '누락'이라고 했습니다.
+ * 그런데 실제 글로 확인해보니 완전히 틀렸습니다.
+ *
+ *   글: "무대에서 노출 사고날뻔한 5세대 걸그룹" 코디가 밉다
+ *   - 제목 전체로 검색 → 0건. 네이버가 "검색결과가 없습니다"까지 돌려줌
+ *   - 그런데 "미야오 안나"로 검색하면 **블로그탭 10위**
+ *   - 그 글은 그 블로그에서 조회수 1위(344회)였습니다
+ *
+ * 멀쩡히 잘 되고 있는 글을 "검색에서 빠졌습니다"라고 알린 겁니다.
+ * 손님이 이 말을 믿었다면 멀쩡한 글을 고치거나 지웠을 겁니다.
+ *
+ * 원인은 네이버가 긴 문장을 그대로 매칭하지 않기 때문입니다.
+ * '사고날뻔한' 같은 구어체는 형태소 분석이 어긋나기 쉽고, 그러면 0건이 나옵니다.
+ * **0건은 '색인에 없다'는 뜻이 아니라 '이 질의로는 안 걸린다'는 뜻일 뿐입니다.**
+ *
+ * 그래서 제목에서 짧은 덩어리를 여러 개 뽑아 하나씩 시도합니다.
+ * 하나라도 걸리면 노출입니다.
+ */
+function titleQueries(title) {
+  const t = String(title || "")
+    // 따옴표·말줄임표는 검색에 방해만 됩니다.
+    .replace(/["'“”‘’]/g, " ")
+    .replace(/\.\.\.|…/g, " ")
+    .replace(/[|·\[\]()【】]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!t) return [];
+
+  const words = t.split(" ").filter((w) => w.length >= 2);
+  const out = [t];                                  // 1) 기호만 뺀 전체
+  if (words.length >= 5) out.push(words.slice(0, 5).join(" ")); // 2) 앞 5어절
+  if (words.length >= 3) out.push(words.slice(0, 3).join(" ")); // 3) 앞 3어절
+  if (words.length >= 4) out.push(words.slice(-3).join(" "));   // 4) 뒤 3어절
+  return [...new Set(out)];
+}
+
+async function checkExposure(blogId, post, { tags = [] } = {}) {
   if (!post.isPublic) return { ...post, state: "skipped", why: "전체공개 글이 아닙니다" };
   if (!post.searchable) return { ...post, state: "skipped", why: "검색 허용을 꺼둔 글입니다" };
 
@@ -71,18 +112,34 @@ async function checkExposure(blogId, post) {
   if (title.replace(/\s/g, "").length < 6)
     return { ...post, state: "skipped", why: "제목이 짧아 판정할 수 없습니다" };
 
-  const r = await searchBlogRanking(title, { limit: 30 });
-  // ⚠️ 네이버가 막았으면 "누락"이 아니라 "확인 못 함"입니다. 이 둘을 섞으면
-  // 멀쩡한 글을 누락됐다고 겁주게 됩니다. 판정을 포기하는 쪽이 항상 안전합니다.
-  if (!r.ok)
-    return { ...post, state: "skipped", why: r.why || "지금은 확인할 수 없었습니다" };
+  // 제목 조각들 + 태그. 태그는 글쓴이가 직접 고른 말이라 색인과 잘 맞습니다.
+  const queries = [...titleQueries(title), ...tags.slice(0, 3)];
 
-  const hit = r.results.find((x) => x.blogId === blogId && x.logNo === post.logNo);
-  // 찾았으면 결과가 몇 건이든 그게 답입니다. 긴 제목은 원래 결과가 적습니다.
-  if (hit) return { ...post, state: "exposed", rank: hit.rank };
-  // 못 찾았는데 결과까지 적으면, 없는 건지 못 본 건지 알 수 없습니다.
-  if (r.lowConfidence) return { ...post, state: "skipped", why: r.why };
-  return { ...post, state: "missing" };
+  let blocked = 0;
+  let searched = 0;
+  for (const q of queries) {
+    const r = await searchBlogRanking(q, { limit: 30 });
+    if (!r.ok) { blocked++; continue; }
+    searched++;
+    const hit = r.results.find((x) => x.blogId === blogId && x.logNo === post.logNo);
+    if (hit) return { ...post, state: "exposed", rank: hit.rank, foundBy: q };
+    await new Promise((res) => setTimeout(res, 500));
+  }
+
+  // 한 번도 제대로 검색하지 못했으면 판정 불가입니다.
+  if (!searched)
+    return { ...post, state: "skipped", why: "지금은 확인할 수 없었습니다. 잠시 뒤에 다시 해주세요." };
+
+  // ⚠️ 여기까지 와도 '누락'이라고 단정하지 않습니다.
+  // 제목에서 뽑은 말로 안 걸린다고 색인에 없다는 뜻은 아닙니다.
+  // 실제로 제목과 상관없는 키워드(태그·본문)로 상위에 뜨는 글이 있습니다.
+  // 우리가 말할 수 있는 건 "이 말들로는 안 나온다"까지입니다.
+  return {
+    ...post,
+    state: "notfound",
+    tried: searched,
+    why: `제목에서 뽑은 말 ${searched}가지로 검색했지만 나오지 않았습니다. 다른 키워드로는 노출되고 있을 수 있습니다.`,
+  };
 }
 
 /** 발행 간격 — "1일 1포"를 지키는지. addDate가 문자열이라 대충이라도 읽어냅니다. */
@@ -137,7 +194,7 @@ async function diagnose(blogId, { sampleSize = 5 } = {}) {
     await new Promise((r) => setTimeout(r, 400));
   }
   const judged = exposure.filter((e) => e.state !== "skipped");
-  const missing = judged.filter((e) => e.state === "missing");
+  const missing = judged.filter((e) => e.state === "notfound");
   const exposedRate = judged.length ? (judged.length - missing.length) / judged.length : null;
 
   // ── 추정 (우리 배점) ─────────────────────────────────────
@@ -190,15 +247,13 @@ async function diagnose(blogId, { sampleSize = 5 } = {}) {
   const signals = [];
   const missRate = judged.length ? missing.length / judged.length : 0;
 
-  if (judged.length >= 3 && missRate >= 0.5)
+  // ⚠️ 한 건 정도는 신호로 세지 않습니다.
+  // 제목으로 안 걸리는 글은 흔합니다. 실제로 그 글이 다른 키워드로 10위에 있고
+  // 조회수 1위였던 사례를 겪었습니다. 여러 건이 한꺼번에 그럴 때만 신호입니다.
+  if (judged.length >= 4 && missRate >= 0.5)
     signals.push({
-      key: "누락",
-      text: `검사한 글 ${judged.length}건 중 ${missing.length}건이 제목으로 검색해도 나오지 않습니다.`,
-    });
-  else if (missing.length)
-    signals.push({
-      key: "누락",
-      text: `${missing.length}건이 제목으로 검색해도 나오지 않습니다.`,
+      key: "노출",
+      text: `검사한 글 ${judged.length}건 중 ${missing.length}건이 제목으로 검색해서 나오지 않습니다. 여러 건이 겹치면 한 번 살펴볼 만합니다.`,
     });
 
   // 방문자가 사흘 내리 줄었는가 — 하루 등락은 흔해서 하루로는 판단하지 않습니다.
@@ -221,10 +276,17 @@ async function diagnose(blogId, { sampleSize = 5 } = {}) {
 
   // ── 할 일 ───────────────────────────────────────────────
   const advice = [];
-  if (missing.length)
+  // ⚠️ 겁주지 않습니다. "누락됐다"고 단정했다가 틀린 적이 있습니다.
+  // 제목으로 안 걸려도 태그나 본문 키워드로 상위에 있는 글이 많습니다.
+  if (missing.length && judged.length >= 4 && missRate >= 0.5)
     advice.push({
-      level: "danger",
-      text: `최근 글 ${missing.length}건이 제목으로 검색해도 나오지 않습니다. 다른 무엇보다 이걸 먼저 보셔야 합니다.`,
+      level: "warn",
+      text: `검사한 ${judged.length}건 중 ${missing.length}건이 제목으로는 검색에 안 걸립니다. 제목이 너무 길거나 구어체라 그럴 수 있습니다.`,
+    });
+  else if (missing.length)
+    advice.push({
+      level: "info",
+      text: `${missing.length}건은 제목으로 검색해서 찾지 못했습니다. 다른 키워드로는 노출되고 있을 수 있으니, 블로그 통계의 유입 키워드를 함께 보세요.`,
     });
   if (postsPerWeek > 0 && postsPerWeek < 2)
     advice.push({ level: "warn", text: `발행이 주 ${postsPerWeek}회입니다. 주 3회 위로 올리면 점수가 올라갑니다.` });
@@ -250,6 +312,9 @@ async function diagnose(blogId, { sampleSize = 5 } = {}) {
         url: e.url,
         state: e.state,
         rank: e.rank ?? null,
+        // 어떤 말로 검색했을 때 걸렸는지 — 제목 전체가 아니라 일부일 수 있습니다.
+        // 손님에게 "이 말로 뜨고 있습니다"라고 알려주면 그 자체가 쓸모 있는 정보입니다.
+        foundBy: e.foundBy ?? null,
         why: e.why ?? null,
       })),
       missingCount: missing.length,

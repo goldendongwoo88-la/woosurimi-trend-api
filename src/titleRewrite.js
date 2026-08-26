@@ -17,17 +17,14 @@
  */
 
 const claudeClient = require("./claudeClient");
+// ⚠️ 규칙은 homefeedRules 한 곳에만 둡니다. 여기에 또 적어두면 언젠가 어긋나고,
+// 어긋나면 화면이 알려주는 기준과 AI가 따르는 기준이 달라집니다.
+const rules = require("./homefeedRules");
 
 /** 제목에 어떤 장치가 있는지 — 고치기 전후를 비교해 보여주려고 씁니다. */
 function analyze(title) {
-  const t = String(title || "");
-  return {
-    length: t.length,
-    quoteStart: /^["'“‘]/.test(t.trim()),
-    ellipsis: /\.\.\.|…/.test(t),
-    curiosity: /['‘]?이것['’]?|['‘]?이곳['’]?|진짜 이유|이유|비밀|정체|알고보니|했던|하더니|까닭|근황|무슨 일/.test(t),
-    number: /\d/.test(t),
-  };
+  const m = rules.measure(title);
+  return { length: m.length, ...m.devices };
 }
 
 function score(a) {
