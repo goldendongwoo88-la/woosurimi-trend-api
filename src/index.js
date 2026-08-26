@@ -1138,6 +1138,100 @@ app.post("/api/naver-blog/prepare", async (req, res) => {
 // 그래서 여기서는 확실히 아는 것만 봅니다. 글자 수, 소제목 수, 키워드 위치,
 // 어미 반복, 광고법에 걸릴 표현 — 전부 계산으로 확인되고 고치면 실제로 나아지는
 // 것들입니다. 추정한 숫자로 겁주는 대신 고칠 수 있는 것을 짚어줍니다.
+// ── 사주 릴스 ────────────────────────────────────────────────
+//
+// ⚠️ 이건 사주 리포트를 팔기 위한 유입 장치입니다. 릴스로 돈을 벌 생각이 아니라,
+// 보고 나서 "내 사주는 어떨까" 싶어 무료 페이지에 들어오게 만드는 게 목적입니다.
+//
+// 소재는 띠 12개 × 주제 8개 = 96편이라 하루 한 편씩 세 달을 돌 수 있습니다.
+const sajuReels = require("./sajuReels");
+
+app.get("/api/saju-reels/menu", (req, res) => {
+  res.json({
+    zodiac: sajuReels.ZODIAC.map((z) => ({ id: z.id, name: z.name, hanja: z.hanja })),
+    topics: sajuReels.TOPICS.map((t) => ({ id: t.id, label: t.label })),
+    total: sajuReels.ZODIAC.length * sajuReels.TOPICS.length,
+    today: sajuReels.seedForDate(),
+  });
+});
+
+/** 대본만 — 영상 만들기 전에 읽어보고 고칠 수 있게. */
+app.post("/api/saju-reels/plan", async (req, res) => {
+  try {
+    const { zodiac, topic, seed } = req.body || {};
+    const plan = await sajuReels.planReel({
+      zodiac, topic,
+      seed: seed != null ? Number(seed) : sajuReels.seedForDate(),
+    });
+    res.json(plan);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+/**
+ * 영상까지.
+ *
+ * ⚠️ 대본을 그대로 넘길 수 있게 열어뒀습니다. 자동으로 만든 걸 손보고 나서
+ * 영상을 뽑고 싶을 때가 반드시 생깁니다. 매번 처음부터 다시 만들게 하면 안 씁니다.
+ */
+app.post("/api/saju-reels/render", async (req, res) => {
+  try {
+    let plan = req.body && req.body.plan;
+    if (!plan || !Array.isArray(plan.scenes)) {
+      plan = await sajuReels.planReel({
+        zodiac: req.body?.zodiac, topic: req.body?.topic,
+        seed: req.body?.seed != null ? Number(req.body.seed) : sajuReels.seedForDate(),
+      });
+    }
+    // 손으로 고친 대본에도 금지선을 다시 걸어봅니다.
+    const leftover = sajuReels.checkScenes(plan.scenes);
+
+    const { dir, scenes } = await sajuReels.buildScenes(plan);
+    const out = await renderShortformVideo(scenes, {
+      durationPerScene: Number(req.body?.durationPerScene) || 4,
+      frameStyle: "full",
+      templateId: req.body?.templateId || "bold-black",
+      hookText: plan.hook || "",
+      transition: "cut",
+      encodePreset: "veryfast",
+      voice: req.body?.voice || { provider: "azure", voiceId: "ko-KR-SunHiNeural" },
+    });
+    sajuReels.cleanup(dir);   // 배경 그림은 영상에 들어갔으니 지웁니다. 디스크가 작습니다.
+
+    res.json({
+      ...out,
+      plan: { zodiac: plan.zodiac.name, topic: plan.topic.label, hook: plan.hook, scenes: plan.scenes },
+      leftover,   // 비어 있어야 정상입니다. 있으면 화면에서 빨간불을 켜줍니다.
+      caption: buildReelCaption(plan),
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+/**
+ * 올릴 때 쓸 문구.
+ *
+ * ⚠️ 영상만 만들어주고 끝내면 결국 사람이 매번 캡션을 씁니다. 그게 제일 귀찮은
+ * 일이라 결국 안 올리게 됩니다. 해시태그까지 붙여서 복사만 하면 되게 만듭니다.
+ */
+function buildReelCaption(plan) {
+  const z = plan.zodiac.name, t = plan.topic.label;
+  const tags = [
+    "사주", "사주풀이", "무료사주", `${z}띠`, "오늘의운세", "운세",
+    "궁합", "사주보는곳", "만세력", "띠별운세", "일상", "데일리",
+  ];
+  return {
+    text:
+      `${plan.hook}\n\n` +
+      plan.scenes.slice(1, -1).map((s) => `· ${s}`).join("\n") +
+      `\n\n띠로 보는 건 여기까지고요,\n태어난 시각까지 넣으면 훨씬 정확하게 나옵니다.\n` +
+      `프로필 링크에서 무료로 보실 수 있어요.`,
+    tags: tags.map((t) => "#" + t).join(" "),
+  };
+}
+
 // ── 크롬 확장 ────────────────────────────────────────────────
 //
 // 확장은 네이버 블로그 글쓰기 화면 안에서 돕니다. 여기서 원고를 만들어 보내면
