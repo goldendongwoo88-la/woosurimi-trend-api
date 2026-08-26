@@ -79,6 +79,7 @@
       <span class="ws-tb-item"><b id="ws-c-link">0</b><small>링크</small></span>
     </div>
     <div class="ws-tb-actions">
+      <button data-act="hometitle" class="ws-tb-primary" title="지금 제목을 홈판에서 눈이 멈추도록 고칩니다">홈판 제목</button>
       <button data-act="audit" title="문제가 될 만한 표현을 찾습니다">표현 검사</button>
       <button data-act="keyword" title="제목의 키워드 경쟁 상황을 봅니다">키워드</button>
       <button data-act="table" title="표를 넣습니다">표</button>
@@ -131,15 +132,28 @@
 
   // ── 서버 호출 ─────────────────────────────────────────
   async function server(pathname, body) {
-    const { serverUrl } = await chrome.storage.sync.get(["serverUrl"]);
+    // ⚠️ 저장소 키 이름을 다른 파일과 맞춰야 합니다.
+    // 처음에 serverUrl로 읽었는데 설정 화면은 server로 저장합니다.
+    // 그러면 사장님이 서버 주소를 바꿔도 반영이 안 되고, 왜 안 되는지도 알 수 없습니다.
+    const { server: serverUrl, wsToken } = await chrome.storage.sync.get(["server", "wsToken"]);
     const base = (serverUrl || DEFAULT_SERVER).replace(/\/+$/, "");
+    const headers = { "content-type": "application/json" };
+    // ⚠️ 도메인이 달라 쿠키가 안 실립니다. 토큰을 머리글에 넣습니다.
+    // 토큰은 확장 설정 화면에서 넣습니다. AI 기능에만 필요합니다.
+    if (wsToken) headers["x-ws-token"] = wsToken;
     const res = await fetch(base + pathname, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message || data.error || `서버 오류 ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 401)
+        throw new Error("확장 설정에 이용권 토큰을 넣어야 합니다. 우수리미에 로그인해서 받으세요.");
+      if (res.status === 402)
+        throw new Error("이 기능은 유료 이용권이 필요합니다.");
+      throw new Error(data.message || data.error || `서버 오류 ${res.status}`);
+    }
     return data;
   }
 
@@ -195,6 +209,98 @@
     } catch (e) {
       showPanel(`<h4>키워드</h4><div class="ws-row bad">${esc(e.message)}</div>`);
     }
+  }
+
+  // ── 홈판 제목으로 보완 ────────────────────────────────
+  //
+  // ⚠️ 이걸 왜 글쓰기 창 안에 넣었나
+  // 제목은 **글을 다 쓰고 나서** 고치는 게 맞습니다. 본문이 있어야 그 안에 있는
+  // 사실로 궁금증을 만들 수 있고, 없는 걸 지어내지 않게 됩니다.
+  // 그래서 사이트가 아니라 여기, 방금 글을 다 쓴 자리에 뒀습니다.
+  //
+  // ⚠️ 제목을 자동으로 바꾸지 않습니다. 후보를 보여주고 사장님이 고르십니다.
+  // 제목은 글의 얼굴이라 마음대로 바꾸면 안 됩니다.
+  async function homeTitle() {
+    const title = getTitle();
+    if (!title) {
+      return showPanel(`<h4>홈판 제목</h4><div class="ws-row warn">
+        제목을 먼저 쓰신 뒤에 눌러주세요.</div>`);
+    }
+    const body = getBodyText();
+    showPanel(`<h4>홈판 제목</h4><p>본문 ${body.length.toLocaleString()}자를 읽고 만드는 중입니다… 10초쯤 걸립니다.</p>`);
+    try {
+      const d = await server("/api/title-rewrite", { title, body: body.slice(0, 1500), count: 5 });
+      const dev = (o) =>
+        [o.quoteStart && "따옴표", o.ellipsis && "말줄임표", o.curiosity && "궁금증", o.number && "숫자"]
+          .filter(Boolean).map((x) => `<span class="ws-chip">${x}</span>`).join("") || `<span class="ws-chip dim">장치 없음</span>`;
+
+      showPanel(`
+        <h4>홈판 제목 후보</h4>
+        <div class="ws-dim" style="margin-bottom:8px">
+          지금 제목 <b>${d.original.score}/4</b> ${dev(d.original.devices)}<br>${esc(d.original.text)}
+        </div>
+        ${d.titles.map((x) => `
+          <div class="ws-title" data-title="${esc(x.text)}">
+            <div><b>${x.score}/4</b> ${dev(x.devices)}</div>
+            <div class="ws-title-text">${esc(x.text)}</div>
+            <div class="ws-dim">${esc(x.why)}</div>
+            ${x.invented && x.invented.length ? `<div class="ws-row bad" style="margin:5px 0 0">
+              ⚠ 본문에 없는 말: <b>${esc(x.invented.join(", "))}</b></div>` : ""}
+            <button class="ws-apply" data-apply="${esc(x.text)}">이걸로 바꾸기</button>
+          </div>`).join("")}
+        <p class="ws-dim">제목이 약속한 내용은 본문에 반드시 있어야 합니다.
+          들어왔다가 바로 나가면 조회수는 올라도 블로그가 상합니다.</p>
+      `);
+
+      panel.querySelectorAll("[data-apply]").forEach((b) =>
+        b.addEventListener("click", () => applyTitle(b.dataset.apply))
+      );
+    } catch (e) {
+      showPanel(`<h4>홈판 제목</h4><div class="ws-row bad">${esc(e.message)}</div>
+        <p class="ws-dim">우수리미에 로그인하고 이용권이 있어야 쓸 수 있는 기능입니다.</p>`);
+    }
+  }
+
+  /** 고른 제목을 제목 칸에 넣습니다. */
+  function applyTitle(text) {
+    const el =
+      document.querySelector(".se-documentTitle .se-text-paragraph") ||
+      document.querySelector(".se-documentTitle [contenteditable='true']") ||
+      document.querySelector("#subject");
+    if (!el) {
+      navigator.clipboard.writeText(text).catch(() => {});
+      return showPanel(`<h4>홈판 제목</h4><div class="ws-row warn">
+        제목 칸을 찾지 못했습니다. 복사해 뒀으니 직접 붙여넣어 주세요.</div>`);
+    }
+    // 옛 에디터는 input이라 value를, 새 에디터는 contenteditable이라 붙여넣기를 씁니다.
+    if ("value" in el && el.tagName === "INPUT") {
+      el.value = text;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      panel.hidden = true;
+      return;
+    }
+    el.focus();
+    // 기존 제목을 모두 선택한 뒤 갈아끼웁니다.
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    let ok = false;
+    try {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", text);
+      ok = el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    } catch {}
+    if (!ok) { try { ok = document.execCommand("insertText", false, text); } catch {} }
+    if (!ok) {
+      navigator.clipboard.writeText(text).catch(() => {});
+      showPanel(`<h4>홈판 제목</h4><div class="ws-row warn">
+        제목을 바로 바꾸지 못했습니다. 복사해 뒀으니 제목 칸에서 Ctrl+V를 눌러주세요.</div>`);
+      return;
+    }
+    panel.hidden = true;
   }
 
   // ── 표 넣기 ───────────────────────────────────────────
@@ -278,7 +384,8 @@
     bar.addEventListener("click", (e) => {
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (!act) return;
-      if (act === "audit") runAudit();
+      if (act === "hometitle") homeTitle();
+      else if (act === "audit") runAudit();
       else if (act === "keyword") runKeyword();
       else if (act === "table") insertTable();
       else if (act === "word") downloadWord();

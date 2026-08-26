@@ -7,10 +7,11 @@ function say(html, kind) {
 }
 
 (async () => {
-  const s = await chrome.storage.sync.get(["code", "blogId", "server"]);
+  const s = await chrome.storage.sync.get(["code", "blogId", "server", "wsToken"]);
   $("#code").value = s.code || "";
   $("#blogId").value = s.blogId || "";
   $("#server").value = s.server || "";
+  $("#token").value = s.wsToken || "";
   $("#server").placeholder = DEFAULT_SERVER;
 })();
 
@@ -27,6 +28,7 @@ $("#save").onclick = async () => {
     code: $("#code").value.trim(),
     blogId: id,
     server: $("#server").value.trim().replace(/\/+$/, ""),
+    wsToken: $("#token").value.trim(),
   });
   say("저장했습니다.", "good");
 };

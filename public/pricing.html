@@ -48,6 +48,16 @@
     <div id="redeemMsg"></div>
   </div>
 
+  <h2>크롬 확장 토큰</h2>
+  <div class="card">
+    <p style="margin-top:0;font-size:14px;color:var(--ink-2)">
+      글쓰기 창에서 <b>홈판 제목</b> 같은 AI 기능을 쓰려면 이 토큰을 확장 설정에 넣어야 합니다.
+      도메인이 달라 로그인 정보가 안 넘어가서요.
+    </p>
+    <button id="tokenBtn">내 토큰 보기</button>
+    <div id="tokenOut"></div>
+  </div>
+
   <h2>결제는 어떻게 하나요</h2>
   <div class="card">
     <p style="margin-top:0;font-size:14px;color:var(--ink-2)">
@@ -115,6 +125,32 @@ $("#redeem").addEventListener("click", async () => {
   $("#redeemMsg").innerHTML = `<div class="msg ok">
     <b>${esc(d.user.plan)}</b> 이용권이 적용됐습니다. ${esc(d.user.planUntil.slice(0, 10))}까지 쓰실 수 있습니다.</div>`;
   setTimeout(load, 800);
+});
+
+$("#tokenBtn").addEventListener("click", async () => {
+  const res = await fetch("/api/auth/token", { method: "POST" });
+  const d = await res.json();
+  if (!res.ok) {
+    $("#tokenOut").innerHTML = `<div class="msg err">${esc(d.error)}
+      ${d.login ? `<a href="${d.login}?next=/pricing.html">로그인하기</a>` : ""}</div>`;
+    return;
+  }
+  $("#tokenOut").innerHTML = `
+    <div class="msg warn" style="margin-top:12px">
+      <b>이건 사실상 비밀번호입니다.</b> 남에게 보여주거나 화면을 캡처해서 올리면
+      계정이 통째로 넘어갑니다.
+    </div>
+    <div style="font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all;
+                background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px;user-select:all">
+      ${esc(d.token)}
+    </div>
+    <button class="ghost small" id="copyTok" style="margin-top:8px">복사</button>
+    <p class="muted" style="margin:8px 0 0">
+      크롬 → 확장 프로그램 → 우수리미 포스팅 → 옵션 → <b>이용권 토큰</b> 칸에 붙여넣으세요.
+    </p>`;
+  $("#copyTok").onclick = () => {
+    navigator.clipboard.writeText(d.token).then(() => { $("#copyTok").textContent = "복사됐습니다"; });
+  };
 });
 
 load();

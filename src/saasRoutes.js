@@ -72,11 +72,23 @@ function requireLogin(req, res, next) {
 
 module.exports = function attachSaas(app) {
   // 모든 요청에 req.user를 채웁니다. 없으면 null(비회원).
+  //
+  // ⚠️ 크롬 확장은 blog.naver.com에서 우리 서버를 부릅니다. 도메인이 다르면
+  // 쿠키가 안 실립니다. 억지로 실으려면 CORS에 credentials를 열어야 하는데,
+  // 그러면 아무 사이트나 손님 계정으로 우리 API를 부를 수 있게 됩니다(CSRF).
+  // 그래서 확장은 **머리글에 토큰을 실어** 보냅니다. 쿠키를 안 쓰니 CSRF가 없습니다.
   app.use((req, res, next) => {
-    const token = readCookie(req, accounts.COOKIE_NAME);
+    const header = req.headers["x-ws-token"];
+    const token = header || readCookie(req, accounts.COOKIE_NAME);
     const u = token ? accounts.userFromToken(token) : null;
     req.user = u ? accounts.publicUser(u) : null;
     next();
+  });
+
+  // 확장에 붙여넣을 토큰을 내줍니다. 로그인한 사람만.
+  app.post("/api/auth/token", requireLogin, (req, res) => {
+    const t = accounts.issueToken(req.user.email);
+    res.json({ ok: true, token: t, note: "크롬 확장 설정에 붙여넣으세요. 남에게 보여주면 계정이 넘어갑니다." });
   });
 
   // ── 회원 ───────────────────────────────────────────────

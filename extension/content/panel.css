@@ -166,3 +166,24 @@
 #ws-tools-panel .ws-row.good { background: #e8f6ee; color: #0b6b3c; }
 #ws-tools-panel .ws-dim { color: #8b909c; font-size: 12px; }
 #ws-tools-panel .ws-list { margin: 6px 0; padding-left: 20px; }
+
+/* 홈판 제목 후보 */
+#ws-tools-bar .ws-tb-primary { background: #0b8f4d; color: #fff; border-color: #0b8f4d; }
+#ws-tools-bar .ws-tb-primary:hover { background: #0a7d44; }
+
+#ws-tools-panel .ws-chip {
+  display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 6px;
+  border-radius: 4px; background: #e8f6ee; color: #0b6b3c; margin-right: 3px;
+}
+#ws-tools-panel .ws-chip.dim { background: #eef0f4; color: #8b909c; }
+
+#ws-tools-panel .ws-title {
+  padding: 11px 0; border-bottom: 1px solid #eef0f4;
+}
+#ws-tools-panel .ws-title:last-of-type { border-bottom: none; }
+#ws-tools-panel .ws-title-text { font-weight: 600; margin: 4px 0 2px; line-height: 1.5; }
+#ws-tools-panel .ws-apply {
+  margin-top: 7px; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 11px;
+  border: 1px solid #0b8f4d; border-radius: 6px; background: #fff; color: #0b8f4d; cursor: pointer;
+}
+#ws-tools-panel .ws-apply:hover { background: #0b8f4d; color: #fff; }

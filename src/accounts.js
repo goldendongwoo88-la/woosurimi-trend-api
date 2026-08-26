@@ -301,6 +301,17 @@ function redeemLicense(email, code) {
   return { ok: true, user: publicUser(u) };
 }
 
+/**
+ * 크롬 확장에 붙여넣을 토큰. 쿠키와 같은 형식이라 검증 코드를 따로 만들 필요가 없습니다.
+ * ⚠️ 이건 사실상 비밀번호입니다. 남에게 보여주면 계정이 통째로 넘어갑니다.
+ * 그래서 화면에도 그렇게 적어둡니다.
+ */
+function issueToken(email) {
+  const u = store.users[normEmail(email)];
+  if (!u) return null;
+  return sign({ e: u.email, t: Date.now() });
+}
+
 function listUsers() {
   return Object.values(store.users).map(publicUser);
 }
@@ -319,5 +330,6 @@ module.exports = {
   issueLicense,
   verifyLicense,
   redeemLicense,
+  issueToken,
   listUsers,
 };

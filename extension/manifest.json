@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "우수리미 포스팅",
-  "version": "1.1.0",
-  "description": "글쓰기 창에서 글자수·표현검사·키워드를 바로 확인하고, AI 원고를 스마트에디터에 넣어줍니다. 발행은 직접 하십니다.",
+  "version": "1.2.0",
+  "description": "글쓰기 창에서 홈판용 제목으로 바로 바꾸고, 글자수·표현검사·키워드도 그 자리에서 확인합니다. 발행은 직접 하십니다.",
   "permissions": [
     "storage",
     "activeTab",
