@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "우수리미 포스팅",
+  "version": "1.0.0",
+  "description": "AI가 원고를 쓰고 네이버 스마트에디터에 바로 넣어줍니다. 검색 결과에 검색량도 함께 보여줍니다.",
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "clipboardWrite"
+  ],
+
+  "host_permissions": [
+    "https://blog.naver.com/*",
+    "https://m.blog.naver.com/*",
+    "https://search.naver.com/*",
+    "https://woosurimi-trend-api.onrender.com/*",
+    "http://localhost/*"
+  ],
+
+  "background": { "service_worker": "background.js" },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "우수리미 포스팅",
+    "default_icon": { "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
+  },
+
+  "icons": { "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+
+  "options_page": "options.html",
+
+  "content_scripts": [
+    {
+      "matches": ["https://blog.naver.com/*"],
+      "js": ["content/naver-editor.js"],
+      "css": ["content/panel.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://search.naver.com/*"],
+      "js": ["content/naver-search.js"],
+      "css": ["content/panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

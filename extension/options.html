@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>우수리미 포스팅 설정</title>
+<style>
+  :root { --ink:#111827; --ink2:#4b5563; --ink3:#9ca3af; --line:#e5e7eb; --brand:#4f46e5; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:#f6f7f9; color:var(--ink); font-size:14px; line-height:1.7;
+    font-family:-apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", sans-serif;
+  }
+  .wrap { max-width:620px; margin:0 auto; padding:40px 24px 60px; }
+  h1 { font-size:20px; margin:0 0 6px; letter-spacing:-.4px; }
+  .sub { color:var(--ink3); font-size:13px; margin:0 0 28px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px 24px; margin-bottom:16px; }
+  label { display:block; font-size:13px; font-weight:600; margin:16px 0 6px; }
+  label:first-child { margin-top:0; }
+  .hint { font-size:12px; color:var(--ink3); margin:5px 0 0; line-height:1.65; }
+  input {
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+    font-size:13.5px; font-family:inherit; color:var(--ink);
+  }
+  input:focus { outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+  .go {
+    margin-top:20px; padding:11px 22px; border:0; border-radius:8px; cursor:pointer;
+    background:var(--brand); color:#fff; font-weight:700; font-size:13.5px; font-family:inherit;
+  }
+  .go:hover { filter:brightness(1.08); }
+  .ghost {
+    margin-left:8px; padding:11px 18px; border:1px solid var(--line); border-radius:8px;
+    cursor:pointer; background:#fff; color:var(--ink2); font-weight:600; font-size:13.5px; font-family:inherit;
+  }
+  .msg { margin-top:14px; font-size:12.5px; border-radius:8px; }
+  .msg:empty { display:none; }
+  .msg.good { padding:10px 13px; background:#eaf7ef; color:#1e6b3f; }
+  .msg.bad  { padding:10px 13px; background:#fdeceb; color:#9b2c23; }
+  .msg.wait { padding:10px 13px; background:#fef9e7; color:#8a6112; }
+  h2 { font-size:14px; margin:0 0 10px; }
+  ol { margin:0; padding-left:20px; font-size:13px; color:var(--ink2); }
+  ol li { margin-bottom:7px; }
+  .warn {
+    background:#fff8e6; border:1px solid #f0dfae; border-radius:10px;
+    padding:14px 16px; font-size:12.5px; color:#7a5a12; line-height:1.75;
+  }
+  .warn b { color:#5c4409; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>우수리미 포스팅 설정</h1>
+  <p class="sub">한 번만 넣어두면 됩니다.</p>
+
+  <div class="card">
+    <label for="code">접속 코드</label>
+    <input id="code" placeholder="사이트에서 받은 코드" autocomplete="off">
+    <p class="hint">우수리미 사이트에서 쓰시는 접속 코드와 같습니다. 이게 있어야 AI가 원고를 써줍니다.</p>
+
+    <label for="blogId">내 블로그 아이디</label>
+    <input id="blogId" placeholder="blog.naver.com/ 뒤에 오는 것" autocomplete="off">
+    <p class="hint">주소가 <code>blog.naver.com/soorim123</code> 이면 <b>soorim123</b>만 넣으시면 됩니다.
+       이게 있어야 확장에서 글쓰기 창을 바로 열 수 있습니다.</p>
+
+    <label for="server">서버 주소</label>
+    <input id="server" placeholder="https://woosurimi-trend-api.onrender.com" autocomplete="off">
+    <p class="hint">바꿀 일 없습니다. 비워두면 기본값이 들어갑니다.</p>
+
+    <button class="go" id="save">저장</button>
+    <button class="ghost" id="test">연결 확인</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>쓰는 법</h2>
+    <ol>
+      <li>네이버 블로그 <b>글쓰기</b> 창을 엽니다.</li>
+      <li>오른쪽 아래에 작은 창이 뜹니다. 주제를 넣고 <b>원고 만들기</b>를 누릅니다.</li>
+      <li><b>에디터에 넣기</b>를 누르면 제목과 본문이 채워집니다.</li>
+      <li>사진을 넣고 내용을 확인한 뒤 <b>직접 발행</b>합니다.</li>
+    </ol>
+  </div>
+
+  <div class="warn">
+    <b>발행 버튼은 대신 누르지 않습니다.</b><br>
+    내용을 채워드리는 데까지만 합니다. 확인하지 않은 글이 그대로 올라가면
+    사장님 블로그에 남는 건 사장님 이름이니까요.
+    AI가 쓴 글에는 사실과 다른 부분이 섞일 수 있어서, 특히 가격·날짜·주소처럼
+    틀리면 곤란한 것들은 꼭 직접 확인하시고 올려주세요.<br><br>
+    <b>아이디와 비밀번호는 어디에도 저장하지 않습니다.</b><br>
+    사장님이 이미 로그인해 둔 브라우저 화면에 내용을 채워넣는 방식이라,
+    확장이나 서버가 계정 정보를 알 필요가 없습니다.
+  </div>
+</div>
+<script src="options.js"></script>
+</body>
+</html>

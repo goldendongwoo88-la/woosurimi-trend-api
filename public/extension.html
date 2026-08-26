@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>크롬 확장 설치 — 우수리미</title>
+<style>
+  :root {
+    --ink:#141a22; --ink2:#4b5563; --ink3:#9199a5; --line:#e6e9ed;
+    --bg:#f7f8fa; --card:#fff; --brand:#4f46e5; --brand2:#2f6fd0;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink); line-height:1.75;
+    font-family:-apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", sans-serif;
+    font-size:15px;
+  }
+  .wrap { max-width:760px; margin:0 auto; padding:0 20px 80px; }
+
+  header {
+    background:linear-gradient(135deg,var(--brand2),var(--brand)); color:#fff;
+    padding:52px 20px 46px; text-align:center; margin-bottom:34px;
+  }
+  header h1 { margin:0 0 10px; font-size:27px; letter-spacing:-.7px; line-height:1.35; }
+  header p { margin:0; opacity:.9; font-size:14.5px; }
+  .back { display:inline-block; margin-top:20px; color:#fff; opacity:.8;
+    font-size:13px; text-decoration:none; border-bottom:1px solid rgba(255,255,255,.4); }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:26px 28px; margin-bottom:16px; }
+  h2 { font-size:17px; margin:0 0 4px; letter-spacing:-.3px; }
+  .lead { color:var(--ink3); font-size:13.5px; margin:0 0 18px; }
+
+  ol.steps { counter-reset:s; list-style:none; margin:0; padding:0; }
+  ol.steps > li {
+    counter-increment:s; position:relative; padding-left:44px; margin-bottom:22px;
+  }
+  ol.steps > li::before {
+    content:counter(s); position:absolute; left:0; top:1px;
+    width:28px; height:28px; border-radius:9px; background:#eef2ff; color:#3730a3;
+    font-weight:700; font-size:13.5px; display:flex; align-items:center; justify-content:center;
+  }
+  ol.steps > li:last-child { margin-bottom:0; }
+  ol.steps b { display:block; margin-bottom:3px; font-size:14.5px; }
+  ol.steps p { margin:0; font-size:13.5px; color:var(--ink2); }
+
+  code, .path {
+    background:#f1f3f6; border-radius:5px; padding:2px 7px;
+    font-family:"Consolas","D2Coding",monospace; font-size:12.5px; color:#2c3644;
+    word-break:break-all;
+  }
+  .dl {
+    display:inline-block; margin-top:6px; padding:12px 24px; border-radius:10px;
+    background:var(--brand); color:#fff; font-weight:700; font-size:14.5px; text-decoration:none;
+  }
+  .dl:hover { filter:brightness(1.08); }
+
+  .note {
+    background:#fff8e6; border:1px solid #f0dfae; border-radius:11px;
+    padding:16px 18px; font-size:13.5px; color:#7a5a12; line-height:1.8;
+  }
+  .note b { color:#5c4409; }
+  .note + .note { margin-top:12px; }
+  .safe {
+    background:#eef7f1; border:1px solid #c9e3d3; border-radius:11px;
+    padding:16px 18px; font-size:13.5px; color:#1f5f3d; line-height:1.8;
+  }
+  .safe b { color:#134a2c; }
+
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:4px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #f0f1f3; vertical-align:top; }
+  th { color:var(--ink3); font-weight:600; font-size:12.5px; width:34%; }
+  td { color:var(--ink2); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>크롬 확장 설치</h1>
+  <p>AI가 원고를 쓰고, 네이버 글쓰기 창에 바로 넣어줍니다</p>
+  <a class="back" href="/">← 우수리미 도구로 돌아가기</a>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>1. 내려받기</h2>
+    <p class="lead">압축 파일 하나입니다.</p>
+    <a class="dl" href="/downloads/woosurimi-posting.zip">확장 파일 내려받기 (.zip)</a>
+    <p style="font-size:13px;color:var(--ink3);margin:12px 0 0">
+      내려받은 뒤 <b>압축을 풀어주세요.</b> 압축된 채로는 크롬이 못 읽습니다.
+      풀어놓은 폴더는 지우면 안 됩니다 — 크롬이 계속 그 폴더를 봅니다.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>2. 크롬에 넣기</h2>
+    <p class="lead">한 번만 하면 됩니다.</p>
+    <ol class="steps">
+      <li>
+        <b>크롬 주소창에 <code>chrome://extensions</code> 입력</b>
+        <p>주소창에 그대로 치고 엔터를 누르시면 됩니다.</p>
+      </li>
+      <li>
+        <b>오른쪽 위 「개발자 모드」를 켭니다</b>
+        <p>이걸 켜야 아래 버튼들이 나타납니다.</p>
+      </li>
+      <li>
+        <b>「압축해제된 확장 프로그램을 로드합니다」 클릭</b>
+        <p>왼쪽 위에 생긴 버튼입니다. 아까 압축 푼 폴더를 고르세요.
+           폴더 안에 <code>manifest.json</code>이 보이는 그 폴더입니다.</p>
+      </li>
+      <li>
+        <b>설정 창이 자동으로 열립니다</b>
+        <p>접속 코드와 블로그 아이디를 넣고 저장하세요. 「연결 확인」을 눌러
+           초록불이 뜨면 끝입니다.</p>
+      </li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>3. 쓰기</h2>
+    <ol class="steps">
+      <li>
+        <b>네이버 블로그 글쓰기 창을 엽니다</b>
+        <p>오른쪽 아래에 작은 창이 뜹니다.</p>
+      </li>
+      <li>
+        <b>주제를 넣고 「원고 만들기」</b>
+        <p>1분쯤 걸립니다. 2,000자 안팎으로 나옵니다.</p>
+      </li>
+      <li>
+        <b>「에디터에 넣기」</b>
+        <p>제목과 본문이 채워집니다.</p>
+      </li>
+      <li>
+        <b>사진 넣고, 확인하고, 직접 발행</b>
+        <p>발행 버튼은 사장님이 누르십니다.</p>
+      </li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>덤으로 되는 것</h2>
+    <table>
+      <tr>
+        <th>네이버에서 검색하면</th>
+        <td>검색 결과 위에 그 키워드의 연관 키워드와 검색량이 뜹니다.
+            키워드를 고르는 건 검색해볼 때지, 도구를 켤 때가 아니니까요.</td>
+      </tr>
+      <tr>
+        <th>상품 링크만 넣으면</th>
+        <td>상품 페이지를 읽어서 리뷰 원고를 씁니다.
+            직접 써보신 점을 적어주시면 그게 글의 중심이 됩니다.</td>
+      </tr>
+      <tr>
+        <th>가진 원고 붙여넣으면</th>
+        <td>제목·소제목·본문·태그로 나눠서 에디터에 넣어줍니다.
+            문장은 손대지 않습니다.</td>
+      </tr>
+      <tr>
+        <th>쓰는 동안 진단</th>
+        <td>글이 나오면 바로 우리 진단을 돌립니다. 글자 수, 키워드 횟수,
+            광고법에 걸리는 표현까지 점수로 보여드립니다.</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="safe">
+    <b>아이디·비밀번호는 어디에도 저장하지 않습니다.</b><br>
+    사장님이 이미 로그인해 둔 브라우저 화면에 내용을 채워 넣는 방식입니다.
+    확장도 서버도 계정 정보를 알 필요가 없고, 알지도 못합니다.
+  </div>
+
+  <div class="note" style="margin-top:12px">
+    <b>발행 버튼은 대신 누르지 않습니다.</b><br>
+    내용을 채워드리는 데까지만 합니다. 이유가 두 가지입니다.
+    하나는 확인하지 않은 글이 그대로 올라가면 곤란해서고,
+    다른 하나는 네이버가 자동 발행을 좋게 보지 않아서입니다.
+    블로그에 남는 건 제 이름이 아니라 사장님 이름입니다.
+  </div>
+
+  <div class="note">
+    <b>AI가 쓴 글에는 틀린 게 섞일 수 있습니다.</b><br>
+    가격·영업시간·주소·날짜처럼 틀리면 곤란한 것은 쓰지 말라고 시켜뒀지만,
+    그래도 새어 나올 수 있습니다. 올리기 전에 한 번만 훑어봐 주세요.
+  </div>
+
+  <div class="note">
+    <b>「개발자 모드」라는 말이 무섭게 들리실 텐데</b><br>
+    크롬 웹스토어에 올리지 않은 확장을 쓸 때 쓰는 평범한 방법입니다.
+    웹스토어 등록은 심사에 시간이 걸려서, 우선 이 방식으로 쓰시게 했습니다.
+    크롬을 켤 때마다 "개발자 모드 확장을 사용 중입니다"라는 알림이 뜰 수 있는데
+    닫으셔도 됩니다.
+  </div>
+
+</div>
+</body>
+</html>

@@ -1138,6 +1138,38 @@ app.post("/api/naver-blog/prepare", async (req, res) => {
 // 그래서 여기서는 확실히 아는 것만 봅니다. 글자 수, 소제목 수, 키워드 위치,
 // 어미 반복, 광고법에 걸릴 표현 — 전부 계산으로 확인되고 고치면 실제로 나아지는
 // 것들입니다. 추정한 숫자로 겁주는 대신 고칠 수 있는 것을 짚어줍니다.
+// ── 크롬 확장 ────────────────────────────────────────────────
+//
+// 확장은 네이버 블로그 글쓰기 화면 안에서 돕니다. 여기서 원고를 만들어 보내면
+// 확장이 스마트에디터에 채워 넣습니다.
+//
+// ⚠️ 발행까지는 하지 않습니다. 확인 안 한 글이 그대로 올라가면 안 되고,
+// 네이버 약관도 자동 발행은 곱게 보지 않습니다. 채워 넣는 데까지만 합니다.
+//
+// ⚠️ 계정 정보는 오가지 않습니다. 사장님이 이미 로그인해 둔 브라우저에서
+// 확장이 화면을 채우는 방식이라, 서버가 아이디·비밀번호를 알 필요가 없습니다.
+const extension = require("./extension");
+
+/** 확장이 서버가 살아 있는지 확인할 때 씁니다. 무료 서버 깨우는 용도도 겸합니다. */
+app.post("/api/ext/ping", (req, res) => {
+  res.json({ ok: true, ai: require("./claudeClient").isConfigured() });
+});
+
+function extRoute(name, fn) {
+  app.post(`/api/ext/${name}`, async (req, res) => {
+    try {
+      res.json(await fn(req.body || {}));
+    } catch (err) {
+      res.status(err.status || 500).json({ error: name, message: err.message });
+    }
+  });
+}
+
+extRoute("write", extension.write);
+extRoute("parse", extension.parse);
+extRoute("product", extension.product);
+extRoute("keywords", extension.keywords);
+
 app.post("/api/post-audit", (req, res) => {
   const { title, body, tags, keyword, images } = req.body || {};
   if (!String(body || "").trim()) {

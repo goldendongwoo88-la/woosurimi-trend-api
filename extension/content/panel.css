@@ -1,0 +1,119 @@
+/* 네이버 화면 위에 얹히는 작은 창.
+   ⚠️ 네이버 CSS와 섞이면 안 되니 클래스 이름을 전부 ws- 로 시작하고,
+   숫자도 네이버 것보다 확실히 위로(2147483000) 올립니다. */
+
+.ws-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 320px;
+  z-index: 2147483000;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(20, 30, 50, .16);
+  font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "맑은 고딕", sans-serif;
+  font-size: 13px;
+  color: #1f2937;
+  overflow: hidden;
+}
+
+.ws-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px;
+  background: linear-gradient(135deg, #2f6fd0, #4f46e5);
+  color: #fff;
+}
+.ws-logo { font-weight: 700; font-size: 13px; letter-spacing: -.2px; }
+.ws-min {
+  background: rgba(255,255,255,.2); border: 0; color: #fff; cursor: pointer;
+  width: 22px; height: 22px; border-radius: 6px; line-height: 1; font-size: 14px;
+}
+.ws-min:hover { background: rgba(255,255,255,.34); }
+
+.ws-body { padding: 13px 14px 11px; }
+.ws-panel.ws-folded .ws-body { display: none; }
+
+.ws-tabs { display: flex; gap: 5px; margin-bottom: 11px; }
+.ws-tab {
+  flex: 1; padding: 7px 4px; font-size: 12px; cursor: pointer;
+  border: 1px solid #e2e6eb; background: #f7f8fa; color: #5b6472;
+  border-radius: 8px; font-family: inherit;
+}
+.ws-tab.ws-on { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; font-weight: 700; }
+
+.ws-in {
+  width: 100%; box-sizing: border-box; padding: 9px 11px; margin-bottom: 7px;
+  border: 1px solid #dfe3e8; border-radius: 8px; font-size: 12.5px;
+  font-family: inherit; color: #1f2937; background: #fff;
+}
+.ws-in:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.13); }
+.ws-ta { min-height: 120px; resize: vertical; line-height: 1.6; }
+
+.ws-go {
+  width: 100%; padding: 10px; border: 0; border-radius: 8px; cursor: pointer;
+  background: #4f46e5; color: #fff; font-weight: 700; font-size: 12.5px;
+  font-family: inherit; margin-top: 2px;
+}
+.ws-go:hover { filter: brightness(1.08); }
+.ws-go:disabled { background: #b4b8d8; cursor: default; }
+.ws-ghost {
+  padding: 10px; border: 1px solid #dfe3e8; border-radius: 8px; cursor: pointer;
+  background: #fff; color: #4b5563; font-weight: 600; font-size: 12.5px; font-family: inherit;
+}
+.ws-btns { display: flex; gap: 6px; margin-top: 9px; }
+.ws-half { flex: 1; width: auto; margin-top: 0; }
+
+.ws-hide { display: none !important; }
+
+.ws-msg { margin-top: 10px; font-size: 11.5px; line-height: 1.65; border-radius: 8px; }
+.ws-msg:empty { display: none; }
+.ws-msg.ws-info { padding: 9px 11px; background: #f3f4f6; color: #4b5563; }
+.ws-msg.ws-wait { padding: 9px 11px; background: #fef9e7; color: #8a6112; }
+.ws-msg.ws-good { padding: 9px 11px; background: #eaf7ef; color: #1e6b3f; }
+.ws-msg.ws-warn { padding: 9px 11px; background: #fff4e5; color: #92551a; }
+.ws-msg.ws-bad  { padding: 9px 11px; background: #fdeceb; color: #9b2c23; }
+
+.ws-result {
+  margin-top: 11px; padding-top: 11px; border-top: 1px dashed #e5e7eb;
+}
+.ws-rt { font-weight: 700; font-size: 12.5px; line-height: 1.5; color: #111827; }
+.ws-rm { font-size: 11px; color: #6b7280; margin-top: 4px; }
+.ws-tags { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+.ws-tags span {
+  font-size: 10.5px; background: #eef2ff; color: #4338ca;
+  padding: 3px 7px; border-radius: 5px;
+}
+
+.ws-foot {
+  margin-top: 11px; padding-top: 9px; border-top: 1px solid #f0f1f3;
+  font-size: 10.5px; color: #9ca3af; line-height: 1.6;
+  display: flex; justify-content: space-between; gap: 8px; align-items: flex-end;
+}
+.ws-foot a { color: #6366f1; text-decoration: none; white-space: nowrap; }
+
+/* 검색 결과에 붙는 키워드 상자 */
+.ws-kwbox {
+  border: 1px solid #dfe3e8; border-radius: 12px; padding: 13px 15px; margin: 12px 0;
+  background: #fff; font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", sans-serif;
+}
+.ws-kwbox .ws-kwh {
+  font-size: 12px; font-weight: 700; color: #4f46e5; margin-bottom: 9px;
+  display: flex; align-items: center; gap: 6px;
+}
+.ws-kwbox table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ws-kwbox th {
+  text-align: right; font-weight: 600; color: #6b7280; font-size: 11px;
+  padding: 5px 8px; border-bottom: 1px solid #eef0f2;
+}
+.ws-kwbox th:first-child { text-align: left; }
+.ws-kwbox td {
+  padding: 6px 8px; border-bottom: 1px solid #f5f6f7; text-align: right;
+  font-variant-numeric: tabular-nums; color: #374151;
+}
+.ws-kwbox td:first-child { text-align: left; color: #111827; }
+.ws-kwbox .ws-lv { padding: 2px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 700; }
+.ws-lv-easy { background: #eaf7ef; color: #1e6b3f; }
+.ws-lv-mid  { background: #fff4e5; color: #92551a; }
+.ws-lv-hard { background: #fdeceb; color: #9b2c23; }
+.ws-kwbox .ws-note { font-size: 10.5px; color: #9ca3af; margin-top: 8px; line-height: 1.6; }
