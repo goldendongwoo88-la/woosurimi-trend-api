@@ -39,6 +39,44 @@ const FADE_SEC = 0.4; // 영상 맨 처음/맨 끝에만 쓰는 검은 화면 �
 const TRANSITION_SEC = 0.35; // 장면과 장면 사이 크로스페이드 전환 길이
 const FONT_PATH = path.join(__dirname, "..", "assets", "fonts", "NotoSansKR-Bold.ttf");
 const RENDERS_DIR = path.join(__dirname, "..", "public", "renders");
+
+/**
+ * 오래된 영상을 치웁니다.
+ *
+ * ⚠️ 만든 영상이 쌓이기만 하고 아무도 안 지우고 있었습니다.
+ * 하루 몇 편씩 만들면 며칠 만에 디스크가 찹니다.
+ *
+ * ⚠️ 시간으로만 지우면 안 됩니다. 사장님이 방금 만든 걸 아직 안 받으셨을 수 있어요.
+ * 그래서 **6시간이 지났고, 그러면서 용량이 넘칠 때만** 오래된 것부터 지웁니다.
+ * 급하지 않으면 그냥 둡니다.
+ */
+const KEEP_HOURS = 6;
+const KEEP_MB = 400;
+
+function sweepOldRenders() {
+  try {
+    if (!fs.existsSync(RENDERS_DIR)) return;
+    const now = Date.now();
+    const files = fs.readdirSync(RENDERS_DIR)
+      .filter((f) => /\.(mp4|mov|webm)$/i.test(f))
+      .map((f) => {
+        const p = path.join(RENDERS_DIR, f);
+        const st = fs.statSync(p);
+        return { p, mtime: st.mtimeMs, mb: st.size / 1048576 };
+      })
+      .sort((a, b) => a.mtime - b.mtime);   // 오래된 것부터
+
+    let totalMb = files.reduce((a, f) => a + f.mb, 0);
+    for (const f of files) {
+      const oldEnough = now - f.mtime > KEEP_HOURS * 3600 * 1000;
+      if (!oldEnough) break;                 // 정렬돼 있으니 여기서부터는 다 최근입니다
+      if (totalMb <= KEEP_MB) break;         // 넉넉하면 굳이 지우지 않습니다
+      try { fs.unlinkSync(f.p); totalMb -= f.mb; } catch {}
+    }
+  } catch {
+    // ⚠️ 치우다 실패해도 영상 만드는 건 계속돼야 합니다.
+  }
+}
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 
 // "포토카드(폴라로이드)" 스타일 치수 — 720x1280 화면 기준으로 넉넉하게 잡되, 자막이
@@ -667,6 +705,11 @@ async function renderShortformVideo(
   if (!scenes || !scenes.length) throw new Error("장면(scene)이 없습니다.");
   if (!fs.existsSync(RENDERS_DIR)) fs.mkdirSync(RENDERS_DIR, { recursive: true });
 
+  // ⚠️ 만든 영상이 쌓이기만 하고 아무도 안 지웠습니다.
+  // 하루에 몇 편씩 만들면 며칠 만에 디스크가 찹니다(Render 무료는 용량이 작습니다).
+  // 새로 만들기 직전에 오래된 것부터 치웁니다.
+  sweepOldRenders();
+
   const jobId = crypto.randomUUID();
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `shortform-${jobId}-`));
 
@@ -794,4 +837,4 @@ async function renderShortformVideo(
   }
 }
 
-module.exports = { renderShortformVideo, RENDERS_DIR, FRAME_STYLES, applyEmphasis, buildCaptionSrt, buildCaptionEvents };
+module.exports = { renderShortformVideo, sweepOldRenders, RENDERS_DIR, FRAME_STYLES, applyEmphasis, buildCaptionSrt, buildCaptionEvents };
