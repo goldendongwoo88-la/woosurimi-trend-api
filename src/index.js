@@ -1138,6 +1138,24 @@ app.post("/api/naver-blog/prepare", async (req, res) => {
 // 그래서 여기서는 확실히 아는 것만 봅니다. 글자 수, 소제목 수, 키워드 위치,
 // 어미 반복, 광고법에 걸릴 표현 — 전부 계산으로 확인되고 고치면 실제로 나아지는
 // 것들입니다. 추정한 숫자로 겁주는 대신 고칠 수 있는 것을 짚어줍니다.
+// ── 여러 곳에 한 번에 올리기 ─────────────────────────────────
+//
+// ⚠️ 일곱 곳 중 다섯 곳만 자동입니다. 그리고 그 다섯도 앱 심사를 받아야 열립니다.
+// 안 되는 걸 되는 척 하지 않고, 무엇이 왜 안 되고 어떻게 해야 열리는지 그대로 돌려줍니다.
+const multiPublish = require("./multiPublish");
+
+app.get("/api/publish/status", (req, res) => {
+  res.json(multiPublish.status());
+});
+
+app.post("/api/publish", async (req, res) => {
+  try {
+    res.json(await multiPublish.publish(req.body || {}));
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
 // ── 스레드 쇼핑 ──────────────────────────────────────────────
 //
 // ⚠️ 영상들이 가르치는 방식은 샤오홍슈에서 남의 사진을 가져다 쓰는 것이었습니다.
