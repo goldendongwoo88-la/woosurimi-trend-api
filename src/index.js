@@ -19,6 +19,7 @@ const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterSta
 const naverBlogExport = require("./naverBlogExport");
 const postAudit = require("./postAudit");
 const keywordInsight = require("./keywordInsight");
+const postImprove = require("./postImprove");
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
 const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
@@ -1151,6 +1152,20 @@ app.post("/api/post-audit", (req, res) => {
 // 카테고리를 골라 좋은 키워드를 찾아주는 건 이미 /api/opportunity가 합니다.
 // 여기는 반대 방향입니다. 이미 쓰려는 키워드가 있을 때 "이거 쓸 만한가"를 봅니다.
 // 검색량(수요)과 문서 수(공급)를 함께 봐야 알 수 있습니다.
+// 진단한 걸 실제로 고쳐 씁니다.
+// 진단만 하고 끝나면 결국 사람이 다시 앉아서 고쳐야 해서, 오히려 일을 늘린 셈이 됩니다.
+app.post("/api/post-improve", async (req, res) => {
+  const { title, body, tags, keyword, images } = req.body || {};
+  if (!String(body || "").trim()) {
+    return res.status(400).json({ error: "empty", message: "고칠 글이 없습니다." });
+  }
+  try {
+    res.json(await postImprove.improve({ title, body, tags, keyword, images }));
+  } catch (err) {
+    res.status(400).json({ error: "improve_failed", message: err.message });
+  }
+});
+
 app.get("/api/keyword/status", (req, res) => {
   res.json(keywordInsight.status());
 });

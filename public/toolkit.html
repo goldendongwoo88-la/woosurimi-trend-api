@@ -113,6 +113,26 @@ th { font-size: 11px; color: var(--ink3); font-weight: 600; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.hi td { background: #fffbf0; }
 
+/* 고쳐쓰기 결과 */
+.fixed { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.delta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.delta span { font-size: 12px; padding: 4px 11px; border-radius: 8px; background: #f0f2f5; color: var(--ink2); }
+.delta span.up { background: #e8f6ec; color: var(--green); font-weight: 600; }
+.delta span.down { background: #fdeaea; color: var(--red); }
+.changes { margin: 12px 0; }
+.changes .c { display: grid; grid-template-columns: 14px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.changes .c:first-child { border-top: none; }
+.changes .w { color: var(--ink); }
+.changes .y { color: var(--ink3); font-size: 11.5px; margin-top: 1px; }
+.fixed-body {
+  background: #fafbfc; border: 1px solid var(--line); border-radius: 9px;
+  padding: 14px 16px; font-size: 13px; line-height: 1.85; white-space: pre-wrap;
+  max-height: 420px; overflow-y: auto; margin-top: 8px;
+}
+.fixed-body mark { background: #fff3cd; color: #7a5c00; padding: 0 3px; border-radius: 3px; }
+.ph-note { background: #fff8e6; border: 1px solid #f0dfae; border-radius: 8px; padding: 11px 13px; font-size: 12px; color: #7a5c00; line-height: 1.7; margin-top: 10px; }
+.copy-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
 .note { font-size: 11px; color: var(--ink3); line-height: 1.7; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--line); }
 .warn-box { background: #fff8e6; border: 1px solid #f0dfae; border-radius: 9px; padding: 13px 15px; font-size: 12.5px; color: #7a5c00; line-height: 1.7; }
 .warn-box code { background: #fff; padding: 1px 5px; border-radius: 3px; font-size: 11.5px; }
@@ -348,6 +368,8 @@ async function auditPost() {
     const d = await res.json();
     if (!res.ok) throw new Error(d.message || "진단하지 못했습니다.");
     out.innerHTML = auditResultHtml(d);
+    const fb = $("#fixBtn");
+    if (fb) fb.onclick = improvePost;
   } catch (e) {
     out.innerHTML = `<div class="err">${esc(e.message)}</div>`;
   }
@@ -420,8 +442,136 @@ function auditResultHtml(a) {
             </div>`).join("")}
         </details>` : ""}
 
+      ${fails.length || (a.risks && a.risks.length) ? `
+        <button class="btn btn-main" id="fixBtn" style="margin-top:16px">
+          ✨ 지적된 부분 고쳐쓰기
+        </button>
+        <div style="font-size:11.5px;color:var(--ink3);text-align:center;margin-top:6px">
+          원래 글은 최대한 그대로 두고, 문제된 곳만 고칩니다.
+          모르는 사실은 지어내지 않고 [대괄호]로 표시해 드려요.
+        </div>` : ""}
+      <div id="fixOut"></div>
+
       <div class="note">${esc(a.disclaimer)}</div>
     </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   고쳐쓰기 — 진단만 하고 끝나면 결국 사람이 다시 앉아서 고쳐야 합니다.
+   ═══════════════════════════════════════════════════════════ */
+let lastFixed = null;
+
+async function improvePost() {
+  const btn = $("#fixBtn");
+  const out = $("#fixOut");
+  btn.disabled = true;
+  btn.textContent = "고치는 중… (30초쯤 걸려요)";
+
+  const tags = $("#pTags").value.split(/[,\s]+/).map((s) => s.replace(/^#/, "").trim()).filter(Boolean);
+  const imgRaw = $("#pImg").value.trim();
+
+  try {
+    const res = await fetch("/api/post-improve", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: $("#pTitle").value,
+        body: $("#pBody").value,
+        tags,
+        keyword: $("#pKw").value.trim(),
+        images: imgRaw === "" ? null : Number(imgRaw),
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.message || "고치지 못했습니다.");
+    lastFixed = d;
+    out.innerHTML = fixedHtml(d);
+    bindFixed(d);
+    btn.classList.add("hidden");
+  } catch (e) {
+    out.innerHTML = `<div class="err" style="margin-top:12px">${esc(e.message)}</div>`;
+    btn.disabled = false;
+    btn.textContent = "✨ 지적된 부분 고쳐쓰기";
+  }
+}
+
+function deltaChip(label, v, unit, goodIsUp = true) {
+  if (!v) return `<span>${label} 그대로</span>`;
+  const good = goodIsUp ? v > 0 : v < 0;
+  return `<span class="${good ? "up" : "down"}">${label} ${v > 0 ? "+" : ""}${v.toLocaleString()}${unit}</span>`;
+}
+
+function fixedHtml(d) {
+  if (d.unchanged) {
+    return `<div class="ph-note" style="margin-top:14px">${esc(d.message)}</div>`;
+  }
+  // [대괄호] 자리를 눈에 띄게 표시합니다.
+  const bodyHtml = esc(d.body).replace(/\[([^\]\n]{2,60})\]/g, (m) => `<mark>${m}</mark>`);
+
+  return `
+    <div class="fixed">
+      <b style="font-size:14px">고쳤습니다</b>
+      <div class="delta" style="margin-top:8px">
+        ${deltaChip("점수", d.delta.score, "점")}
+        ${deltaChip("글자", d.delta.chars, "자")}
+        ${deltaChip("문제", d.delta.bad, "개", false)}
+        ${deltaChip("주의", d.delta.warn, "개", false)}
+      </div>
+
+      ${d.changes && d.changes.length ? `
+        <div class="changes">
+          ${d.changes.map((c) => `
+            <div class="c">
+              <span>✓</span>
+              <span><div class="w">${esc(c.what)}</div><div class="y">${esc(c.why)}</div></span>
+            </div>`).join("")}
+        </div>` : ""}
+
+      ${d.placeholders && d.placeholders.length ? `
+        <div class="ph-note">
+          <b>직접 채워주셔야 할 곳이 ${d.placeholders.length}군데 있어요</b><br>
+          없는 사실을 지어내지 않으려고 자리만 남겨뒀습니다.
+          노란색으로 표시된 [대괄호] 부분을 채워주세요.
+        </div>` : ""}
+
+      <label style="margin-top:14px">고친 제목</label>
+      <input type="text" id="fxTitle" value="${esc(d.title)}" readonly>
+
+      <label>고친 본문</label>
+      <div class="fixed-body">${bodyHtml}</div>
+
+      <label>고친 태그</label>
+      <input type="text" id="fxTags" value="${esc(d.tags.map((s) => "#" + s).join(" "))}" readonly>
+
+      <div class="copy-row">
+        <button class="btn btn-sm" data-fx="title">제목 복사</button>
+        <button class="btn btn-sm" data-fx="body">본문 복사</button>
+        <button class="btn btn-sm" data-fx="tags">태그 복사</button>
+        <button class="btn btn-sm" data-fx="replace">위 입력칸에 넣기</button>
+      </div>
+    </div>`;
+}
+
+function bindFixed(d) {
+  document.querySelectorAll("[data-fx]").forEach((b) => (b.onclick = async () => {
+    const k = b.dataset.fx;
+    if (k === "replace") {
+      // 고친 글을 입력칸에 넣어서 바로 다시 진단해볼 수 있게 합니다.
+      $("#pTitle").value = d.title;
+      $("#pBody").value = d.body;
+      $("#pTags").value = d.tags.map((s) => "#" + s).join(" ");
+      $("#fixOut").innerHTML = "";
+      auditPost();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const text = k === "title" ? d.title : k === "tags" ? d.tags.map((s) => "#" + s).join(" ") : d.body;
+    try {
+      await navigator.clipboard.writeText(text);
+      const old = b.textContent;
+      b.textContent = "복사됨";
+      setTimeout(() => (b.textContent = old), 1400);
+    } catch { alert("복사하지 못했어요."); }
+  }));
 }
 
 $("#pBtn").onclick = auditPost;
