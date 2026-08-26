@@ -212,3 +212,6 @@
   padding: 11px; max-height: 260px; overflow-y: auto; margin: 7px 0 0;
   font-family: inherit; color: #17181c;
 }
+
+#ws-tools-panel .ws-topics { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+#ws-tools-panel .ws-topics .ws-apply { margin-top: 0; font-size: 11.5px; padding: 4px 9px; }

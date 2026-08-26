@@ -18,6 +18,7 @@ const homefeedAudit = require("./homefeedAudit");
 const titleRewrite = require("./titleRewrite");
 const notify = require("./notify");
 const bodyRewrite = require("./bodyRewrite");
+const topicFit = require("./topicFit");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -338,6 +339,48 @@ module.exports = function attachSaas(app) {
       res.json({ ...r, usage: req.usage });
     } catch (e) {
       res.status(502).json({ error: "다듬는 데 실패했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  // 주제 적합도 — 이 글을 어느 블로그, 어느 주제로 걸어야 하나.
+  // ⚠️ AI를 안 씁니다. 낱말로 판정해서 즉시 답합니다. 글 쓸 때마다 부르는 기능이라
+  // 빨라야 하고, 매번 API 비용이 나가면 안 됩니다. 그래서 사용량도 안 셉니다.
+  app.post("/api/topic-fit", (req, res) => {
+    const { title, body, blogTopic } = req.body || {};
+    if (!String(title || "").trim()) return res.status(400).json({ error: "제목을 넣어주세요." });
+    const r = blogTopic
+      ? topicFit.fitsBlog(title, body || "", blogTopic)
+      : topicFit.classify(title, body || "");
+    res.json({ ok: true, ...r, topics: Object.keys(topicFit.TOPICS) });
+  });
+
+  // 블로그 전체 주제 순도
+  app.post("/api/topic-purity", usage.gate("diagnose"), async (req, res) => {
+    const id = naverData.parseBlogId((req.body || {}).blogId);
+    const blogTopic = (req.body || {}).blogTopic || "패션·미용";
+    if (!id) return res.status(400).json({ error: "블로그 주소나 아이디를 확인해 주세요." });
+    try {
+      let posts = [];
+      for (let page = 1; posts.length < 90 && page <= 3; page++) {
+        const l = await naverData.fetchPostList(id, { page, countPerPage: 30 });
+        if (!l.posts.length) break;
+        posts = posts.concat(l.posts);
+        await new Promise((r) => setTimeout(r, 350));
+      }
+      const seen = new Set();
+      posts = posts.filter((p) => !seen.has(p.logNo) && seen.add(p.logNo));
+      if (!posts.length) return res.status(404).json({ error: "글을 찾지 못했습니다." });
+
+      // 주제별 분포도 함께 — "무엇이 섞여 있나"를 보여줘야 판단이 됩니다.
+      const spread = {};
+      for (const p of posts) {
+        const k = topicFit.classify(p.title).topic || "모름";
+        spread[k] = (spread[k] || 0) + 1;
+      }
+      const r = topicFit.purityOf(posts.map((p) => p.title), blogTopic);
+      res.json({ ok: true, blogId: id, blogTopic, ...r, spread, usage: req.usage });
+    } catch (e) {
+      res.status(502).json({ error: "확인에 실패했습니다. 잠시 뒤에 다시 해주세요." });
     }
   });
 

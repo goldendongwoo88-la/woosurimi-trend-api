@@ -81,6 +81,7 @@
     <div class="ws-tb-actions">
       <button data-act="hometitle" class="ws-tb-primary" title="지금 제목을 홈판에서 눈이 멈추도록 고칩니다">홈판 제목</button>
       <button data-act="homebody" class="ws-tb-primary" title="본문을 소제목 6개로 나누고 사진 자리를 잡습니다">홈판 본문</button>
+      <button data-act="topic" title="이 글이 이 블로그 주제에 맞는지 봅니다">주제</button>
       <button data-act="audit" title="문제가 될 만한 표현을 찾습니다">표현 검사</button>
       <button data-act="keyword" title="제목의 키워드 경쟁 상황을 봅니다">키워드</button>
       <button data-act="table" title="표를 넣습니다">표</button>
@@ -358,6 +359,62 @@
     }
   }
 
+  // ── 주제 적합도 ───────────────────────────────────────
+  //
+  // ⚠️ 블로그를 주제별로 나눠 운영할 때 쓰는 기능입니다.
+  // 홈피드는 "이 블로그는 무슨 블로그인가"를 판단해 그 주제에 관심 있는 사람에게
+  // 밀어줍니다. 패션 블로그에 예능 글을 올리면 패션 보러 온 사람에게 가고,
+  // 그 사람은 안 누릅니다. 안 누르면 그게 나쁜 신호로 쌓입니다.
+  //
+  // AI를 안 쓰기 때문에 이용권 없이도 됩니다. 즉시 답합니다.
+  async function checkTopic() {
+    const title = getTitle();
+    if (!title) {
+      return showPanel(`<h4>주제</h4><div class="ws-row warn">제목을 먼저 쓰신 뒤에 눌러주세요.</div>`);
+    }
+    const { blogTopic } = await chrome.storage.sync.get(["blogTopic"]);
+    showPanel(`<h4>주제</h4><p>보는 중입니다…</p>`);
+    try {
+      const d = await server("/api/topic-fit", {
+        title,
+        body: getBodyText().slice(0, 1200),
+        blogTopic: blogTopic || undefined,
+      });
+
+      const badge =
+        d.fits === true ? `<span class="ws-chip">맞습니다</span>`
+        : d.fits === false ? `<span class="ws-chip dim" style="background:#fdeceb;color:#a02c2c">다른 블로그로</span>`
+        : "";
+
+      showPanel(`
+        <h4>주제 ${badge}</h4>
+        <div class="ws-stats">
+          <span>이 글은 <b>${esc(d.topic || "판정 못 함")}</b></span>
+          ${d.confidence === "mixed" ? `<span>${esc(d.runnerUp || "")}도 섞임</span>` : ""}
+        </div>
+        <div class="ws-row ${d.fits === false ? "warn" : "good"}">${esc(d.advice || d.why)}</div>
+        ${d.matched && d.topic && d.matched[d.topic] && d.matched[d.topic].length
+          ? `<p class="ws-dim">걸린 말: ${esc(d.matched[d.topic].join(", "))}</p>` : ""}
+        ${!blogTopic ? `
+          <p class="ws-dim">이 블로그의 주제를 정해두면 "맞다/아니다"로 알려드립니다.</p>
+          <div class="ws-topics">
+            ${(d.topics || []).map((t) => `<button class="ws-apply" data-settopic="${esc(t)}">${esc(t)} 블로그로 설정</button>`).join("")}
+          </div>` : `
+          <p class="ws-dim">이 블로그는 <b>${esc(blogTopic)}</b>으로 설정돼 있습니다.
+            <button class="ws-apply" data-settopic="">바꾸기</button></p>`}
+      `);
+
+      panel.querySelectorAll("[data-settopic]").forEach((b) =>
+        b.addEventListener("click", async () => {
+          await chrome.storage.sync.set({ blogTopic: b.dataset.settopic });
+          checkTopic();
+        })
+      );
+    } catch (e) {
+      showPanel(`<h4>주제</h4><div class="ws-row bad">${esc(e.message)}</div>`);
+    }
+  }
+
   // ── 표 넣기 ───────────────────────────────────────────
   function insertTable() {
     const cols = Number(prompt("칸을 몇 개로 할까요? (2~6)", "3"));
@@ -441,6 +498,7 @@
       if (!act) return;
       if (act === "hometitle") homeTitle();
       else if (act === "homebody") homeBody();
+      else if (act === "topic") checkTopic();
       else if (act === "audit") runAudit();
       else if (act === "keyword") runKeyword();
       else if (act === "table") insertTable();
