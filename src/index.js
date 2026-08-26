@@ -35,6 +35,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
+const sharp = require("sharp");
 const multer = require("multer");
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 15 * 1024 * 1024 } }); // BGM 업로드용, 최대 15MB
 
@@ -1174,6 +1175,22 @@ app.get("/api/long-to-shorts/:jobId", (req, res) => {
   res.json({ ...j, elapsed: Math.round((Date.now() - j.startedAt) / 1000) });
 });
 
+// ── 네이버 클립 문구 ─────────────────────────────────────────
+//
+// ⚠️ 인스타 캡션을 그대로 클립에 올리면 손해입니다.
+// 클립은 네이버 검색과 연결되어서, 문구에 검색어가 들어가야 합니다.
+// 그리고 클립에만 있는 게 하나 있어요 — 쇼핑태그.
+// 스마트스토어 상품을 영상에 붙일 수 있고 프로필 [쇼핑기록] 탭에 모입니다.
+const clipCaption = require("./clipCaption");
+
+app.post("/api/naver-clip/caption", async (req, res) => {
+  try {
+    res.json(await clipCaption.make(req.body || {}));
+  } catch (e) {
+    res.status(e.status || 500).json({ message: e.message });
+  }
+});
+
 // ── 스레드 연동 ──────────────────────────────────────────────
 //
 // ⚠️ 어제 "앱 심사 때문에 몇 주 걸린다"고 했는데 그건 남에게 서비스로 팔 때 이야기였습니다.
@@ -1308,6 +1325,105 @@ app.post("/api/thread-shop/product", async (req, res) => {
     res.json(await threadShop.fromProduct(req.body || {}));
   } catch (err) {
     res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+// ── 캐릭터 ───────────────────────────────────────────────────
+//
+// ⚠️ 저는 그림을 못 만듭니다. 글과 코드만 만들어요.
+// 그래서 캐릭터 그림은 사장님이 구글 Flow에서 만들어 올려주시고,
+// 그 뒤로는 릴스가 전부 그 그림을 씁니다. 한 번 올리면 계속 쓰는 구조입니다.
+const characterImage = require("./characterImage");
+
+const charStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    fs.mkdirSync(characterImage.OUT_DIR, { recursive: true });
+    cb(null, characterImage.OUT_DIR);
+  },
+  filename: (req, file, cb) => {
+    // ⚠️ 파일 이름 앞에 캐릭터 id가 와야 합니다. 그래야 채널별로 골라 쓸 수 있어요.
+    const who = String(req.body.character || req.query.character || "assi")
+      .replace(/[^a-z]/gi, "").slice(0, 20) || "assi";
+    const scene = String(req.body.scene || req.query.scene || "speaking")
+      .replace(/[^a-z]/gi, "").slice(0, 20) || "speaking";
+    cb(null, `${who}-${scene}-${Date.now().toString(36)}.jpg`);
+  },
+});
+const uploadChar = multer({ storage: charStorage, limits: { fileSize: 12 * 1024 * 1024, files: 12 } });
+
+app.get("/api/characters/list", (req, res) => {
+  const out = {};
+  for (const c of Object.values(characterImage.CHARACTERS)) {
+    out[c.id] = {
+      id: c.id, name: c.name, who: c.who, handle: c.handle,
+      tone: c.tone, accent: c.accent, topics: c.topics,
+      scenes: Object.keys(c.scenes),
+      images: characterImage.existing(c.id),
+    };
+  }
+  res.json({ characters: out, provider: characterImage.provider() });
+});
+
+app.get("/api/characters/prompts", (req, res) => {
+  const { character, scene } = req.query;
+  if (character) {
+    try { return res.json(characterImage.prompt(character, scene || "speaking")); }
+    catch (e) { return res.status(400).json({ message: e.message }); }
+  }
+  res.json({ prompts: characterImage.allPrompts() });
+});
+
+/**
+ * Flow에서 만든 그림 올리기.
+ *
+ * ⚠️ 세로로 잘라 저장합니다. 가로 그림을 그대로 두면 영상에서 얼굴이 잘립니다.
+ */
+app.post("/api/characters/upload", uploadChar.array("images", 12), async (req, res) => {
+  try {
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ message: "그림을 올려주세요." });
+    const done = [];
+    for (const f of files) {
+      try {
+        const buf = fs.readFileSync(f.path);
+        await sharp(buf)
+          .resize(1080, 1920, { fit: "cover", position: "top" })
+          .jpeg({ quality: 90 })
+          .toFile(f.path + ".tmp");
+        fs.renameSync(f.path + ".tmp", f.path);
+        done.push(`/uploads/characters/${path.basename(f.path)}`);
+      } catch (e) {
+        // ⚠️ 한 장이 이상해도 나머지는 살립니다.
+        try { fs.unlinkSync(f.path); } catch {}
+      }
+    }
+    res.json({ ok: true, uploaded: done.length, files: done });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+app.delete("/api/characters/:name", (req, res) => {
+  try {
+    const name = path.basename(String(req.params.name));
+    const p = path.join(characterImage.OUT_DIR, name);
+    if (!fs.existsSync(p)) return res.status(404).json({ message: "그런 그림이 없습니다." });
+    fs.unlinkSync(p);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+/** 키가 있으면 직접 만들어 봅니다. 없으면 프롬프트를 돌려줍니다. */
+app.post("/api/characters/generate", async (req, res) => {
+  try {
+    res.json(await characterImage.generate(
+      req.body?.character || "assi",
+      req.body?.scene || "speaking"
+    ));
+  } catch (e) {
+    res.status(500).json({ message: e.message });
   }
 });
 

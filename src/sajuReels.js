@@ -58,6 +58,9 @@ const TOPICS = [
   { id: "reunion", label: "헤어진 뒤",     ask: "이 띠 사람들이 이별 후에 보이는 특징적인 결" },
   { id: "health",  label: "몸이 보내는 신호", ask: "이 띠 사람들의 기운 치우침이 몸에 남기는 자국" },
   { id: "strength", label: "타고난 무기",   ask: "이 띠 사람들이 가진 강점과 그것을 쓰는 법" },
+  // ⚠️ 살(煞)은 파는 상품에도 있어서 릴스 주제로도 둡니다.
+  // 다만 겁주는 쪽으로 흐르기 제일 쉬운 주제라 GUARD를 더 조심해서 봐야 합니다.
+  { id: "sal",     label: "타고난 표식",   ask: "이 띠에 흔한 신살(역마·도화·화개 같은 표식)이 삶에 남기는 결" },
 ];
 
 const GUARD = `
@@ -126,12 +129,76 @@ function starField(seed, count = 46) {
 }
 
 /**
+ * 캐릭터 그림이 있으면 그걸 씁니다.
+ *
+ * ⚠️ 그라데이션에 한자만 깔린 영상은 사람들이 안 봅니다. 사장님 말씀이 맞았어요.
+ * 사주로 하루 500만원 번다는 사람의 핵심이 바로 캐릭터였습니다 —
+ * "제가 한 거는 이 이미지 하나 만들어서 넣은 것밖에 없거든요"라고 했습니다.
+ *
+ * ⚠️ 그런데 저는 그림을 못 만듭니다. 그래서 이렇게 나눴습니다.
+ *   · 캐릭터 그림은 **사장님이 구글 Flow에서 한 번만** 만들어 올려주시고
+ *   · 그 뒤로는 96편이 전부 그 그림을 씁니다
+ * 한 번 만들어두면 계속 쓰는 구조라, 매번 만드실 필요가 없습니다.
+ *
+ * ⚠️ 같은 얼굴이 계속 나와야 브랜드가 됩니다. 매번 다른 얼굴이면
+ * 사람들이 기억하지 못합니다.
+ */
+function pickCharacterImage(index, channelId) {
+  try {
+    const ci = require("./characterImage");
+    // ⚠️ 채널별로 골라야 합니다. 연애 채널 영상에 도령이 나오면 안 됩니다.
+    const pool = ci.existing(channelId);
+    if (!pool.length) return null;
+    // ⚠️ 무작위로 고르면 한 영상 안에서 얼굴이 계속 바뀝니다.
+    // 장면 순서대로 돌려서 자연스럽게 이어지게 합니다.
+    const PUBLIC_DIR = path.join(__dirname, "..", "public");
+    const f = pool[index % pool.length];
+    const local = path.join(PUBLIC_DIR, f.path.replace(/^\/+/, ""));
+    return fs.existsSync(local) ? local : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 장면 배경 한 장.
  *
  * ⚠️ 글자는 넣지 않습니다. 자막은 videoRenderer가 얹습니다.
  * 여기서 글자를 넣으면 자막과 겹칩니다.
+ *
+ * ⚠️ 캐릭터 그림이 올라와 있으면 그림 위에 어둡게 깔아서 씁니다.
+ * 그냥 얹으면 밝은 부분에서 자막이 안 보입니다.
  */
-async function makeBackground(z, index, dest) {
+async function makeBackground(z, index, dest, channelId) {
+  const charPath = pickCharacterImage(index, channelId);
+  if (charPath) {
+    // 위아래를 어둡게 덮어 자막이 읽히게 합니다. 가운데 얼굴은 살립니다.
+    const veil = Buffer.from(`
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">
+  <defs>
+    <linearGradient id="v" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#000" stop-opacity="0.62"/>
+      <stop offset="0.22" stop-color="#000" stop-opacity="0.10"/>
+      <stop offset="0.62" stop-color="#000" stop-opacity="0.10"/>
+      <stop offset="1"    stop-color="#000" stop-opacity="0.72"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#v)"/>
+  <rect x="46" y="46" width="988" height="1828" fill="none"
+        stroke="${z.from}" stroke-opacity="0.35" stroke-width="2" rx="6"/>
+</svg>`);
+    await sharp(charPath)
+      .resize(1080, 1920, { fit: "cover", position: "top" })
+      .composite([{ input: veil, blend: "over" }])
+      .jpeg({ quality: 88 })
+      .toFile(dest);
+    return;
+  }
+  return makeGradientBackground(z, index, dest);
+}
+
+/** 캐릭터 그림이 없을 때 쓰는 바탕. 없어도 영상은 나와야 합니다. */
+async function makeGradientBackground(z, index, dest) {
   const big = 700 + (index % 3) * 90;   // 장면마다 한자 크기를 조금씩 달리해 단조로움을 줄입니다
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920">
@@ -159,8 +226,17 @@ async function makeBackground(z, index, dest) {
 // ────────────────────────────────────────────────────────────
 // 대본
 // ────────────────────────────────────────────────────────────
-async function writeScript(z, topic) {
+async function writeScript(z, topic, character) {
   if (!isConfigured()) throw new Error("AI가 연결되지 않았습니다.");
+
+  // ⚠️ 채널마다 말투가 확실히 달라야 합니다.
+  // 세 계정이 같은 말투로 올리면 한 사람이 돌리는 게 티가 납니다.
+  const who = character
+    ? `\n[이 채널의 말투 — 반드시 지키세요]\n` +
+      `${character.name}(${character.who})가 말합니다.\n` +
+      `${character.tone}\n` +
+      `⚠️ 다른 채널과 말투가 겹치면 안 됩니다. 이 결로만 쓰세요.\n`
+    : "";
 
   const data = await callClaude({
     system:
@@ -169,7 +245,8 @@ async function writeScript(z, topic) {
       "  나쁜 예: '오늘은 쥐띠에 대해 알아보겠습니다'\n" +
       "  좋은 예: '쥐띠가 돈을 모으는 방식, 좀 특이합니다'\n\n" +
       "⚠️ 말로 읽힐 글입니다. 눈으로 읽는 글처럼 쓰지 마세요.\n" +
-      "  한 장면은 한 호흡에 읽을 수 있는 길이여야 합니다.\n\n" +
+      "  한 장면은 한 호흡에 읽을 수 있는 길이여야 합니다.\n" +
+      who + "\n" +
       GUARD + "\n\n" +
       '{"hook":"상단 고정 문구(12자 이내)","scenes":["장면1","장면2",...]} JSON만 출력하세요.',
     messages: [{
@@ -247,11 +324,35 @@ async function writeScript(z, topic) {
  * @param {string} opts.topic   주제 id (없으면 무작위)
  * @param {number} opts.seed    같은 씨앗이면 같은 조합. 매일 다른 편이 나오게 날짜를 넣습니다.
  */
-async function planReel({ zodiac, topic, seed = 0 } = {}) {
+async function planReel({ zodiac, topic, channel, seed = 0 } = {}) {
   const z = ZODIAC.find((x) => x.id === zodiac) || ZODIAC[seed % ZODIAC.length];
-  const t = TOPICS.find((x) => x.id === topic) || TOPICS[Math.floor(seed / ZODIAC.length) % TOPICS.length];
-  const script = await writeScript(z, t);
-  return { zodiac: z, topic: t, ...script };
+
+  // ⚠️ 채널을 지정하면 그 채널이 맡은 주제 안에서만 고릅니다.
+  // 안 그러면 연애 채널에 재물운 영상이 올라갑니다. 계정 성격이 흐려져요.
+  const ci = require("./characterImage");
+  const ch = channel ? ci.CHARACTERS[channel] : null;
+
+  let t;
+  if (topic) {
+    t = TOPICS.find((x) => x.id === topic);
+    // 지정한 주제가 그 채널 몫이 아니면 그냥 씁니다 — 사람이 일부러 고른 거니까요.
+  }
+  if (!t && ch) {
+    const mine = ch.topics.map((id) => TOPICS.find((x) => x.id === id)).filter(Boolean);
+    t = mine[Math.floor(seed / ZODIAC.length) % mine.length];
+  }
+  if (!t) t = TOPICS[Math.floor(seed / ZODIAC.length) % TOPICS.length];
+
+  // 채널을 안 정했으면 그 주제를 맡은 채널을 찾습니다.
+  const speaker = ch || ci.channelFor(t.id);
+
+  const script = await writeScript(z, t, speaker);
+  return {
+    zodiac: z,
+    topic: t,
+    channel: { id: speaker.id, name: speaker.name, handle: speaker.handle, voiceId: speaker.voiceId },
+    ...script,
+  };
 }
 
 /** 대본을 받아 배경까지 만들어, 렌더러가 바로 먹을 수 있는 장면 배열로. */
@@ -263,7 +364,7 @@ async function buildScenes(plan) {
   const scenes = [];
   for (let i = 0; i < plan.scenes.length; i++) {
     const file = path.join(dir, `s${i}.jpg`);
-    await makeBackground(plan.zodiac, i, file);
+    await makeBackground(plan.zodiac, i, file, plan.channel && plan.channel.id);
     scenes.push({
       caption: plan.scenes[i],
       image: `/uploads/saju-reels/${jobId}/s${i}.jpg`,
