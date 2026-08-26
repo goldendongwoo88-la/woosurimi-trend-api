@@ -89,6 +89,93 @@ async function outline({ topic, audience, material = "", chapters = 8 } = {}) {
 }
 
 /**
+ * 지어낸 약어 풀이를 찾아냅니다.
+ *
+ * ⚠️ 숫자 검사만으로는 부족했습니다. 실제로 이런 문장이 두 권 모두에서 나왔습니다.
+ *   1권: "D.I.A. 기준입니다. Depth(깊이), Image(시각 자료), Action(행동 유도)의 약자인데"
+ *   2권: "AEO 시대가 왔습니다. AI Engine Optimization."
+ * 둘 다 틀렸습니다. D.I.A.는 Deep Intent Analysis이고 AEO는 Answer Engine Optimization입니다.
+ *
+ * 그럴듯하게 지어낸 약어 풀이는 숫자보다 더 위험합니다. 아는 사람이 보면
+ * 바로 알아보고, 그 순간 책 전체가 아마추어가 됩니다.
+ * 그래서 약어 옆에 영어 풀이가 붙으면 미리 정해둔 정답과 대조합니다.
+ */
+const TERMS = {
+  "D.I.A": "Deep Intent Analysis",
+  "DIA": "Deep Intent Analysis",
+  "AEO": "Answer Engine Optimization",
+  "SEO": "Search Engine Optimization",
+  "C-Rank": "Creator Rank",
+  "CTR": "Click Through Rate",
+  "CPC": "Cost Per Click",
+};
+
+/**
+ * ⚠️ 처음 짠 정규식은 반대로 동작했습니다 — 틀린 걸 통과시키고 맞는 걸 잡았어요.
+ * "Depth(깊이)"는 괄호 때문에, "AI Engine"은 AI가 소문자로 안 이어져서 안 걸렸고,
+ * 정작 맞게 쓴 문장은 '약자'라는 단어 하나 때문에 걸렸습니다.
+ *
+ * 그래서 규칙을 단순하게 바꿨습니다. 약어 뒤 80자를 통째로 떼어내서
+ *   (1) 풀이처럼 보이는 게 있는가 — 영어 낱말 두 개 이상, 또는 '약자/약어'
+ *   (2) 있다면 정답이 그 안에 들어 있는가
+ * 두 가지만 봅니다. 정답이 없으면 지적합니다.
+ */
+function checkTerms(text) {
+  const bad = [];
+  const s = String(text);
+
+  for (const [abbr, right] of Object.entries(TERMS)) {
+    const esc = abbr.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+    const re = new RegExp(esc, "g");
+    for (const m of s.matchAll(re)) {
+      const after = s.slice(m.index, m.index + 90);
+
+      // 풀이가 붙어 있는가?
+      const hasEnglishGloss = /[A-Za-z]{3,}(?:[\s(),]+[A-Za-z]{3,}){1,3}/.test(
+        after.slice(abbr.length)
+      );
+      const saysAbbrev = /약자|약어|줄임말|의\s*뜻은/.test(after);
+      if (!hasEnglishGloss && !saysAbbrev) continue;   // 그냥 약어만 쓴 것 — 문제 없음
+
+      // 정답이 그 안에 있으면 맞게 쓴 것입니다.
+      const flat = after.replace(/\s+/g, " ").toLowerCase();
+      if (flat.includes(right.toLowerCase())) continue;
+
+      // 정답의 첫 낱말만 맞아도 봐줍니다 ("Deep Intent"까지만 쓴 경우)
+      const firstTwo = right.split(" ").slice(0, 2).join(" ").toLowerCase();
+      if (firstTwo && flat.includes(firstTwo)) continue;
+
+      bad.push({
+        abbr,
+        wrote: after.slice(abbr.length).replace(/\s+/g, " ").trim().slice(0, 46),
+        should: right,
+      });
+    }
+  }
+
+  // 같은 지적이 여러 번 나오지 않게 합칩니다
+  const seen = new Set();
+  return bad.filter((b) => {
+    const k = b.abbr;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/** 정확한 뜻을 프롬프트에 못 박아둘 문구. 재료에 붙여서 씁니다. */
+const TERM_NOTE = `
+[약어 — 지어내지 마세요]
+확실하지 않으면 **풀어쓰지 말고 약어 그대로 두세요.** 지어낸 풀이는 숫자보다 위험합니다.
+· D.I.A. = Deep Intent Analysis (네이버의 문서 의도 분석 모델)
+  ⚠️ "Detail, Image, Action"이나 "Depth, Image, Action"이 아닙니다. 그렇게 쓰지 마세요.
+· D.I.A.+ = D.I.A.의 확장 모델
+· C-Rank = 블로그(출처) 단위의 신뢰도 평가
+· AEO = Answer Engine Optimization (답변 엔진 최적화)
+  ⚠️ "AI Engine Optimization"이 아닙니다.
+`.trim();
+
+/**
  * 근거 없는 숫자를 찾아냅니다.
  *
  * ⚠️ 프롬프트에 "숫자를 지어내지 마세요"라고 못을 박아도 뚫립니다.
@@ -306,4 +393,5 @@ function toHtml(book, parts) {
 module.exports = {
   outline, writeChapter, writeIntro, toHtml, VOICE,
   checkNumbers, stripUnsourcedNumbers,
+  checkTerms, TERMS, TERM_NOTE,
 };
