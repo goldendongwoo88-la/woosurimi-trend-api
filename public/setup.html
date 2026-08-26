@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>네이버 키 받기 · 우수리미</title>
+<style>
+/* 키워드 진단과 상위 글 분석은 네이버 키가 있어야 돕니다.
+   둘 다 무료인데 발급 경로가 서로 다르고 화면도 안 친절해서,
+   실제로 눌러야 하는 것만 순서대로 적어둡니다. */
+:root { --ink:#24282e; --ink2:#5c6470; --ink3:#98a0ac; --line:#e6e8ec; --brand:#03c75a; }
+* { box-sizing: border-box; }
+body { margin:0; background:#f5f6f8; color:var(--ink); line-height:1.7;
+  font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; }
+header { background:#fff; border-bottom:1px solid var(--line); padding:14px 16px; }
+header .row { max-width:760px; margin:0 auto; display:flex; align-items:center; gap:12px; }
+h1 { font-size:17px; margin:0; flex:1; }
+.back { font-size:13px; color:var(--ink3); text-decoration:none; }
+main { max-width:760px; margin:0 auto; padding:18px 16px 80px; }
+
+.status-card { background:#fff; border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+.st-row { display:flex; align-items:center; gap:12px; padding:11px 0; border-top:1px solid var(--line); }
+.st-row:first-of-type { border-top:none; }
+.st-dot { width:10px; height:10px; border-radius:50%; flex:0 0 auto; }
+.st-on { background:var(--brand); } .st-off { background:#d0d5dc; }
+.st-name { font-size:13.5px; font-weight:600; flex:1; }
+.st-what { font-size:12px; color:var(--ink3); font-weight:400; display:block; }
+.st-tag { font-size:11px; padding:2px 9px; border-radius:9px; }
+.st-tag.on { background:#e8f6ec; color:#1f6b32; } .st-tag.off { background:#eef0f3; color:var(--ink3); }
+
+.guide { background:#fff; border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+.guide h2 { font-size:15px; margin:0 0 3px; }
+.guide .why { font-size:12.5px; color:var(--ink3); margin-bottom:16px; }
+.guide .free { display:inline-block; font-size:11px; background:#e8f6ec; color:#1f6b32; padding:2px 8px; border-radius:8px; margin-left:6px; vertical-align:2px; }
+
+ol.steps { margin:0; padding:0; list-style:none; counter-reset:s; }
+ol.steps li { counter-increment:s; position:relative; padding:0 0 16px 34px; font-size:13.5px; }
+ol.steps li::before {
+  content: counter(s); position:absolute; left:0; top:1px;
+  width:22px; height:22px; border-radius:50%; background:var(--ink); color:#fff;
+  font-size:11px; font-weight:700; display:grid; place-items:center;
+}
+ol.steps li:last-child { padding-bottom:0; }
+ol.steps b { color:var(--ink); }
+ol.steps .hint { display:block; font-size:12px; color:var(--ink3); margin-top:2px; }
+a.ext { color:var(--brand); text-decoration:none; font-weight:600; }
+a.ext:hover { text-decoration:underline; }
+
+.envbox { background:#1e2229; color:#e8eaed; border-radius:9px; padding:14px 16px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; line-height:1.9;
+  margin-top:14px; overflow-x:auto; white-space:pre; }
+.envbox .k { color:#7ec9a0; }
+.envbox .c { color:#7b8494; }
+
+.warn { background:#fff8e6; border:1px solid #f0dfae; border-radius:9px; padding:13px 15px;
+  font-size:12.5px; color:#7a5c00; margin-top:14px; }
+.tip { background:#f0f7ff; border:1px solid #cfe0f5; border-radius:9px; padding:13px 15px;
+  font-size:12.5px; color:#2c4f7c; margin-top:14px; }
+.copy { background:#f0f2f5; border:none; border-radius:7px; padding:7px 12px; font-size:12px;
+  color:var(--ink2); cursor:pointer; font-family:inherit; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="row">
+    <h1>네이버 키 받기</h1>
+    <a class="back" href="/toolkit.html">← 도구로</a>
+  </div>
+</header>
+
+<main>
+  <div class="status-card">
+    <div style="font-size:13px;color:var(--ink2);margin-bottom:6px">지금 상태</div>
+    <div id="status">확인하는 중…</div>
+  </div>
+
+  <div class="tip" style="margin-bottom:16px">
+    둘 다 <b>무료</b>이고, <b>하나만 받아도</b> 그만큼은 바로 쓸 수 있습니다.
+    검색광고 쪽이 더 쉬우니 그것부터 받으시는 걸 권합니다.
+  </div>
+
+  <!-- ① 검색광고 API -->
+  <div class="guide">
+    <h2>① 네이버 검색광고 API<span class="free">무료</span></h2>
+    <div class="why">
+      월간 검색량과 연관 키워드를 봅니다. 이게 있어야 <b>"이 키워드를 몇 명이나 찾는가"</b>를 알 수 있습니다.
+    </div>
+
+    <ol class="steps">
+      <li>
+        <a class="ext" href="https://searchad.naver.com" target="_blank" rel="noopener">searchad.naver.com</a> 에서 네이버 아이디로 로그인
+        <span class="hint">광고를 집행하지 않아도 계정은 만들 수 있습니다. 카드 등록도 필요 없어요.</span>
+      </li>
+      <li>
+        오른쪽 위 <b>내 정보</b> 옆의 계정 이름을 누르고 <b>도구 → API 사용 관리</b>
+        <span class="hint">'광고 시스템' 화면으로 들어간 뒤에 상단 메뉴에 나옵니다.</span>
+      </li>
+      <li>
+        <b>네이버 검색광고 API 서비스 이용약관</b>에 동의하고 <b>등록</b>
+      </li>
+      <li>
+        화면에 나오는 <b>액세스 라이선스</b>와 <b>비밀키</b>를 복사
+        <span class="hint">비밀키는 등록할 때 한 번만 보여줍니다. 놓치면 다시 발급받아야 해요.</span>
+      </li>
+      <li>
+        <b>고객 ID(CUSTOMER_ID)</b>는 같은 화면 위쪽이나 '내 정보'에 있는 숫자입니다
+        <span class="hint">보통 일곱 자리 숫자예요.</span>
+      </li>
+    </ol>
+
+    <div class="envbox"><span class="c"># .env 파일에 이 세 줄을 넣으세요</span>
+<span class="k">NAVER_AD_API_KEY</span>=여기에_액세스_라이선스
+<span class="k">NAVER_AD_SECRET_KEY</span>=여기에_비밀키
+<span class="k">NAVER_AD_CUSTOMER_ID</span>=여기에_고객ID</div>
+    <button class="copy" data-copy="ad">위 세 줄 복사</button>
+  </div>
+
+  <!-- ② API HUB -->
+  <div class="guide">
+    <h2>② 네이버 API HUB (검색)<span class="free">일정량 무료</span></h2>
+    <div class="why">
+      블로그에 이미 글이 몇 개나 있는지, 오늘 몇 개가 올라왔는지, 상위 글이 어떻게 생겼는지를 봅니다.
+      <b>"경쟁이 얼마나 센가"</b>를 아는 데 필요합니다.
+    </div>
+
+    <ol class="steps">
+      <li>
+        <a class="ext" href="https://www.ncloud.com" target="_blank" rel="noopener">ncloud.com</a> (네이버 클라우드 플랫폼) 가입
+        <span class="hint">개인도 가입됩니다. 결제 수단 등록을 요구할 수 있는데, 검색 API는 무료 사용량 안에서 쓰면 요금이 안 나옵니다.</span>
+      </li>
+      <li>
+        콘솔에서 <b>Services → AI·NAVER API → Application</b>
+      </li>
+      <li>
+        <b>Application 등록</b> → 이름을 아무거나 정하고, <b>Search</b> (검색) 항목을 체크
+        <span class="hint">블로그 검색이 이 안에 들어 있습니다.</span>
+      </li>
+      <li>
+        등록된 Application에서 <b>인증 정보</b>를 열어 <b>Client ID</b>와 <b>Client Secret</b> 복사
+      </li>
+    </ol>
+
+    <div class="envbox"><span class="c"># .env 파일에 이 두 줄을 넣으세요</span>
+<span class="k">NAVER_APIHUB_KEY_ID</span>=여기에_Client_ID
+<span class="k">NAVER_APIHUB_KEY_SECRET</span>=여기에_Client_Secret</div>
+    <button class="copy" data-copy="hub">위 두 줄 복사</button>
+
+    <div class="warn">
+      ⚠️ 예전 <b>developers.naver.com</b> 경로로 발급받은 키는 안 됩니다.
+      네이버가 2026년부터 검색 API를 클라우드 플랫폼(API HUB)으로 옮겼고,
+      옛 경로로는 새로 발급이 안 됩니다.
+    </div>
+  </div>
+
+  <!-- 넣는 법 -->
+  <div class="guide">
+    <h2>받은 키를 어디에 넣나</h2>
+    <div class="why">사는 곳이 두 군데입니다. 둘 다 넣어두시면 편합니다.</div>
+
+    <ol class="steps">
+      <li>
+        <b>이 PC에서 쓸 때</b>
+        <span class="hint">
+          <code>C:\Users\Admin\Desktop\my-project\woosurimi-trend-api\.env</code> 파일을 메모장으로 열고
+          맨 아래에 붙여넣은 뒤 저장. 서버를 껐다 켜야 반영됩니다.
+        </span>
+      </li>
+      <li>
+        <b>배포된 사이트에서 쓸 때</b>
+        <span class="hint">
+          Render → <code>woosurimi-trend-api</code> → Environment → Add Environment Variable로
+          한 줄씩 넣고 Save. 자동으로 다시 배포됩니다.
+        </span>
+      </li>
+    </ol>
+
+    <div class="warn">
+      ⚠️ 이 키들은 비밀번호와 같습니다. 캡처해서 올리거나 남에게 보내지 마세요.
+      <code>.env</code> 파일은 git에 올라가지 않도록 이미 막아뒀습니다.
+    </div>
+  </div>
+
+  <div class="guide">
+    <h2>키 없이도 되는 것들</h2>
+    <div class="why">키를 안 받으셔도 이건 그대로 씁니다.</div>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;color:var(--ink2);line-height:2">
+      <li><b>글 진단</b> — 글자 수·소제목·어미 반복·광고법 위험 표현</li>
+      <li><b>고쳐쓰기</b> — 지적된 부분만 골라 고치기</li>
+      <li><b>맞춤형 글쓰기 프롬프트</b> 전부</li>
+      <li><b>네이버 블로그 발행 도우미</b></li>
+      <li><b>숏폼·카드뉴스 만들기</b></li>
+    </ul>
+    <div class="tip">
+      네이버 키가 필요한 건 <b>키워드 진단</b>과 <b>상위 글 분석</b> 둘뿐입니다.
+      글을 쓰고 다듬고 올리는 흐름은 키 없이도 전부 됩니다.
+    </div>
+  </div>
+</main>
+
+<script>
+const AD = `NAVER_AD_API_KEY=
+NAVER_AD_SECRET_KEY=
+NAVER_AD_CUSTOMER_ID=`;
+const HUB = `NAVER_APIHUB_KEY_ID=
+NAVER_APIHUB_KEY_SECRET=`;
+
+document.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(b.dataset.copy === "ad" ? AD : HUB);
+    const old = b.textContent;
+    b.textContent = "복사됐어요";
+    setTimeout(() => (b.textContent = old), 1500);
+  } catch { alert("복사하지 못했어요."); }
+}));
+
+/* 지금 어떤 키가 들어와 있는지 보여줍니다. 값은 절대 내려받지 않고 있는지 없는지만 봅니다. */
+(async () => {
+  const box = document.getElementById("status");
+  try {
+    const s = await (await fetch("/api/keyword/status")).json();
+    const row = (on, name, what) => `
+      <div class="st-row">
+        <span class="st-dot ${on ? "st-on" : "st-off"}"></span>
+        <span class="st-name">${name}<span class="st-what">${what}</span></span>
+        <span class="st-tag ${on ? "on" : "off"}">${on ? "들어와 있음" : "아직 없음"}</span>
+      </div>`;
+    box.innerHTML =
+      row(s.ad, "① 검색광고 API", "월간 검색량 · 연관 키워드") +
+      row(s.search, "② API HUB (검색)", "블로그 문서 수 · 상위 글 분석") +
+      (s.ready
+        ? `<div class="tip" style="margin-top:12px">쓸 수 있는 기능이 있습니다. <a class="ext" href="/toolkit.html">도구로 가기 →</a></div>`
+        : "");
+  } catch {
+    box.innerHTML = `<div style="font-size:13px;color:var(--ink3)">상태를 확인하지 못했습니다. 서버가 켜져 있는지 봐주세요.</div>`;
+  }
+})();
+</script>
+</body>
+</html>
