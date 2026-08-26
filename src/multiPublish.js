@@ -6,43 +6,55 @@
  * 저장해두고 브라우저를 사람인 척 조작하는 방식입니다. 그건 계정 정지 위험을
  * 사용자가 떠안는 구조라 여기서는 만들지 않습니다.
  *
- * ⚠️ 그리고 다섯 곳도 **바로 되는 게 아닙니다.** 메타·유튜브·틱톡 모두
- * 앱 심사를 받아야 게시 권한이 열립니다. 며칠에서 몇 주 걸립니다.
- * 그래서 이 모듈은 "안 됩니다"라고 조용히 실패하지 않고,
+ * ⚠️ 처음에 여기에 "다섯 곳 다 앱 심사가 필요해서 몇 주 걸린다"고 적어뒀는데
+ * **틀렸습니다.** 그건 남에게 서비스로 팔 때 이야기예요.
+ * 메타 앱을 **개발 모드**로 두면 본인 계정에는 심사 없이 바로 게시됩니다.
+ * 인스타와 스레드는 오늘 바로 되고, 틱톡만 심사가 실제로 필요합니다.
+ *
+ * ⚠️ 그래서 이 모듈은 "안 됩니다"라고 조용히 실패하지 않고,
  * **무엇이 왜 안 되고 어떻게 해야 열리는지**를 정확히 돌려줍니다.
  * 그게 이 파일의 절반입니다.
  */
 
 const instagramAuth = require("./instagramAuth");
 const instagramPublish = require("./instagramPublish");
+const threadsAuth = require("./threadsAuth");
+const threadsPublish = require("./threadsPublish");
 
 // ────────────────────────────────────────────────────────────
 // 어디에 올릴 수 있나
 // ────────────────────────────────────────────────────────────
 const PLATFORMS = {
+  // ⚠️ 어제 여기에 "앱 검수 2주"라고 적어뒀는데 틀렸습니다.
+  // 그건 **남에게 서비스로 팔 때** 이야기입니다.
+  // 메타 앱을 개발 모드로 두면 본인 계정에는 심사 없이 바로 게시됩니다.
+  // 사장님은 본인 계정에만 올리시니 오늘 바로 됩니다.
   instagram: {
     id: "instagram",
     name: "인스타그램 릴스",
     kind: "auto",
-    needs: "메타 앱 + 인스타 비즈니스 계정 + 페이스북 페이지 연결",
+    needs: "메타 앱(개발 모드) + 인스타 비즈니스 계정 + 페이스북 페이지 연결",
     steps: [
-      "인스타 계정을 프로페셔널(비즈니스)로 전환합니다.",
+      "인스타 계정을 프로페셔널(비즈니스 또는 크리에이터)로 전환합니다.",
       "페이스북 페이지를 만들고 인스타 계정과 연결합니다.",
-      "developers.facebook.com 에서 앱을 만듭니다.",
-      "Instagram Graph API 제품을 추가하고 instagram_content_publish 권한을 신청합니다.",
-      "앱 검수(App Review)를 넣습니다 — 보통 며칠에서 2주 걸립니다.",
-      "승인되면 이 사이트에서 [인스타 연동]을 누릅니다.",
+      "developers.facebook.com 에서 앱을 만듭니다 — 개발 모드 그대로 두세요.",
+      "Instagram 제품을 추가하고, 앱 역할(Roles)에 본인 계정을 관리자로 넣습니다.",
+      "⚠️ 앱 검수는 필요 없습니다. 개발 모드에서 본인 계정은 그냥 됩니다.",
+      "FB_APP_ID / FB_APP_SECRET / PUBLIC_BASE_URL 을 넣고 [인스타 연동]을 누릅니다.",
     ],
   },
   threads: {
     id: "threads",
     name: "스레드",
     kind: "auto",
-    needs: "메타 앱 + Threads API 권한",
+    needs: "메타 앱에 Threads 용도 추가 (개발 모드)",
     steps: [
-      "인스타와 같은 메타 앱에 Threads API 제품을 추가합니다.",
-      "threads_content_publish 권한을 신청합니다.",
-      "검수가 끝나면 인스타와 같은 방식으로 연동됩니다.",
+      "developers.facebook.com 앱에서 [Threads] 용도(use case)를 추가합니다.",
+      "threads_basic, threads_content_publish 권한을 켭니다.",
+      "리디렉션 주소에 {서버주소}/api/threads/callback 을 넣습니다.",
+      "⚠️ 앱 검수는 필요 없습니다. 개발 모드에서 본인 계정은 그냥 됩니다.",
+      "THREADS_APP_ID / THREADS_APP_SECRET 을 넣고 [스레드 연동]을 누릅니다.",
+      "⚠️ 스레드 토큰은 60일이면 만료됩니다. 글을 올릴 때 자동으로 갱신하지만, 두 달 넘게 안 올리면 다시 연동하셔야 합니다.",
     ],
   },
   facebook: {
@@ -119,8 +131,20 @@ function status() {
     if (p.id === "instagram") {
       if (igReady) { state = "준비됨"; detail = `연동된 계정 ${igAccounts.length}개`; }
       else if (instagramAuth.isConfigured()) { state = "연동 필요"; detail = "앱은 있는데 계정 연동이 아직입니다."; }
-    } else if (p.id === "threads" || p.id === "facebook") {
-      // 같은 메타 앱을 씁니다. 앱이 없으면 셋 다 못 씁니다.
+    } else if (p.id === "threads") {
+      // ⚠️ 스레드는 인스타와 앱 설정이 따로입니다. 같은 메타 앱이어도 용도를 따로 켜야 해요.
+      let tAcc = [];
+      try { tAcc = threadsAuth.loadAccounts() || []; } catch { tAcc = []; }
+      if (threadsAuth.isConfigured() && tAcc.length) {
+        state = "준비됨";
+        const days = tAcc[0].expiresAt ? Math.floor((tAcc[0].expiresAt - Date.now()) / 86400000) : null;
+        detail = `@${tAcc[0].username}` + (days != null ? ` · 토큰 ${days}일 남음` : "");
+      } else if (threadsAuth.isConfigured()) {
+        state = "연동 필요"; detail = "앱은 있는데 계정 연동이 아직입니다.";
+      } else {
+        detail = "THREADS_APP_ID / THREADS_APP_SECRET 이 필요합니다.";
+      }
+    } else if (p.id === "facebook") {
       if (!instagramAuth.isConfigured()) detail = "메타 앱부터 만들어야 합니다 (인스타와 같은 앱).";
     } else if (p.id === "youtube") {
       if (process.env.YOUTUBE_CLIENT_ID) { state = "연동 필요"; detail = "앱은 있는데 계정 연동이 아직입니다."; }
@@ -137,7 +161,7 @@ function status() {
     total: Object.keys(PLATFORMS).length,
     // ⚠️ 이 문장을 숨기지 않습니다. 기대치를 미리 맞춰두는 게 낫습니다.
     summary: ready === 0
-      ? "아직 자동으로 올릴 수 있는 곳이 없습니다. 영상과 문구까지는 자동으로 만들어드리니, 올리는 건 손으로 하시는 게 지금은 더 빠릅니다."
+      ? "아직 연동된 곳이 없습니다. 인스타와 스레드는 **앱 심사 없이 오늘 바로** 연결됩니다 — 아래 절차대로 15분이면 됩니다."
       : `${ready}곳 자동 게시 가능. 나머지는 아래 절차가 필요합니다.`,
   };
 }
@@ -149,7 +173,7 @@ function status() {
  * 전부 돌려줍니다. "일부 실패"라고만 하면 사장님이 어디를 손으로 올려야 할지
  * 알 수가 없습니다.
  */
-async function publish({ videoUrl, imageUrl, caption = "", targets = [] } = {}) {
+async function publish({ videoUrl, imageUrl, caption = "", replyText = "", targets = [] } = {}) {
   const results = [];
 
   for (const t of targets) {
@@ -176,6 +200,22 @@ async function publish({ videoUrl, imageUrl, caption = "", targets = [] } = {}) 
           ? await instagramPublish.publishReel({ igUsername: acc.igUsername, videoUrl, caption })
           : await instagramPublish.publishImage({ igUsername: acc.igUsername, imageUrl, caption });
         results.push({ platform: t, name: p.name, ok: true, ...r });
+      } catch (e) {
+        results.push({ platform: t, name: p.name, ok: false, message: e.message });
+      }
+      continue;
+    }
+
+    if (t === "threads") {
+      try {
+        const r = await threadsPublish.publish({
+          text: caption,
+          videoUrl: videoUrl || undefined,
+          imageUrl: !videoUrl && imageUrl ? imageUrl : undefined,
+          // ⚠️ 링크는 본문이 아니라 댓글에 답니다. 본문에 넣으면 노출이 줄어듭니다.
+          replyText: replyText || undefined,
+        });
+        results.push({ platform: t, name: p.name, ...r });
       } catch (e) {
         results.push({ platform: t, name: p.name, ok: false, message: e.message });
       }

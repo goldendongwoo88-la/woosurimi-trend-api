@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한 번에 올리기 — 우수리미</title>
+
+<!-- ⚠️ 사장님만 보는 페이지입니다. 계정 연동을 다루니 어디에도 연결하지 않았습니다. -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<style>
+:root{--bg:#F4F5F7;--card:#fff;--edge:#DFE2E8;--ink:#161A22;--ink2:#4E5665;--ink3:#868E9C;
+  --brand:#1F1F1F;--brass:#8A6A1F;--brass-bg:#F6F1E3;
+  --brick:#9B3B2E;--brick-bg:#FAEEEB;--moss:#2E6B4F;--moss-bg:#EAF3ED}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.8;font-size:16px;
+  font-family:"IBM Plex Sans KR",-apple-system,sans-serif}
+.wrap{max-width:780px;margin:0 auto;padding:40px 20px 90px}
+h1{font-size:25px;margin:0 0 8px;letter-spacing:-.02em}
+.lead{color:var(--ink3);font-size:14.5px;margin:0 0 24px;line-height:1.75}
+h2{font-size:19px;margin:36px 0 6px}
+.sub{color:var(--ink3);font-size:13.5px;margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:20px 22px;margin-bottom:12px}
+label{display:block;font-size:12.5px;color:var(--ink2);font-weight:600;margin:14px 0 6px}
+label:first-child{margin-top:0}
+input,textarea,select{width:100%;padding:11px 13px;border:1px solid var(--edge);border-radius:7px;
+  font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
+textarea{min-height:110px;resize:vertical;line-height:1.7}
+input:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(31,31,31,.08)}
+.hint{font-size:12px;color:var(--ink3);margin-top:6px;line-height:1.65}
+.go{width:100%;margin-top:16px;padding:14px;border:0;border-radius:8px;cursor:pointer;
+  background:var(--brand);color:#fff;font-weight:700;font-size:15.5px;font-family:inherit}
+.go:hover{background:#000}
+.go:disabled{background:#B9BDC4;cursor:default}
+.msg{margin-top:14px;font-size:13.5px;border-radius:7px;line-height:1.75}
+.msg:empty{display:none}
+.msg.wait{padding:12px 14px;background:var(--brass-bg);color:var(--brass)}
+.msg.bad{padding:12px 14px;background:var(--brick-bg);color:var(--brick)}
+.msg.good{padding:12px 14px;background:var(--moss-bg);color:var(--moss)}
+
+.plat{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid #EEF0F3}
+.plat:last-child{border-bottom:0}
+.plat .dot{width:9px;height:9px;border-radius:50%;flex:none;margin-top:9px}
+.dot.ok{background:var(--moss)}.dot.no{background:#C9CDD4}.dot.man{background:var(--brass)}
+.plat .body{flex:1;min-width:0}
+.plat .nm{font-size:15.5px;font-weight:600}
+.plat .st{font-size:12.5px;color:var(--ink3);margin-top:2px;line-height:1.6}
+.plat .act{flex:none}
+.plat .act a{display:inline-block;padding:8px 15px;border:1px solid var(--edge);border-radius:7px;
+  background:#fff;font-size:12.5px;text-decoration:none;color:var(--ink2);white-space:nowrap}
+.plat .act a:hover{border-color:var(--brand);color:var(--ink)}
+details{margin-top:9px}
+summary{cursor:pointer;font-size:12.5px;color:var(--brass);list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"＋ 설정 방법";}
+details[open] summary::before{content:"－ 접기"}
+details ol{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--ink2);line-height:1.8}
+
+.targets{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.targets label{display:flex;align-items:center;gap:7px;margin:0;padding:9px 14px;
+  border:1px solid var(--edge);border-radius:8px;background:#fff;cursor:pointer;
+  font-size:13.5px;font-weight:400;color:var(--ink2)}
+.targets label:has(input:checked){border-color:var(--brand);background:#F2F3F5;color:var(--ink);font-weight:600}
+.targets input{width:auto;margin:0}
+.targets label.off{opacity:.45;cursor:not-allowed}
+
+.warn{background:var(--brick-bg);border-left:3px solid var(--brick);border-radius:0 7px 7px 0;
+  padding:14px 17px;margin:14px 0;font-size:13.5px;color:var(--ink2);line-height:1.75}
+.warn b{color:var(--brick)}
+.good{background:var(--moss-bg);border-left:3px solid var(--moss);border-radius:0 7px 7px 0;
+  padding:14px 17px;margin:14px 0;font-size:13.5px;color:var(--ink2);line-height:1.75}
+.good b{color:var(--moss)}
+.res{background:var(--card);border:1px solid var(--edge);border-radius:8px;padding:14px 18px;margin-top:12px}
+.res div{font-size:14px;padding:6px 0;border-bottom:1px solid #F1F3F5}
+.res div:last-child{border-bottom:0}
+footer{margin-top:36px;font-size:12px;color:var(--ink3);line-height:1.85}
+footer a{color:var(--brass);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>한 번에 올리기</h1>
+<p class="lead">
+  영상 하나를 여러 곳에 한 번에 올립니다.
+  <b>인스타와 스레드는 앱 심사 없이 오늘 바로</b> 연결됩니다.
+</p>
+
+<div class="good">
+  <b>정정합니다.</b> 어제 제가 "메타 심사에 몇 주 걸린다"고 말씀드렸는데 틀렸습니다.
+  그건 <b>남에게 서비스로 팔 때</b> 이야기예요.
+  메타 앱을 <b>개발 모드</b>로 두면 본인 계정에는 심사 없이 바로 게시됩니다.
+  15분이면 연결됩니다.
+</div>
+
+<h2>연동 상태</h2>
+<p class="sub" id="summary">불러오는 중…</p>
+<div class="card" id="plats"></div>
+
+<h2>올리기</h2>
+<div class="card">
+  <label for="file">올릴 영상 <span style="font-weight:400;color:var(--ink3)">(만들어둔 것을 고르세요)</span></label>
+  <select id="file"><option value="">불러오는 중…</option></select>
+  <p class="hint">
+    사주 릴스나 쇼츠 뽑기로 만든 영상이 여기 나옵니다.
+    다른 영상은 아래 주소 칸에 직접 넣으셔도 됩니다.
+  </p>
+
+  <label for="url">또는 영상 주소 직접 입력</label>
+  <input id="url" placeholder="/renders/... 또는 https://..." autocomplete="off">
+  <p class="hint">
+    ⚠️ <b>인터넷에서 열리는 주소여야 합니다.</b> 메타 서버가 그 주소로 직접 받아갑니다.
+    내 컴퓨터에 있는 파일은 못 씁니다.
+  </p>
+
+  <label for="cap">올릴 문구</label>
+  <textarea id="cap" placeholder="영상과 함께 올라갈 글"></textarea>
+  <p class="hint">스레드는 500자까지입니다. 넘으면 문장 끝에서 잘라서 올립니다.</p>
+
+  <label for="reply">댓글로 달 글 <span style="font-weight:400;color:var(--ink3)">(스레드만 · 선택)</span></label>
+  <input id="reply" placeholder="예: 무료 사주 보러 가기 → https://..." autocomplete="off">
+  <p class="hint">
+    ⚠️ <b>링크는 본문이 아니라 댓글에 다세요.</b> 본문에 링크를 넣으면 스레드가 노출을 줄입니다.
+  </p>
+
+  <label>어디에 올릴까요</label>
+  <div class="targets" id="targets"></div>
+
+  <button class="go" id="go">올리기</button>
+  <div class="msg" id="msg"></div>
+  <div id="out"></div>
+</div>
+
+<div class="warn">
+  <b>계정 정보를 저장해 사람인 척 조작하는 방식은 쓰지 않습니다.</b>
+  전부 공식 통로(API)로만 올립니다. 그래야 계정이 안전합니다.
+  네이버 블로그와 클립은 공식 통로가 없어서 손으로 올리셔야 합니다 —
+  블로그는 크롬 확장으로 내용까지는 자동으로 채워집니다.
+</div>
+
+<footer>
+  ⚠️ 스레드 토큰은 60일이면 만료됩니다. 글을 올릴 때 자동으로 갱신하지만,
+  두 달 넘게 한 번도 안 올리시면 다시 연동하셔야 합니다.
+  <br><br>
+  <a href="/">← 우수리미 도구로</a>
+</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+function say(html, kind) { $("#msg").className = "msg " + kind; $("#msg").innerHTML = html; }
+
+let READY = new Set();
+
+async function loadStatus() {
+  const d = await (await fetch("/api/publish/status")).json();
+  $("#summary").innerHTML = esc(d.summary).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+
+  const connectUrl = { instagram: "/api/instagram/connect", threads: "/api/threads/connect" };
+  $("#plats").innerHTML = d.platforms.map((p) => {
+    const cls = p.state === "준비됨" ? "ok" : p.state === "manual" ? "man" : "no";
+    if (p.state === "준비됨") READY.add(p.id);
+    const canConnect = connectUrl[p.id] && p.state !== "준비됨";
+    return `
+    <div class="plat">
+      <span class="dot ${cls}"></span>
+      <div class="body">
+        <div class="nm">${esc(p.name)}</div>
+        <div class="st">${p.state === "manual" ? "손으로 올려야 합니다 — " + esc(p.why) : esc(p.state) + " · " + esc(p.detail || "")}</div>
+        ${p.state === "manual" && p.instead ? `<div class="st" style="color:var(--brass)">${esc(p.instead)}</div>` : ""}
+        ${p.steps ? `<details><summary></summary><ol>${p.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol></details>` : ""}
+      </div>
+      ${canConnect ? `<div class="act"><a href="${connectUrl[p.id]}">연동하기</a></div>` : ""}
+    </div>`;
+  }).join("");
+
+  // 올릴 곳 고르기 — 준비 안 된 곳은 못 고르게 합니다.
+  $("#targets").innerHTML = d.platforms
+    .filter((p) => p.kind === "auto")
+    .map((p) => {
+      const on = p.state === "준비됨";
+      return `<label class="${on ? "" : "off"}">
+        <input type="checkbox" value="${p.id}" ${on ? "checked" : "disabled"}>${esc(p.name)}</label>`;
+    }).join("");
+}
+
+/** 만들어둔 영상 목록. 매번 주소를 손으로 치게 하면 안 씁니다. */
+async function loadFiles() {
+  try {
+    const d = await (await fetch("/api/renders")).json();
+    const list = d.files || [];
+    $("#file").innerHTML = `<option value="">직접 입력</option>` +
+      list.map((f) => `<option value="${esc(f.path)}">${esc(f.name)} · ${f.sizeMb}MB</option>`).join("");
+    if (!list.length) $("#file").innerHTML = `<option value="">만들어둔 영상이 없습니다</option>`;
+  } catch {
+    $("#file").innerHTML = `<option value="">목록을 못 불러왔습니다</option>`;
+  }
+}
+
+$("#file").onchange = () => { if ($("#file").value) $("#url").value = $("#file").value; };
+
+$("#go").onclick = async () => {
+  const videoUrl = $("#url").value.trim() || $("#file").value;
+  const caption = $("#cap").value.trim();
+  const targets = [...$("#targets").querySelectorAll("input:checked")].map((i) => i.value);
+
+  if (!videoUrl) { say("올릴 영상을 골라주세요.", "bad"); return; }
+  if (!targets.length) { say("올릴 곳을 하나 이상 골라주세요.", "bad"); return; }
+
+  const btn = $("#go"); btn.disabled = true; btn.textContent = "올리는 중…";
+  $("#out").innerHTML = "";
+  say("올리고 있습니다. 영상은 메타가 변환하는 데 시간이 걸려서 <b>1~3분</b>까지 걸릴 수 있어요.", "wait");
+
+  try {
+    const r = await fetch("/api/publish", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoUrl, caption, replyText: $("#reply").value.trim(), targets }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.message || "올리지 못했습니다.");
+
+    say(d.done === d.total
+      ? `<b>${d.done}곳 전부 올라갔습니다.</b>`
+      : `${d.total}곳 중 <b>${d.done}곳</b> 올라갔습니다.`, d.done ? "good" : "bad");
+
+    $("#out").innerHTML = `<div class="res">` + d.results.map((x) => {
+      if (x.ok) {
+        return `<div>✅ <b>${esc(x.name)}</b>` +
+          (x.permalink ? ` — <a href="${esc(x.permalink)}" target="_blank" rel="noopener">보러 가기</a>` : "") +
+          (x.replyFailed ? `<br><span style="color:var(--brick);font-size:12.5px">댓글은 실패했습니다: ${esc(x.replyFailed)}</span>` : "") +
+          `</div>`;
+      }
+      if (x.manual) {
+        return `<div>✋ <b>${esc(x.name)}</b> — 손으로 올리셔야 합니다<br>
+          <span style="font-size:12.5px;color:var(--ink3)">${esc(x.instead || x.message)}</span></div>`;
+      }
+      return `<div>❌ <b>${esc(x.name)}</b> — ${esc(x.message)}</div>`;
+    }).join("") + `</div>`;
+  } catch (e) {
+    say(esc(e.message), "bad");
+  }
+  btn.disabled = false; btn.textContent = "올리기";
+};
+
+loadStatus();
+loadFiles();
+</script>
+</body>
+</html>

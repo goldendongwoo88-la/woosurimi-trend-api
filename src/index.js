@@ -1174,6 +1174,73 @@ app.get("/api/long-to-shorts/:jobId", (req, res) => {
   res.json({ ...j, elapsed: Math.round((Date.now() - j.startedAt) / 1000) });
 });
 
+// ── 스레드 연동 ──────────────────────────────────────────────
+//
+// ⚠️ 어제 "앱 심사 때문에 몇 주 걸린다"고 했는데 그건 남에게 서비스로 팔 때 이야기였습니다.
+// 메타 앱을 개발 모드로 두면 본인 계정에는 심사 없이 바로 게시됩니다. 정정합니다.
+//
+// ⚠️ 스레드는 인스타와 완전히 다른 통로를 씁니다(graph.threads.net).
+// 같은 메타인데도 앱 설정도, 토큰도 따로입니다.
+const threadsAuth = require("./threadsAuth");
+const threadsPublish = require("./threadsPublish");
+
+app.get("/api/threads/connect", (req, res) => {
+  try {
+    res.redirect(threadsAuth.getAuthUrl());
+  } catch (e) {
+    res.status(500).send(`연동 준비 실패: ${e.message}`);
+  }
+});
+
+app.get("/api/threads/callback", async (req, res) => {
+  const { code, state, error, error_description } = req.query;
+  if (error) {
+    return res.status(400).send(`<meta charset="utf-8"><h2>연동 취소/실패</h2><p>${error_description || error}</p>`);
+  }
+  try {
+    const r = await threadsAuth.handleCallback(code, state);
+    const persisted = !!process.env.THREADS_ACCOUNTS_JSON;
+    res.send(`<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>스레드 연동 완료</title>
+<style>
+ body{font-family:"Malgun Gothic",sans-serif;line-height:1.7;max-width:760px;margin:40px auto;padding:0 20px}
+ textarea{width:100%;height:120px;font-family:monospace;font-size:12px}
+ .warn{background:#fff8e1;border:1px solid #e0c34d;padding:12px 16px;border-radius:6px}
+ .ok{background:#e8f5e9;border:1px solid #81c784;padding:12px 16px;border-radius:6px}
+ code{background:#eee;padding:2px 5px;border-radius:3px}
+</style></head><body>
+<h2>스레드 연동 완료 ✅</h2>
+<p>@${r.username}</p>
+${persisted
+  ? `<div class="ok">이미 <code>THREADS_ACCOUNTS_JSON</code>을 쓰고 있습니다. 토큰을 새로 받으셨으면 아래 값으로 바꿔주세요.</div>`
+  : `<div class="warn"><b>한 번만 더 해주세요 — 안 하면 다음 배포 때 연동이 풀립니다.</b><br>
+     무료 서버는 재배포하면 저장된 파일이 지워집니다. 아래 값을 Render → Environment에
+     <code>THREADS_ACCOUNTS_JSON</code> 이름으로 넣어두세요.</div>`}
+<p style="margin-top:20px"><b>환경변수 값</b> (상자를 누르면 전체 선택됩니다)</p>
+<textarea readonly onclick="this.select()">${r.envJson.replace(/</g, "&lt;")}</textarea>
+<p style="color:#a33;font-size:13px">⚠️ 이 값에 계정 토큰이 들어 있습니다. 남에게 보여주지 마세요.</p>
+<p style="background:#f3f4f6;padding:12px 16px;border-radius:6px;font-size:14px">
+  ⚠️ <b>스레드 토큰은 60일이면 만료됩니다.</b> 페이스북 토큰과 달라요.<br>
+  만료가 일주일 안으로 다가오면 글을 올릴 때 자동으로 갱신합니다.
+  다만 <b>두 달 넘게 한 번도 안 올리면</b> 만료돼서 다시 연동하셔야 합니다.
+</p>
+<p>이 창은 닫으셔도 됩니다.</p>
+</body></html>`);
+  } catch (e) {
+    res.status(500).send(`<meta charset="utf-8"><h2>연동 실패</h2><p>${e.message}</p>`);
+  }
+});
+
+app.get("/api/threads/status", (req, res) => res.json(threadsAuth.status()));
+
+app.post("/api/threads/publish", async (req, res) => {
+  try {
+    res.json(await threadsPublish.publish(req.body || {}));
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
 // ── 여러 곳에 한 번에 올리기 ─────────────────────────────────
 //
 // ⚠️ 일곱 곳 중 다섯 곳만 자동입니다. 그리고 그 다섯도 앱 심사를 받아야 열립니다.
@@ -1182,6 +1249,30 @@ const multiPublish = require("./multiPublish");
 
 app.get("/api/publish/status", (req, res) => {
   res.json(multiPublish.status());
+});
+
+/**
+ * 만들어둔 영상 목록.
+ *
+ * ⚠️ 올릴 때마다 주소를 손으로 치게 하면 결국 안 씁니다.
+ * 방금 만든 게 맨 위에 오도록 최신순으로 줍니다.
+ */
+app.get("/api/renders", (req, res) => {
+  try {
+    const dir = require("./videoRenderer").RENDERS_DIR;
+    if (!fs.existsSync(dir)) return res.json({ files: [] });
+    const files = fs.readdirSync(dir)
+      .filter((f) => /\.(mp4|mov|webm)$/i.test(f))
+      .map((f) => {
+        const st = fs.statSync(path.join(dir, f));
+        return { name: f, path: `/renders/${f}`, sizeMb: +(st.size / 1048576).toFixed(1), mtime: st.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, 40);
+    res.json({ files });
+  } catch (e) {
+    res.status(500).json({ files: [], message: e.message });
+  }
 });
 
 app.post("/api/publish", async (req, res) => {
