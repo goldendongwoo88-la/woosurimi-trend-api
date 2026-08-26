@@ -21,6 +21,7 @@ const postAudit = require("./postAudit");
 const keywordInsight = require("./keywordInsight");
 const postImprove = require("./postImprove");
 const competitorScan = require("./competitorScan");
+const titleLab = require("./titleLab");
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
 const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
@@ -1164,6 +1165,28 @@ app.post("/api/post-improve", async (req, res) => {
     res.json(await postImprove.improve({ title, body, tags, keyword, images }));
   } catch (err) {
     res.status(400).json({ error: "improve_failed", message: err.message });
+  }
+});
+
+// 제목 후보 만들기.
+// 본문이 아무리 좋아도 검색 결과에서 안 눌리면 아무도 안 읽습니다. 그런데 글을 다 쓰고
+// 나면 제목에 쓸 기운이 안 남아서 대충 달고 올려버립니다. 그래서 따로 뒀습니다.
+app.post("/api/title-lab", async (req, res) => {
+  const { body, keyword, currentTitle, count, withCompetitors } = req.body || {};
+  if (!String(body || "").trim()) {
+    return res.status(400).json({ error: "empty", message: "본문이 없습니다." });
+  }
+  try {
+    // 키가 있고 요청하면 상위 글 패턴까지 반영합니다.
+    let patterns = null;
+    if (withCompetitors && keyword && competitorScan.hasKeys()) {
+      try {
+        patterns = (await competitorScan.scan(keyword, { count: 20 })).patterns;
+      } catch { /* 못 가져와도 제목은 만들 수 있습니다 */ }
+    }
+    res.json(await titleLab.suggest({ body, keyword, currentTitle, patterns, count }));
+  } catch (err) {
+    res.status(400).json({ error: "title_failed", message: err.message });
   }
 });
 

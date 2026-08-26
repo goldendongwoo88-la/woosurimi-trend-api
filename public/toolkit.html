@@ -113,6 +113,24 @@ th { font-size: 11px; color: var(--ink3); font-weight: 600; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.hi td { background: #fffbf0; }
 
+/* 제목 후보 */
+.tl { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.tcard {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;
+  padding: 12px 0; border-top: 1px solid var(--line);
+}
+.tcard:first-of-type { border-top: none; }
+.tcard .tt { font-size: 14px; color: var(--ink); line-height: 1.5; font-weight: 600; }
+.tcard .tw { font-size: 11.5px; color: var(--ink2); margin-top: 3px; }
+.tcard .tf { font-size: 11px; color: var(--ink3); margin-top: 1px; }
+.tcard .tmeta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
+.tstyle { font-size: 10px; padding: 1px 7px; border-radius: 8px; background: #eef2f7; color: #4a6285; }
+.tok { font-size: 10px; padding: 1px 7px; border-radius: 8px; background: #e8f6ec; color: #2f9e5e; }
+.tno { font-size: 10px; padding: 1px 7px; border-radius: 8px; background: #fdf0f0; color: #b05555; }
+.tuse { background: #24282e; color: #fff; border: none; border-radius: 7px; padding: 7px 12px;
+  font-size: 11.5px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.saved-note { font-size: 11px; color: var(--ink3); text-align: right; margin-top: 4px; height: 14px; }
+
 /* 상위 노출 글 */
 .comp { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .comp-advice { background: #f0f7ff; border: 1px solid #cfe0f5; border-radius: 9px; padding: 13px 15px; margin-bottom: 12px; }
@@ -226,6 +244,9 @@ details summary { cursor: pointer; font-size: 12px; color: var(--ink3); padding:
       </div>
 
       <button class="btn btn-main" id="pBtn">진단하기</button>
+      <button class="btn btn-main" id="tlBtn" style="background:#24282e">✏️ 제목 후보 만들기</button>
+      <div class="saved-note" id="savedNote"></div>
+      <div id="tlOut"></div>
       <div id="pOut"></div>
     </div>
   </section>
@@ -698,6 +719,137 @@ function bindFixed(d) {
   }));
 }
 
+/* ═══════════════════════════════════════════════════════════
+   제목 후보
+
+   본문이 아무리 좋아도 검색 결과에서 안 눌리면 아무도 안 읽습니다.
+   글을 다 쓰고 나면 제목에 쓸 기운이 안 남아서 대충 달게 되니까 따로 뒀습니다.
+   ═══════════════════════════════════════════════════════════ */
+async function makeTitles() {
+  const body = $("#pBody").value.trim();
+  if (!body) { $("#pBody").focus(); return; }
+  const btn = $("#tlBtn");
+  const out = $("#tlOut");
+  btn.disabled = true;
+  btn.textContent = "짓는 중… (30초쯤 걸려요)";
+
+  try {
+    const res = await fetch("/api/title-lab", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        body,
+        keyword: $("#pKw").value.trim(),
+        currentTitle: $("#pTitle").value.trim(),
+        count: 10,
+        withCompetitors: true,
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.message || "제목을 만들지 못했습니다.");
+    out.innerHTML = titlesHtml(d);
+    out.querySelectorAll("[data-use]").forEach((b) => (b.onclick = () => {
+      $("#pTitle").value = b.dataset.use;
+      $("#pTitle").scrollIntoView({ behavior: "smooth", block: "center" });
+      b.textContent = "넣었어요";
+      setTimeout(() => (b.textContent = "이걸로"), 1500);
+      saveDraft();
+    }));
+  } catch (e) {
+    out.innerHTML = `<div class="err" style="margin-top:12px">${esc(e.message)}</div>`;
+  }
+  btn.disabled = false;
+  btn.textContent = "✏️ 제목 후보 만들기";
+}
+
+function titlesHtml(d) {
+  return `
+    <div class="tl">
+      <b style="font-size:13.5px">제목 후보 ${d.titles.length}개</b>
+      <div style="font-size:11.5px;color:var(--ink3);margin-top:2px;margin-bottom:6px">
+        결이 다른 것들로 뽑았어요. 본문과 가장 잘 맞는 걸 고르세요.
+      </div>
+      ${d.titles.map((t) => `
+        <div class="tcard">
+          <span>
+            <div class="tt">${esc(t.text)}</div>
+            <div class="tw">${esc(t.why)}</div>
+            ${t.for ? `<div class="tf">${esc(t.for)}</div>` : ""}
+            <div class="tmeta">
+              ${t.style ? `<span class="tstyle">${esc(t.style)}</span>` : ""}
+              <span class="${t.lengthOk ? "tok" : "tno"}">${t.length}자</span>
+              ${t.hasKeyword
+                ? `<span class="tok">${t.keywordEarly ? "키워드 앞쪽" : "키워드 있음"}</span>`
+                : `<span class="tno">키워드 없음</span>`}
+              ${t.hasNumber ? `<span class="tstyle">숫자</span>` : ""}
+            </div>
+          </span>
+          <button class="tuse" data-use="${esc(t.text)}">이걸로</button>
+        </div>`).join("")}
+      <div class="note">${esc(d.note)}</div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   쓰던 글 자동 저장
+
+   ⚠️ 본문을 길게 붙여넣고 실수로 새로고침하면 통째로 날아갑니다. 그러면 다시는
+   이 도구를 안 씁니다. 브라우저에 자동으로 담아두고 다음에 열면 되살립니다.
+   서버로는 안 보냅니다 — 남의 글을 서버에 쌓아둘 이유가 없습니다.
+   ═══════════════════════════════════════════════════════════ */
+const DRAFT_KEY = "toolkit.draft";
+const FIELDS = ["pTitle", "pKw", "pBody", "pTags", "pImg"];
+
+let saveTimer = null;
+function saveDraft() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const d = {};
+    for (const id of FIELDS) d[id] = $("#" + id).value;
+    d.at = Date.now();
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      const n = $("#savedNote");
+      if (n && (d.pBody || "").trim()) {
+        n.textContent = "자동 저장됨";
+        setTimeout(() => { if (n.textContent === "자동 저장됨") n.textContent = ""; }, 2000);
+      }
+    } catch { /* 저장 공간이 꽉 찼으면 조용히 넘어갑니다 */ }
+  }, 700);
+}
+
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    if (!d || !(d.pBody || "").trim()) return;
+
+    // 너무 오래된 건 되살리지 않습니다. 남의 글이 남아 있으면 곤란합니다.
+    if (d.at && Date.now() - d.at > 14 * 24 * 3600 * 1000) {
+      localStorage.removeItem(DRAFT_KEY);
+      return;
+    }
+    for (const id of FIELDS) if (d[id] != null) $("#" + id).value = d[id];
+
+    const when = d.at ? new Date(d.at) : null;
+    $("#savedNote").innerHTML =
+      `쓰시던 글을 되살렸어요${when ? ` (${when.getMonth() + 1}/${when.getDate()} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")})` : ""} ·
+       <button id="clearDraft" style="background:none;border:none;color:#98a0ac;cursor:pointer;font-size:11px;text-decoration:underline;padding:0">지우기</button>`;
+    const cd = $("#clearDraft");
+    if (cd) cd.onclick = () => {
+      localStorage.removeItem(DRAFT_KEY);
+      for (const id of FIELDS) $("#" + id).value = "";
+      $("#savedNote").textContent = "";
+      $("#tlOut").innerHTML = "";
+      $("#pOut").innerHTML = "";
+    };
+  } catch { /* 저장된 게 깨졌으면 그냥 넘어갑니다 */ }
+}
+
+FIELDS.forEach((id) => $("#" + id).addEventListener("input", saveDraft));
+restoreDraft();
+
+$("#tlBtn").onclick = makeTitles;
 $("#pBtn").onclick = auditPost;
 
 /* 주소에 ?tab=post 가 붙어 있으면 글 진단부터 엽니다. */
