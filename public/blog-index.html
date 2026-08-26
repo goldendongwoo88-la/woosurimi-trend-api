@@ -141,6 +141,16 @@ function render(d) {
       <p class="muted" style="margin:10px 0 0">${esc(d.disclaimer)}</p>
     </div>
 
+    ${d.risk && d.risk.level !== "none" ? `
+      <div class="card" style="border-color:${d.risk.level === "high" ? "var(--danger)" : "var(--warn)"}">
+        <h2 style="margin-top:0;color:${d.risk.level === "high" ? "var(--danger)" : "var(--warn)"}">
+          위험 신호 ${d.risk.signals.length}건
+          ${d.risk.level === "high" ? "— 겹쳐서 나타납니다" : ""}
+        </h2>
+        ${d.risk.signals.map((s) => `<div class="msg ${d.risk.level === "high" ? "err" : "warn"}">${esc(s.text)}</div>`).join("")}
+        <p class="muted" style="margin:8px 0 0">${esc(d.risk.note)}</p>
+      </div>` : ""}
+
     ${d.advice.map((a) => `<div class="msg ${a.level === "danger" ? "err" : a.level === "warn" ? "warn" : "ok"}">${esc(a.text)}</div>`).join("")}
 
     <div class="two">

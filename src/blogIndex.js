@@ -176,6 +176,49 @@ async function diagnose(blogId, { sampleSize = 5 } = {}) {
   const score = parts.reduce((a, b) => a + b.score, 0);
   const grade = gradeFor(score);
 
+  // ── 저품질 위험 ─────────────────────────────────────────
+  //
+  // ⚠️ '저품질'은 네이버가 쓰는 말이 아닙니다. 블로거들 사이에서 쓰는 말이고,
+  // 네이버가 그런 딱지를 붙인다고 공식적으로 밝힌 적도 없습니다.
+  // 그러니 "저품질입니다"라고 단정하면 우리가 없는 판정을 지어내는 셈입니다.
+  //
+  // 대신 **실제로 관찰되는 것**만 말합니다:
+  //   - 발행한 글이 제목으로 검색해도 안 나온다 (누락)
+  //   - 글은 꾸준히 올리는데 방문자가 준다
+  // 이 둘이 겹치면 블로거들이 '저품질'이라 부르는 상태와 겉모습이 같습니다.
+  // 그래서 "위험 신호가 몇 개 보인다"까지만 말하고 판정은 하지 않습니다.
+  const signals = [];
+  const missRate = judged.length ? missing.length / judged.length : 0;
+
+  if (judged.length >= 3 && missRate >= 0.5)
+    signals.push({
+      key: "누락",
+      text: `검사한 글 ${judged.length}건 중 ${missing.length}건이 제목으로 검색해도 나오지 않습니다.`,
+    });
+  else if (missing.length)
+    signals.push({
+      key: "누락",
+      text: `${missing.length}건이 제목으로 검색해도 나오지 않습니다.`,
+    });
+
+  // 방문자가 사흘 내리 줄었는가 — 하루 등락은 흔해서 하루로는 판단하지 않습니다.
+  if (settled.length >= 4) {
+    let down = 0;
+    for (let i = 1; i < settled.length; i++) if (settled[i].count < settled[i - 1].count) down++;
+    if (down >= settled.length - 1)
+      signals.push({ key: "방문자", text: `최근 ${settled.length}일 동안 방문자가 계속 줄고 있습니다.` });
+  }
+
+  // 글은 많이 쓰는데 사람이 안 온다
+  if (postsPerWeek >= 5 && avgVisitors < 50 && list.total > 100)
+    signals.push({
+      key: "효율",
+      text: `주 ${postsPerWeek}회씩 쓰는데 일 방문자가 ${avgVisitors}명입니다. 글이 노출되지 않고 있을 가능성이 큽니다.`,
+    });
+
+  const risk =
+    signals.length >= 2 ? "high" : signals.length === 1 ? "watch" : "none";
+
   // ── 할 일 ───────────────────────────────────────────────
   const advice = [];
   if (missing.length)
@@ -214,6 +257,14 @@ async function diagnose(blogId, { sampleSize = 5 } = {}) {
     },
     // 추정 — 우리 배점표로 매긴 값
     estimated: { score, grade, parts },
+    // 위험 신호 — 판정이 아니라 관찰입니다
+    risk: {
+      level: risk,
+      signals,
+      note:
+        "'저품질'은 네이버가 쓰는 말이 아니고, 네이버가 그런 딱지를 붙인다고 밝힌 적도 없습니다. " +
+        "여기서는 실제로 관찰되는 것만 적었습니다.",
+    },
     advice,
     disclaimer:
       "네이버는 블로그 지수를 공개하지 않습니다. 등급은 위 실측값을 우수리미 배점표로 환산한 추정치이며, 네이버 공식 판정이 아닙니다.",
