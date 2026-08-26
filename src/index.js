@@ -1138,6 +1138,42 @@ app.post("/api/naver-blog/prepare", async (req, res) => {
 // 그래서 여기서는 확실히 아는 것만 봅니다. 글자 수, 소제목 수, 키워드 위치,
 // 어미 반복, 광고법에 걸릴 표현 — 전부 계산으로 확인되고 고치면 실제로 나아지는
 // 것들입니다. 추정한 숫자로 겁주는 대신 고칠 수 있는 것을 짚어줍니다.
+// ── 긴 영상에서 쇼츠 뽑기 ────────────────────────────────────
+//
+// ⚠️ 내 영상에만 쓰는 도구입니다. 남의 영상을 잘라 올리면 유튜브가
+// 재사용 콘텐츠로 보고 수익 창출을 거부하고, 신고가 쌓이면 채널이 사라집니다.
+//
+// ⚠️ 오래 걸립니다(내려받기 + 자르기). 그래서 작업을 접수하고 나중에 확인하게 합니다.
+// 요청을 붙잡고 있으면 프록시가 먼저 끊어버립니다.
+const longToShorts = require("./longToShorts");
+const l2sJobs = new Map();
+
+app.post("/api/long-to-shorts", (req, res) => {
+  const { url, count, topic } = req.body || {};
+  if (!/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/.test(String(url || ""))) {
+    return res.status(400).json({ message: "유튜브 주소를 넣어주세요." });
+  }
+  const jobId = crypto.randomUUID().slice(0, 8);
+  l2sJobs.set(jobId, { state: "working", startedAt: Date.now() });
+
+  // ⚠️ 오래된 작업 기록은 지웁니다. 안 그러면 메모리에 계속 쌓입니다.
+  for (const [k, v] of l2sJobs) {
+    if (Date.now() - v.startedAt > 2 * 3600 * 1000) l2sJobs.delete(k);
+  }
+
+  longToShorts.fromYoutube(url, { count: Number(count) || 4, topic: topic || "" })
+    .then((r) => l2sJobs.set(jobId, { state: "done", startedAt: Date.now(), result: r }))
+    .catch((e) => l2sJobs.set(jobId, { state: "failed", startedAt: Date.now(), message: e.message }));
+
+  res.json({ jobId, message: "만들고 있습니다. 몇 분 걸립니다." });
+});
+
+app.get("/api/long-to-shorts/:jobId", (req, res) => {
+  const j = l2sJobs.get(req.params.jobId);
+  if (!j) return res.status(404).json({ message: "그 작업을 찾을 수 없습니다." });
+  res.json({ ...j, elapsed: Math.round((Date.now() - j.startedAt) / 1000) });
+});
+
 // ── 여러 곳에 한 번에 올리기 ─────────────────────────────────
 //
 // ⚠️ 일곱 곳 중 다섯 곳만 자동입니다. 그리고 그 다섯도 앱 심사를 받아야 열립니다.
