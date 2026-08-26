@@ -181,9 +181,29 @@ function publicUser(u) {
   };
 }
 
-/** 기간이 지난 유료 플랜은 자동으로 무료로 떨어집니다. */
+/**
+ * 기간이 지난 유료 플랜은 자동으로 무료로 떨어집니다.
+ *
+ * ⚠️ 주인 계정은 예외입니다.
+ * 사장님이 사장님한테 이용권 코드를 발급해서 등록하는 건 말이 안 됩니다.
+ * 그런데 지금 구조가 정확히 그랬습니다 — 관리자 비밀번호로 코드를 뽑아서
+ * 본인이 등록해야 AI 기능이 열렸습니다. 게다가 그 비밀번호가 서버에 없으면
+ * 사장님조차 자기가 만든 기능을 못 씁니다.
+ *
+ * OWNER_EMAIL에 적힌 계정은 항상 최상위 플랜으로 봅니다.
+ * 쉼표로 여러 개 적을 수 있습니다(사장님·사모님).
+ */
+function isOwner(email) {
+  const list = String(process.env.OWNER_EMAIL || "")
+    .split(",")
+    .map((s) => normEmail(s))
+    .filter(Boolean);
+  return list.includes(normEmail(email));
+}
+
 function effectivePlan(u) {
   if (!u) return "free";
+  if (isOwner(u.email)) return "biz";
   if (u.plan && u.plan !== "free") {
     if (!u.planUntil) return u.plan;
     if (new Date(u.planUntil).getTime() > Date.now()) return u.plan;
