@@ -11,6 +11,7 @@ const usage = require("./usage");
 const blogIndex = require("./blogIndex");
 const rankTracker = require("./rankTracker");
 const naverData = require("./naverBlogData");
+const competitorCompare = require("./competitorCompare");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -195,6 +196,24 @@ module.exports = function attachSaas(app) {
       res.json({ ...r, keyword: kw, usage: req.usage });
     } catch (e) {
       res.status(502).json({ error: "검색에 실패했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  // ── 경쟁 글 비교 ───────────────────────────────────────
+  // ⚠️ 글을 5편씩 받아오느라 6초쯤 걸립니다. 무료는 하루 1번만 열어둡니다.
+  // 한 번 써보면 값어치를 알게 되고, 그게 결제 이유가 됩니다.
+  app.post("/api/compare", usage.gate("compare"), async (req, res) => {
+    const { keyword, myUrl } = req.body || {};
+    const planId = req.user ? req.user.plan : "free";
+    // 무료는 3편, 유료는 5~8편까지 봅니다.
+    const topN = planId === "free" ? 3 : planId === "light" ? 5 : 8;
+    try {
+      const r = await competitorCompare.compare({ keyword, myUrl, topN });
+      if (!r.ok) return res.status(r.blocked ? 503 : 400).json({ error: r.why });
+      res.json({ ...r, usage: req.usage, plan: planId, topN });
+    } catch (e) {
+      console.error("[compare]", e.message);
+      res.status(502).json({ error: "비교에 실패했습니다. 잠시 뒤에 다시 해주세요." });
     }
   });
 

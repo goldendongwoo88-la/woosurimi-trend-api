@@ -54,26 +54,105 @@ function extractTags(html) {
   return { tags: [], how: "none", certain: false };
 }
 
-/** 본문 속 이미지 개수 — pageExtractor가 이미 뽑아주지만 한 번 더 세어 맞춰봅니다. */
+/**
+ * 본문 속 사진 개수.
+ *
+ * ⚠️ 원래 `se-image`가 들어간 클래스를 전부 셌는데, 사진 한 장에
+ * `se-component se-image`(바깥)와 `se-module-image`(안쪽)가 같이 붙습니다.
+ * 그래서 **개수가 정확히 두 배로 나오고 있었습니다.**
+ * 실측: 사진 30장인 글이 64장으로 보고됐습니다.
+ *
+ * 이건 그냥 숫자가 틀린 문제가 아닙니다. 진단에서 "사진이 충분합니다"라고
+ * 말해주던 근거가 통째로 틀렸다는 뜻이고, 경쟁 글 비교도 같이 어긋납니다.
+ *
+ * `se-image-resource`는 실제 <img> 요소에만 붙습니다. 여러 장 묶음(imageStrip)
+ * 안의 사진에도 붙어서 한 번에 다 세어집니다. 스티커는 se-sticker-image라 안 섞입니다.
+ */
 function countImages(html) {
-  // 네이버는 본문 사진을 se-image 계열 클래스로 감쌉니다.
-  const se = (html.match(/class="[^"]*se-image[^"]*"/gi) || []).length;
-  if (se) return se;
+  const resource = (html.match(/se-image-resource/gi) || []).length;
+  if (resource) return resource;
+  // 옛 글이나 구조가 다른 경우 — se-component 단위로 셉니다.
+  const comp = (html.match(/class="se-component se-image(?:Strip)?[^"]*"/gi) || []).length;
+  if (comp) return comp;
   // 옛 에디터
-  const old = (html.match(/<img[^>]+(?:blogfiles|postfiles|pstatic)[^>]*>/gi) || []).length;
-  return old;
+  return (html.match(/<img[^>]+(?:blogfiles|postfiles|pstatic)[^>]*>/gi) || []).length;
+}
+
+/**
+ * 스마트에디터가 쓴 구성요소를 세어 글의 짜임새를 봅니다.
+ * 본문 HTML을 제대로 잘라낼 수 있게 되면서 비로소 가능해진 것들입니다.
+ */
+function analyzeStructure(bodyHtml) {
+  const h = bodyHtml || "";
+  if (!h) return null;
+  const count = (re) => (h.match(re) || []).length;
+  return {
+    // 인용구를 소제목처럼 쓰는 글이 많습니다. 네이버 블로그의 사실상 소제목입니다.
+    subheads: count(/class="se-component se-quotation/gi),
+    images: countImages(h),
+    imageStrips: count(/class="se-component se-imageStrip/gi),
+    stickers: count(/se-sticker-image/gi),
+    // 맛집·장소 글에서 지도가 있고 없고는 차이가 큽니다.
+    hasMap: /se-component se-placesMap|se-map/i.test(h),
+    linkCards: count(/class="se-component se-oglink/gi),
+    dividers: count(/class="se-component se-horizontalLine/gi),
+    videos: count(/class="se-component se-video/gi),
+    tables: count(/class="se-component se-table/gi),
+    codeBlocks: count(/class="se-component se-code/gi),
+  };
+}
+
+/**
+ * 여는 div의 위치를 받아, **짝이 맞는 닫는 div까지** 잘라냅니다.
+ *
+ * ⚠️ 이 함수를 왜 만들었는지 남깁니다.
+ * 원래는 정규식 하나로 `<div class="se-main-container">...</div>` 를 잡았는데,
+ * 정규식에는 괄호 짝을 세는 기능이 없습니다. 게을리 매칭(non-greedy)하면
+ * **맨 처음 나오는 </div>** 에서 끊기고, 욕심내면(greedy) 페이지 끝까지 먹습니다.
+ *
+ * 실제로 본문 글자는 1,813자인데 잘라낸 HTML은 1,144자밖에 안 됐습니다.
+ * 그래서 소제목이 하나도 안 세어졌고(항상 null), 경쟁 글 비교에서
+ * 소제목 항목이 통째로 죽어 있었습니다.
+ *
+ * div를 세면서 훑으면 정확합니다. HTML 전체를 파싱하는 라이브러리를 새로 깔 필요도 없습니다.
+ */
+function sliceBalancedDiv(html, startIndex) {
+  const OPEN = /<div\b/gi;
+  const CLOSE = /<\/div\s*>/gi;
+  let depth = 0;
+  let i = startIndex;
+  const end = html.length;
+
+  while (i < end) {
+    OPEN.lastIndex = i;
+    CLOSE.lastIndex = i;
+    const o = OPEN.exec(html);
+    const c = CLOSE.exec(html);
+
+    if (!c) break;                       // 닫는 태그가 더 없으면 포기
+    if (o && o.index < c.index) {
+      depth++;
+      i = o.index + 4;
+    } else {
+      depth--;
+      i = c.index + c[0].length;
+      if (depth === 0) return html.slice(startIndex, i);
+    }
+    // 아주 긴 페이지에서 무한정 돌지 않도록 안전장치
+    if (i - startIndex > 400000) break;
+  }
+  // 짝을 못 찾으면 넉넉히 잘라서라도 돌려줍니다. 없는 것보단 낫습니다.
+  return html.slice(startIndex, Math.min(end, startIndex + 200000));
 }
 
 /** 페이지에서 본문 HTML만 잘라냅니다. 소제목을 세려면 태그가 남아 있어야 합니다. */
 function extractBodyHtml(html) {
-  // 새 에디터
-  let m = html.match(/<div[^>]+class="[^"]*se-main-container[^"]*"[\s\S]*?<\/div>\s*(?=<div[^>]+class="[^"]*(?:post_?tag|area_sympathy|_postFooter))/i);
-  if (m) return m[0];
-  m = html.match(/<div[^>]+class="[^"]*se-main-container[^"]*"[\s\S]{200,200000}?<\/div>/i);
-  if (m) return m[0];
+  // 새 에디터 — se-main-container
+  let m = html.match(/<div[^>]+class="[^"]*se-main-container[^"]*"/i);
+  if (m) return sliceBalancedDiv(html, m.index);
   // 옛 에디터
-  m = html.match(/<div[^>]+id="post(?:ViewArea|-view)[^"]*"[\s\S]{200,200000}?<\/div>/i);
-  if (m) return m[0];
+  m = html.match(/<div[^>]+id="post(?:ViewArea|-view)[^"]*"/i);
+  if (m) return sliceBalancedDiv(html, m.index);
   return null;
 }
 
@@ -159,4 +238,4 @@ function toMobileNaver(url) {
   }
 }
 
-module.exports = { fetchPost, extractTags, extractBodyHtml, countImages, toMobileNaver };
+module.exports = { fetchPost, extractTags, extractBodyHtml, countImages, analyzeStructure, toMobileNaver };

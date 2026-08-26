@@ -36,6 +36,9 @@ const PLANS = {
       keyword: { perMinute: 1 },      // 키워드 분석 (판다랭크와 같은 방식)
       rankKeywords: 3,                // 순위 추적 등록 키워드 수
       rankPosts: 1,                   // 순위 추적 등록 글 수
+      // 경쟁 글 비교 — 글을 5편씩 받아오느라 무겁습니다. 따로 셉니다.
+      // 무료는 하루 1번. 한 번 써보면 값어치를 알게 되고, 그게 결제 이유가 됩니다.
+      compare: { perDay: 1 },
       aiCredits: { perDay: 0 },       // AI 생성 — 무료는 없음
     },
     features: { ads: true, alert: false, academy: false, bulk: false },
@@ -52,6 +55,7 @@ const PLANS = {
       keyword: { perMinute: 10 },
       rankKeywords: 20,
       rankPosts: 10,
+      compare: { perDay: 5 },
       aiCredits: { perDay: 10 },
     },
     features: { ads: false, alert: true, academy: true, bulk: false },
@@ -69,6 +73,7 @@ const PLANS = {
       keyword: { perMinute: 30 },
       rankKeywords: 100,
       rankPosts: 50,
+      compare: { perDay: 20 },
       aiCredits: { perDay: 40 },
     },
     features: { ads: false, alert: true, academy: true, bulk: true },
@@ -85,6 +90,7 @@ const PLANS = {
       keyword: { perMinute: 60 },
       rankKeywords: 500,
       rankPosts: 200,
+      compare: { perDay: 80 },
       aiCredits: { perDay: 120 },
     },
     features: { ads: false, alert: true, academy: true, bulk: true },
@@ -125,6 +131,7 @@ function comparison() {
     { key: "keyword", label: "키워드 분석", fmt: (l) => `분당 ${l.keyword.perMinute}회` },
     { key: "rankKeywords", label: "순위 추적 키워드", fmt: (l) => `${l.rankKeywords}개` },
     { key: "rankPosts", label: "순위 추적 글", fmt: (l) => `${l.rankPosts}개` },
+    { key: "compare", label: "경쟁 글 비교", fmt: (l) => `일 ${l.compare.perDay}회` },
     { key: "aiCredits", label: "AI 크레딧", fmt: (l) => (l.aiCredits.perDay ? `일 ${l.aiCredits.perDay}` : "없음") },
   ];
   return {
