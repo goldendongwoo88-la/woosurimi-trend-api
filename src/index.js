@@ -1707,6 +1707,18 @@ cron.schedule(REFRESH_CRON, refresh);
 warmBlogTopicsCache();
 cron.schedule(`*/${Math.max(1, Math.round(BLOG_TOPICS_TTL_MS / 60000))} * * * *`, warmBlogTopicsCache);
 
+// 공유 링크 정리 — 60일 지난 것은 지웁니다.
+// 무료 서버는 디스크가 작습니다. 안 지우면 계속 쌓입니다.
+const sharePage = require("./sharePage");
+cron.schedule(
+  "30 4 * * *",
+  () => {
+    const n = sharePage.prune(60);
+    if (n) console.log(`[공유링크] 오래된 ${n}건을 지웠습니다.`);
+  },
+  { timezone: "Asia/Seoul" }
+);
+
 // 순위 추적 — 매일 새벽 4시(한국)에 등록된 키워드 순위를 다시 잽니다.
 //
 // ⚠️ 새벽에 도는 이유가 둘입니다.

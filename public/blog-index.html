@@ -126,9 +126,11 @@ function render(d) {
             </div>`).join("")}
         </div>
       </div>
-      <p class="muted" style="margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)">
-        ${esc(d.disclaimer)}
-      </p>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);flex-wrap:wrap">
+        <button class="ghost small" id="shareBtn" data-blog="${esc(d.blogId)}">결과 링크 만들기</button>
+        <span class="muted" id="shareOut" style="flex:1;min-width:180px"></span>
+      </div>
+      <p class="muted" style="margin:10px 0 0">${esc(d.disclaimer)}</p>
     </div>
 
     ${d.advice.map((a) => `<div class="msg ${a.level === "danger" ? "err" : a.level === "warn" ? "warn" : "ok"}">${esc(a.text)}</div>`).join("")}
@@ -179,6 +181,36 @@ function render(d) {
   `;
   window.scrollTo({ top: 220, behavior: "smooth" });
 }
+
+// ── 결과 링크 만들기 ────────────────────────────────────
+// 진단 결과를 남에게 보여줄 수 있는 짧은 주소를 만듭니다.
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#shareBtn");
+  if (!btn) return;
+  btn.disabled = true;
+  const out = $("#shareOut");
+  out.textContent = "만드는 중…";
+  try {
+    const res = await fetch("/api/share", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ blogId: btn.dataset.blog }),
+    });
+    const d = await res.json();
+    if (!res.ok) { out.textContent = d.error; return; }
+    const full = location.origin + d.url;
+    // 클립보드가 막힌 브라우저도 있어서, 복사가 안 되면 주소를 그냥 보여줍니다.
+    try {
+      await navigator.clipboard.writeText(full);
+      out.innerHTML = `복사됐습니다 · <a href="${d.url}" target="_blank" rel="noopener">${esc(full)}</a>`;
+    } catch {
+      out.innerHTML = `<a href="${d.url}" target="_blank" rel="noopener">${esc(full)}</a>`;
+    }
+  } catch {
+    out.textContent = "실패했습니다. 잠시 뒤에 다시 해주세요.";
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ── 공개 누락 현황 ──────────────────────────────────────
 async function loadDrops() {

@@ -13,6 +13,7 @@ const rankTracker = require("./rankTracker");
 const naverData = require("./naverBlogData");
 const competitorCompare = require("./competitorCompare");
 const celebFinder = require("./celebFinder");
+const sharePage = require("./sharePage");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -198,6 +199,50 @@ module.exports = function attachSaas(app) {
     } catch (e) {
       res.status(502).json({ error: "검색에 실패했습니다. 잠시 뒤에 다시 해주세요." });
     }
+  });
+
+  // ── 진단 결과 공유 ─────────────────────────────────────
+  // ⚠️ 지금 이 사업의 병목은 기능이 아니라 **아무도 사이트를 모른다**는 것입니다.
+  // 블로거는 지수가 잘 나오면 자랑하고 못 나오면 하소연합니다. 둘 다 남에게 보여줍니다.
+  // 그때 보여줄 주소를 만들어 줍니다.
+  app.post("/api/share", async (req, res) => {
+    const id = naverData.parseBlogId((req.body || {}).blogId);
+    if (!id) return res.status(400).json({ error: "블로그 아이디를 확인해 주세요." });
+    try {
+      // 공유용은 가볍게 — 노출 검사는 3건만 합니다. 안 그러면 공유 버튼 누를 때마다 10초씩 걸립니다.
+      const r = await blogIndex.diagnose(id, { sampleSize: 3 });
+      if (!r.ok) return res.status(404).json({ error: r.why });
+      const s = sharePage.create(r, { owner: req.user ? req.user.email : null });
+      if (!s.ok) return res.status(400).json({ error: s.why });
+      res.json({ ok: true, url: s.url, id: s.id });
+    } catch (e) {
+      res.status(502).json({ error: "공유 링크를 만들지 못했습니다." });
+    }
+  });
+
+  // 서버에서 HTML을 완성해 내려보냅니다. 자바스크립트로 그리면 카카오톡·네이버가
+  // 빈 페이지로 봐서 미리보기에 아무것도 안 뜹니다. 공유가 목적인데 그러면 안 됩니다.
+  app.get("/d/:id", (req, res) => {
+    const item = sharePage.get(req.params.id);
+    if (!item) {
+      return res
+        .status(404)
+        .type("html")
+        .send(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<title>없는 링크입니다</title><link rel="stylesheet" href="/assets/ws.css"></head><body>
+<div class="wrap" style="max-width:420px;text-align:center;padding-top:80px">
+<h1>없는 링크입니다</h1><p class="lede">지워졌거나 주소가 잘못됐습니다.</p>
+<a href="/blog-index.html"><button>내 블로그 진단해보기</button></a></div></body></html>`);
+    }
+    item.views = (item.views || 0) + 1;
+    const baseUrl = process.env.PUBLIC_BASE_URL || "";
+    res.type("html").send(sharePage.render(item, { baseUrl }));
+  });
+
+  app.delete("/api/share/:id", (req, res) => {
+    const r = sharePage.remove(req.params.id, req.user ? req.user.email : null);
+    if (!r.ok) return res.status(400).json({ error: r.why });
+    res.json({ ok: true });
   });
 
   // ── 경쟁 글 비교 ───────────────────────────────────────
