@@ -15,6 +15,7 @@ const competitorCompare = require("./competitorCompare");
 const celebFinder = require("./celebFinder");
 const sharePage = require("./sharePage");
 const homefeedAudit = require("./homefeedAudit");
+const titleRewrite = require("./titleRewrite");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -63,7 +64,8 @@ function requireAdmin(req, res, next) {
 }
 
 function requireLogin(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: "로그인이 필요합니다.", login: "/login.html" });
+  // /login.html은 회원 기능 이전의 옛 화면이라 로그인이 안 됩니다. /join.html로 보냅니다.
+  if (!req.user) return res.status(401).json({ error: "로그인이 필요합니다.", login: "/join.html" });
   next();
 }
 
@@ -292,6 +294,23 @@ module.exports = function attachSaas(app) {
     } catch (e) {
       console.error("[homefeed]", e.message);
       res.status(502).json({ error: "진단에 실패했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  // 제목 다시 쓰기 — 진단이 "말줄임표가 3%뿐"이라고만 하면 아무도 안 고칩니다.
+  // 진단과 고침 사이를 잇습니다. AI를 쓰므로 크레딧을 씁니다.
+  app.post("/api/title-rewrite", usage.creditGate("title", accounts), async (req, res) => {
+    const { title, body, count } = req.body || {};
+    try {
+      const r = await titleRewrite.rewrite({
+        title,
+        body,
+        count: Math.min(6, Math.max(3, Number(count) || 5)),
+      });
+      if (!r.ok) return res.status(400).json({ error: r.why });
+      res.json({ ...r, usage: req.usage });
+    } catch (e) {
+      res.status(502).json({ error: "제목을 만들지 못했습니다. 잠시 뒤에 다시 해주세요." });
     }
   });
 

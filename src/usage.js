@@ -186,7 +186,9 @@ function creditGate(action, accounts) {
   const cost = CREDIT_COST[action] || 1;
   return (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({ error: "로그인이 필요합니다.", login: "/login.html" });
+      // ⚠️ /login.html은 새 회원 기능이 생기기 전의 옛 화면입니다.
+      // 거기로 보내면 로그인해도 아무 일이 안 일어납니다. /join.html이 맞습니다.
+      return res.status(401).json({ error: "로그인이 필요합니다.", login: "/join.html" });
     }
     const limit = getPlan(req.user.plan).limits.aiCredits;
     const perDay = limit ? limit.perDay : 0;

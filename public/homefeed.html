@@ -55,6 +55,23 @@
   </div>
 
   <div id="out"></div>
+
+  <h2>제목 고쳐 쓰기</h2>
+  <p class="lede" style="margin-top:-8px">
+    "말줄임표가 3%뿐입니다"라고만 하면 뭘 어떻게 고치라는 건지 막막합니다. 여기서 바로 고칩니다.
+  </p>
+  <div class="card">
+    <label for="tTitle">지금 제목</label>
+    <input id="tTitle" type="text" placeholder="예: 40대에도 어울리는 여자 짧은 숏컷" />
+    <div style="height:12px"></div>
+    <label for="tBody">본문 <span class="muted">(넣으면 지어내는 걸 막을 수 있습니다)</span></label>
+    <textarea id="tBody" rows="4" placeholder="본문을 붙여넣으면 그 안에 있는 사실로만 제목을 만듭니다."
+      style="width:100%;padding:12px 14px;font-size:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-family:inherit;resize:vertical"></textarea>
+    <div style="height:14px"></div>
+    <button id="tGo">제목 5개 뽑기</button>
+    <span class="muted" id="tQuota" style="margin-left:10px"></span>
+    <div id="tOut"></div>
+  </div>
 </div>
 
 <script>
@@ -174,6 +191,63 @@ function renderVersus(d) {
   `;
   window.scrollTo({ top: 200, behavior: "smooth" });
 }
+
+// ── 제목 고쳐 쓰기 ──────────────────────────────────────
+const DEV_LABEL = { quoteStart: "따옴표", ellipsis: "말줄임표", curiosity: "궁금증", number: "숫자" };
+const devTags = (d) =>
+  Object.entries(DEV_LABEL).filter(([k]) => d[k]).map(([, v]) => `<span class="tag ok">${v}</span>`).join(" ") || `<span class="tag skip">장치 없음</span>`;
+
+$("#tGo").addEventListener("click", async () => {
+  const title = $("#tTitle").value.trim();
+  if (!title) return;
+  $("#tGo").disabled = true;
+  $("#tOut").innerHTML = `<div class="msg">만드는 중입니다… 10초쯤 걸립니다.</div>`;
+  try {
+    const res = await fetch("/api/title-rewrite", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title, body: $("#tBody").value.trim(), count: 5 }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      $("#tOut").innerHTML = `<div class="msg err">${esc(d.error)}
+        ${d.upgrade ? `<a href="${d.upgrade}">요금제 보기</a>` : ""}
+        ${d.login ? `<a href="${d.login}?next=/homefeed.html">로그인</a>` : ""}</div>`;
+      return;
+    }
+    $("#tOut").innerHTML = `
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+        <div class="muted">지금 제목 — 장치 ${d.original.score}/4</div>
+        <div style="margin:4px 0 14px">${esc(d.original.text)} ${devTags(d.original.devices)}</div>
+        ${d.weak ? `<div class="msg warn">고친 것들이 지금 제목보다 나아지지 않았습니다. 본문을 넣고 다시 해보세요.</div>` : ""}
+        ${d.titles.map((x, i) => `
+          <div style="padding:11px 0;border-bottom:1px solid var(--line)">
+            <div style="display:flex;gap:8px;align-items:flex-start">
+              <b style="color:var(--brand);flex:none">${x.score}/4</b>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;cursor:pointer" data-copy="${esc(x.text)}" title="눌러서 복사">${esc(x.text)}</div>
+                <div class="muted" style="margin-top:3px">${devTags(x.devices)} ${esc(x.why)}</div>
+                ${x.invented.length ? `<div class="msg err" style="margin:6px 0 0;padding:7px 10px">
+                  ⚠ 원문에 없던 말: <b>${esc(x.invented.join(", "))}</b> — 본문에 실제로 있는 내용인지 확인하고 쓰세요.</div>` : ""}
+              </div>
+            </div>
+          </div>`).join("")}
+        <div class="msg" style="margin-top:12px">${esc(d.note)}</div>
+      </div>`;
+  } catch {
+    $("#tOut").innerHTML = `<div class="msg err">연결에 실패했습니다.</div>`;
+  } finally { $("#tGo").disabled = false; loadMe(); }
+});
+
+// 제목을 눌러 복사
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-copy]");
+  if (!el) return;
+  navigator.clipboard.writeText(el.dataset.copy).then(() => {
+    const old = el.textContent;
+    el.textContent = "복사됐습니다";
+    setTimeout(() => (el.textContent = old), 900);
+  }).catch(() => {});
+});
 
 loadMe();
 </script>
