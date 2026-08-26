@@ -80,6 +80,7 @@
     </div>
     <div class="ws-tb-actions">
       <button data-act="hometitle" class="ws-tb-primary" title="지금 제목을 홈판에서 눈이 멈추도록 고칩니다">홈판 제목</button>
+      <button data-act="homebody" class="ws-tb-primary" title="본문을 소제목 6개로 나누고 사진 자리를 잡습니다">홈판 본문</button>
       <button data-act="audit" title="문제가 될 만한 표현을 찾습니다">표현 검사</button>
       <button data-act="keyword" title="제목의 키워드 경쟁 상황을 봅니다">키워드</button>
       <button data-act="table" title="표를 넣습니다">표</button>
@@ -303,6 +304,60 @@
     panel.hidden = true;
   }
 
+  // ── 홈판 본문으로 보완 ────────────────────────────────
+  //
+  // ⚠️ 제목보다 훨씬 조심스러운 기능입니다. 사장님이 직접 쓴 글에 손을 댑니다.
+  // 그래서 **에디터를 자동으로 갈아치우지 않습니다.** 다듬은 글을 보여주고,
+  // 사장님이 읽어본 뒤에 직접 복사해 가시게 합니다.
+  // 한 번 덮어쓰면 되돌릴 수가 없어서, 편한 것보다 안전한 쪽을 골랐습니다.
+  let lastBody = null;
+
+  async function homeBody() {
+    const body = getBodyText();
+    if (body.length < 200) {
+      return showPanel(`<h4>홈판 본문</h4><div class="ws-row warn">
+        본문이 ${body.length}자입니다. 200자 이상 쓰신 뒤에 눌러주세요.</div>`);
+    }
+    showPanel(`<h4>홈판 본문</h4><p>${body.length.toLocaleString()}자를 여섯 토막으로 나누는 중입니다…
+      30초에서 1분쯤 걸립니다. 창을 닫지 마세요.</p>`);
+    try {
+      const d = await server("/api/body-rewrite", { body, title: getTitle() });
+      lastBody = d.body;
+      const keep = Math.round((d.after.chars / d.before.chars) * 100);
+      showPanel(`
+        <h4>홈판 본문</h4>
+        <div class="ws-stats">
+          <span>소제목 <b>${d.before.subheads}</b> → <b class="ws-up">${d.after.subheads}</b>개</span>
+          <span>사진자리 <b class="ws-up">${d.after.photoSlots}</b>곳</span>
+          <span>분량 <b>${keep}%</b> 유지</span>
+        </div>
+        ${d.invented.length ? `<div class="ws-row bad">
+          ⚠ 원문에 없던 말이 섞였습니다: <b>${esc(d.invented.join(", "))}</b><br>
+          붙여넣기 전에 그 부분을 꼭 확인하세요.</div>` : ""}
+        <div class="ws-subheads">
+          ${d.subheads.map((s, i) => `<div><b>${i + 1}</b> ${esc(s)}</div>`).join("")}
+        </div>
+        ${d.suggestions && d.suggestions.length ? `<div class="ws-row good">
+          <b>더 쓰면 좋을 것</b><br>${d.suggestions.map(esc).join("<br>")}</div>` : ""}
+        <button class="ws-apply" id="ws-copy-body">다듬은 본문 복사</button>
+        <details class="ws-preview"><summary>다듬은 본문 보기</summary><pre>${esc(d.body)}</pre></details>
+        <p class="ws-dim">${esc(d.note)}</p>
+        <p class="ws-dim"><b>에디터를 자동으로 바꾸지 않습니다.</b>
+          복사해서 직접 붙여넣으세요. 한 번 덮어쓰면 되돌릴 수가 없어서요.
+          [사진: …] 자리에는 실제 사진을 넣으시면 됩니다.</p>
+      `);
+      const btn = panel.querySelector("#ws-copy-body");
+      if (btn) btn.addEventListener("click", () => {
+        navigator.clipboard.writeText(lastBody).then(() => {
+          btn.textContent = "복사됐습니다";
+          setTimeout(() => (btn.textContent = "다듬은 본문 복사"), 1200);
+        }).catch(() => { btn.textContent = "복사에 실패했습니다"; });
+      });
+    } catch (e) {
+      showPanel(`<h4>홈판 본문</h4><div class="ws-row bad">${esc(e.message)}</div>`);
+    }
+  }
+
   // ── 표 넣기 ───────────────────────────────────────────
   function insertTable() {
     const cols = Number(prompt("칸을 몇 개로 할까요? (2~6)", "3"));
@@ -385,6 +440,7 @@
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (!act) return;
       if (act === "hometitle") homeTitle();
+      else if (act === "homebody") homeBody();
       else if (act === "audit") runAudit();
       else if (act === "keyword") runKeyword();
       else if (act === "table") insertTable();

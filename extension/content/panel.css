@@ -187,3 +187,28 @@
   border: 1px solid #0b8f4d; border-radius: 6px; background: #fff; color: #0b8f4d; cursor: pointer;
 }
 #ws-tools-panel .ws-apply:hover { background: #0b8f4d; color: #fff; }
+
+/* 홈판 본문 결과 */
+#ws-tools-panel .ws-stats {
+  display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: #5a5f6b;
+  padding: 9px 11px; background: #f7f8fa; border-radius: 7px; margin-bottom: 9px;
+}
+#ws-tools-panel .ws-stats b { color: #17181c; font-size: 13px; }
+#ws-tools-panel .ws-stats .ws-up { color: #0b8f4d; }
+
+#ws-tools-panel .ws-subheads { margin: 8px 0; font-size: 13px; line-height: 1.7; }
+#ws-tools-panel .ws-subheads > div { padding: 4px 0; border-bottom: 1px solid #f0f1f4; }
+#ws-tools-panel .ws-subheads > div:last-child { border-bottom: none; }
+#ws-tools-panel .ws-subheads b {
+  display: inline-block; width: 17px; height: 17px; line-height: 17px; text-align: center;
+  background: #e8f6ee; color: #0b6b3c; border-radius: 4px; font-size: 11px; margin-right: 6px;
+}
+
+#ws-tools-panel .ws-preview { margin-top: 9px; }
+#ws-tools-panel .ws-preview summary { font-size: 12px; color: #5a5f6b; cursor: pointer; }
+#ws-tools-panel .ws-preview pre {
+  white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.7;
+  background: #f7f8fa; border: 1px solid #e6e8ed; border-radius: 7px;
+  padding: 11px; max-height: 260px; overflow-y: auto; margin: 7px 0 0;
+  font-family: inherit; color: #17181c;
+}

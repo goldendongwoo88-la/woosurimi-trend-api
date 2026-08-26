@@ -17,6 +17,7 @@ const sharePage = require("./sharePage");
 const homefeedAudit = require("./homefeedAudit");
 const titleRewrite = require("./titleRewrite");
 const notify = require("./notify");
+const bodyRewrite = require("./bodyRewrite");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -324,6 +325,19 @@ module.exports = function attachSaas(app) {
       res.json({ ...r, usage: req.usage });
     } catch (e) {
       res.status(502).json({ error: "제목을 만들지 못했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  // 본문 다시 나누기 — 소제목 6개로 쪼개고 사진 자리를 잡습니다.
+  // ⚠️ 사장님이 직접 쓴 글에 손대는 일이라 크레딧을 더 씁니다(원고 수준).
+  app.post("/api/body-rewrite", usage.creditGate("rewrite", accounts), async (req, res) => {
+    const { body, title } = req.body || {};
+    try {
+      const r = await bodyRewrite.rewrite({ body, title });
+      if (!r.ok) return res.status(400).json({ error: r.why, shrunk: !!r.shrunk });
+      res.json({ ...r, usage: req.usage });
+    } catch (e) {
+      res.status(502).json({ error: "다듬는 데 실패했습니다. 잠시 뒤에 다시 해주세요." });
     }
   });
 

@@ -19,12 +19,62 @@ const fs = require("fs");
 const path = require("path");
 const claudeClient = require("./claudeClient");
 const { getRelatedKeywords } = require("./naverKeywordTool");
+// 홈판 실측값. 스킬 파일 15개에 흩어 적지 않고 여기 한 곳에서 덧댑니다.
+const rules = require("./homefeedRules");
 
 // 사용자가 직접 만들어둔 "클로드 스킬" 원문(매우 긴 지침)을 그대로 시스템 프롬프트로
 // 쓰는 카드들은, JS 문자열 안에 코드블록(```)까지 그대로 들어있어 이스케이프가 까다로워서
 // 별도 텍스트 파일(src/promptSkills/*.txt)로 분리해두고 그대로 읽어옵니다.
+/**
+ * ⚠️ 스킬 파일 15개를 각각 고치지 않고 여기서 한 번에 덧댑니다.
+ *
+ * 스킬 파일들은 이미 잘 쓰여 있습니다. 다만 그 안의 숫자는 뷰티 블로거 8인을
+ * 분석해서 만든 것이고, 제가 2026-08-27에 직접 잰 값과 몇 군데 어긋납니다.
+ *
+ *   소제목 : 스킬은 3~4개 / 실측은 6개   ← 가장 큰 차이
+ *   사진   : 스킬은 11~15장 / 실측은 19장
+ *
+ * 파일 15개를 손으로 고치면 어딘가는 반드시 빠뜨리고, 다음에 다시 재면 또 어긋납니다.
+ * 그래서 **덧대는 방식**으로 둡니다. 실측값은 homefeedRules 한 곳에만 있고,
+ * 거기를 고치면 모든 스킬이 같이 바뀝니다.
+ *
+ * 덮어쓰지 않고 "아래를 우선한다"고만 적는 이유: 스킬 파일에는 주제별로 다듬어진
+ * 맥락(예: 정보성 글은 짧게, 후기는 길게)이 들어 있어서 통째로 무시하면 오히려 나빠집니다.
+ */
+function homefeedPatch() {
+  const r = rules;
+  return (
+    `\n\n---\n\n## 홈판 실측 보정 (${r.EVIDENCE.measuredAt} 측정)\n\n` +
+    `아래는 실제 블로그를 직접 세어 얻은 값이다. 위 지침의 숫자와 다르면 **아래를 우선한다.**\n` +
+    `근거: 일 방문 ${r.EVIDENCE.winner.dailyVisitors.toLocaleString()}명 블로그(글 ${r.EVIDENCE.winner.posts}편)와 ` +
+    `${r.EVIDENCE.baseline.dailyVisitors.toLocaleString()}명 블로그(글 ${r.EVIDENCE.baseline.posts.toLocaleString()}편)의 ` +
+    `제목 각 ${r.EVIDENCE.sampleSize}편, 본문 각 6편.\n\n` +
+
+    `### 소제목은 5~6개로 나눈다 (가장 중요)\n` +
+    `잘 되는 쪽 ${r.BODY.subheads.winner}개, 덜 되는 쪽 ${r.BODY.subheads.baseline}개.\n` +
+    `${r.BODY.subheads.why}\n` +
+    `네이버 스마트에디터에는 제목 서식이 없으므로 **인용구**를 소제목으로 쓴다.\n` +
+    `원고에는 소제목을 [소제목] 표시로 명확히 구분해 6개를 배치한다.\n\n` +
+
+    `### 사진은 ${r.BODY.images.winner}장 안팎\n` +
+    `${r.BODY.images.why} 잘 되는 쪽 ${r.BODY.images.winner}장, 덜 되는 쪽 ${r.BODY.images.baseline}장.\n\n` +
+
+    `### 길이보다 나누기\n` +
+    `${r.BODY.chars.why} (잘 되는 쪽 ${r.BODY.chars.winner.toLocaleString()}자 / 덜 되는 쪽 ${r.BODY.chars.baseline.toLocaleString()}자)\n` +
+    `분량을 늘리려고 같은 말을 반복하지 말 것. 모르면 ✏️로 남길 것.\n\n` +
+
+    `### 제목 장치 — 실제 사용률\n` +
+    Object.values(r.DEVICES)
+      .map((d) => `- ${d.label}: 잘 되는 쪽 ${d.winner}% / 덜 되는 쪽 ${d.baseline}%. ${d.why}`)
+      .join("\n") +
+    `\n\n### 절대 하지 말 것\n` +
+    r.AVOID.map((a) => `- ${a.what} — ${a.why}`).join("\n") + "\n"
+  );
+}
+
 function loadSkillPrompt(name) {
-  return fs.readFileSync(path.join(__dirname, "promptSkills", `${name}.txt`), "utf8");
+  const raw = fs.readFileSync(path.join(__dirname, "promptSkills", `${name}.txt`), "utf8");
+  return raw + homefeedPatch();
 }
 
 const HONESTY_RULE =
