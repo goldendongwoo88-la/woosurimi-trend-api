@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사주 릴스 만들기 — 우수리미</title>
+
+<!-- ⚠️ 이 화면의 목적은 "누르면 나온다"입니다.
+     고를 게 많으면 결국 안 씁니다. 기본값을 잘 잡아두고 버튼 하나로 끝나게 했습니다.
+     손보고 싶을 때만 아래 항목을 펼치면 됩니다. -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<style>
+:root{
+  --night:#0E1420;--ink:#F0EAE0;--ink2:#BFB6A8;--ink3:#8B8578;
+  --gold:#C8A45C;--gold2:#E0C68A;--line:rgba(200,164,92,.24);
+  --danji:#9E3B37;--moss:#4E7A5A;
+  --serif:"Gowun Batang",serif;--sans:"IBM Plex Sans KR",-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--night);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.8;-webkit-font-smoothing:antialiased}
+.sky{position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(1100px 620px at 78% -8%,#22304A 0%,transparent 62%),
+  linear-gradient(180deg,#0E1420 0%,#131A28 55%,#0C1119 100%)}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px 80px}
+header{padding:44px 0 24px}
+.brand{font-size:11.5px;letter-spacing:.28em;color:var(--gold);margin-bottom:14px}
+h1{font-family:var(--serif);font-weight:700;font-size:clamp(24px,5.4vw,32px);
+  line-height:1.4;margin:0 0 10px;letter-spacing:-.02em}
+.lead{color:var(--ink2);font-size:15px;margin:0}
+.lead b{color:var(--gold2)}
+
+.card{border:1px solid var(--line);border-radius:5px;padding:22px 20px;margin-bottom:14px;
+  background:linear-gradient(165deg,rgba(200,164,92,.07),rgba(200,164,92,.02))}
+label{display:block;font-size:12.5px;color:var(--ink2);margin:0 0 6px;font-weight:500}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1;min-width:130px}
+select,input{width:100%;padding:11px 12px;border:1px solid rgba(200,164,92,.28);border-radius:4px;
+  background:rgba(10,15,24,.52);color:var(--ink);font-size:14.5px;font-family:inherit}
+select:focus,input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,164,92,.14)}
+select option{background:#161E2E;color:var(--ink)}
+.go{width:100%;margin-top:16px;padding:15px;border:0;border-radius:4px;cursor:pointer;
+  background:linear-gradient(135deg,var(--gold),#B08D45);color:#1A1408;
+  font-weight:700;font-size:16px;font-family:inherit}
+.go:hover{filter:brightness(1.08)}
+.go:disabled{background:#5A5240;color:#9A9382;cursor:default}
+.ghost{padding:10px 15px;border:1px solid var(--line);border-radius:4px;background:none;
+  color:var(--ink2);font-size:13.5px;font-family:inherit;cursor:pointer}
+.ghost:hover{border-color:var(--gold);color:var(--ink)}
+.tiny{font-size:11.5px;color:var(--ink3);margin-top:10px;line-height:1.7}
+
+.msg{margin-top:14px;font-size:13.5px;border-radius:4px;line-height:1.75}
+.msg:empty{display:none}
+.msg.wait{padding:12px 14px;background:rgba(200,164,92,.12);color:var(--gold2)}
+.msg.bad{padding:12px 14px;background:rgba(158,59,55,.16);color:#F0B4B1}
+.msg.good{padding:12px 14px;background:rgba(78,122,90,.16);color:#B4DCC0}
+
+.scenes{margin-top:16px}
+.scene{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid rgba(200,164,92,.14)}
+.scene:last-child{border-bottom:0}
+.scene .n{flex:none;width:24px;height:24px;border-radius:50%;background:rgba(200,164,92,.16);
+  color:var(--gold2);font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:3px}
+.scene textarea{flex:1;background:rgba(10,15,24,.4);border:1px solid rgba(200,164,92,.2);
+  border-radius:4px;color:var(--ink);font-family:inherit;font-size:14.5px;padding:9px 11px;
+  line-height:1.7;resize:vertical;min-height:52px}
+.scene textarea:focus{outline:none;border-color:var(--gold)}
+
+video{width:100%;max-width:320px;border-radius:6px;margin:16px auto 0;display:block;
+  box-shadow:0 12px 36px rgba(0,0,0,.4)}
+.capbox{background:rgba(10,15,24,.5);border:1px solid var(--line);border-radius:4px;
+  padding:14px 16px;margin-top:14px;font-size:13.5px;line-height:1.9;white-space:pre-wrap}
+.tags{color:var(--gold2);font-size:12.5px;margin-top:10px;line-height:1.8;word-break:break-all}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:22px 0 40px;
+  font-size:11.5px;color:var(--ink3);line-height:1.9}
+</style>
+</head>
+<body>
+<div class="sky"></div>
+<div class="wrap">
+
+<header>
+  <div class="brand">우 수 리 미 　 사 주 　 릴 스</div>
+  <h1>버튼 하나로 릴스 한 편</h1>
+  <p class="lead">
+    대본·영상·자막·올릴 문구까지 <b>15초</b>면 나옵니다.
+    소재는 <b id="total">96</b>편치 들어 있어서 하루 한 편씩 석 달을 돕니다.
+  </p>
+</header>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <label for="z">띠</label>
+      <select id="z"><option value="">오늘 순서대로</option></select>
+    </div>
+    <div>
+      <label for="t">주제</label>
+      <select id="t"><option value="">오늘 순서대로</option></select>
+    </div>
+    <div>
+      <label for="v">목소리</label>
+      <select id="v">
+        <option value="ko-KR-SunHiNeural">아씨 (여)</option>
+        <option value="ko-KR-HyunsuMultilingualNeural">도령 (남)</option>
+      </select>
+    </div>
+  </div>
+  <button class="go" id="plan">✍️ 대본 먼저 보기</button>
+  <p class="tiny">
+    대본을 읽어보고 고친 다음 영상을 만드는 게 좋습니다.
+    바로 영상까지 만드시려면 아래 <b>영상까지 한 번에</b>를 누르세요.
+  </p>
+  <div class="btns">
+    <button class="ghost" id="both" style="flex:1">⚡ 영상까지 한 번에</button>
+  </div>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="card" id="editbox" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+    <div>
+      <div style="font-family:var(--serif);font-size:19px;font-weight:700" id="title"></div>
+      <div style="font-size:12.5px;color:var(--ink3)" id="meta"></div>
+    </div>
+    <button class="ghost" id="replan">다른 대본으로</button>
+  </div>
+  <label style="margin-top:16px">상단 고정 문구</label>
+  <input id="hook" maxlength="16">
+  <div class="scenes" id="scenes"></div>
+  <button class="go" id="render">🎬 이 대본으로 영상 만들기</button>
+  <div class="msg" id="msg2"></div>
+</div>
+
+<div class="card" id="outbox" style="display:none">
+  <div style="font-family:var(--serif);font-size:19px;font-weight:700">완성</div>
+  <div style="font-size:12.5px;color:var(--ink3)" id="outmeta"></div>
+  <video id="vid" controls playsinline></video>
+  <div class="btns">
+    <a class="ghost" id="dl" download style="flex:1;text-align:center;text-decoration:none">⬇ 영상 내려받기</a>
+    <button class="ghost" id="copycap" style="flex:1">📋 올릴 문구 복사</button>
+  </div>
+  <div class="capbox" id="cap"></div>
+  <div class="tags" id="tags"></div>
+  <p class="tiny">
+    인스타 릴스 · 유튜브 쇼츠 · 틱톡 · 네이버 클립에 그대로 올리시면 됩니다.
+    <b>하나 만들어 다섯 군데</b>가 이 채널들의 무기입니다.
+  </p>
+</div>
+
+<footer>
+  겁주는 표현은 만들지 않습니다. "조심하세요", "큰일 납니다" 같은 말은
+  재미는 있지만 그걸 보고 진짜 걱정하는 사람이 생깁니다.
+  만들 때마다 검사해서 걸리면 자동으로 고칩니다.
+  <br><br>
+  <a href="/" style="color:var(--gold2);text-decoration:none">← 우수리미 도구로</a>
+</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+let PLAN = null, OUT = null;
+
+function say(el, html, kind) { el.className = "msg " + kind; el.innerHTML = html; }
+
+(async () => {
+  try {
+    const m = await (await fetch("/api/saju-reels/menu")).json();
+    $("#total").textContent = m.total;
+    $("#z").innerHTML += m.zodiac.map((z) => `<option value="${z.id}">${z.name}띠 ${z.hanja}</option>`).join("");
+    $("#t").innerHTML += m.topics.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join("");
+  } catch {}
+})();
+
+function opts() {
+  return { zodiac: $("#z").value || undefined, topic: $("#t").value || undefined };
+}
+
+function drawPlan(p) {
+  PLAN = p;
+  $("#editbox").style.display = "block";
+  $("#title").textContent = `${p.zodiac.name}띠 · ${p.topic.label}`;
+  const chars = p.scenes.reduce((a, s) => a + s.length, 0);
+  $("#meta").textContent =
+    `${p.scenes.length}장면 · ${chars}자` +
+    (p.repaired ? ` · 위험 표현 ${p.repaired}곳 고침` : "") +
+    (p.leftover && p.leftover.length ? ` · ⚠ 확인 필요 ${p.leftover.length}곳` : "");
+  $("#hook").value = p.hook || "";
+  $("#scenes").innerHTML = p.scenes.map((s, i) =>
+    `<div class="scene"><span class="n">${i + 1}</span><textarea data-i="${i}">${esc(s)}</textarea></div>`).join("");
+  $("#editbox").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function readPlan() {
+  if (!PLAN) return null;
+  const scenes = [...$("#scenes").querySelectorAll("textarea")]
+    .map((t) => t.value.trim()).filter(Boolean);
+  return { ...PLAN, hook: $("#hook").value.trim(), scenes };
+}
+
+async function makePlan() {
+  const btn = $("#plan"); btn.disabled = true; btn.textContent = "쓰는 중…";
+  say($("#msg"), "AI가 대본을 쓰고 있습니다. 10초쯤 걸려요.", "wait");
+  try {
+    const r = await fetch("/api/saju-reels/plan", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts()),
+    });
+    const p = await r.json();
+    if (!r.ok) throw new Error(p.message || "만들지 못했습니다.");
+    say($("#msg"), "", "good");
+    drawPlan(p);
+  } catch (e) {
+    say($("#msg"), esc(e.message), "bad");
+  }
+  btn.disabled = false; btn.textContent = "✍️ 대본 먼저 보기";
+}
+
+async function makeVideo(plan, msgEl, btn) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = "만드는 중…";
+  say(msgEl, "영상을 만들고 있습니다. 15초쯤 걸려요.<br><small>이 창을 닫지 마세요.</small>", "wait");
+  try {
+    const r = await fetch("/api/saju-reels/render", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...(plan ? { plan } : opts()),
+        voice: { provider: "azure", voiceId: $("#v").value },
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.message || "만들지 못했습니다.");
+    OUT = d;
+    say(msgEl, "", "good");
+
+    $("#outbox").style.display = "block";
+    $("#outmeta").textContent =
+      `${d.plan.zodiac}띠 · ${d.plan.topic} · ${Math.round(d.durationSec)}초` +
+      (d.narration && d.narration.used ? " · 목소리 있음" : " · 목소리 없음");
+    $("#vid").src = d.publicPath;
+    $("#dl").href = d.publicPath;
+    $("#dl").setAttribute("download", `사주릴스_${d.plan.zodiac}띠_${d.plan.topic}.mp4`);
+    $("#cap").textContent = d.caption.text;
+    $("#tags").textContent = d.caption.tags;
+
+    if (d.leftover && d.leftover.length) {
+      say(msgEl,
+        `⚠ 확인이 필요한 표현이 ${d.leftover.length}곳 있습니다: ` +
+        d.leftover.map((h) => `<b>${esc(h.word)}</b>(${esc(h.kind)})`).join(", ") +
+        `<br><small>대본을 손보고 다시 만드시는 게 좋습니다.</small>`, "bad");
+    }
+    $("#outbox").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    say(msgEl, esc(e.message), "bad");
+  }
+  btn.disabled = false; btn.textContent = label;
+}
+
+$("#plan").onclick = makePlan;
+$("#replan").onclick = makePlan;
+$("#both").onclick = () => makeVideo(null, $("#msg"), $("#both"));
+$("#render").onclick = () => makeVideo(readPlan(), $("#msg2"), $("#render"));
+
+$("#copycap").onclick = async () => {
+  if (!OUT) return;
+  const btn = $("#copycap");
+  try {
+    await navigator.clipboard.writeText(OUT.caption.text + "\n\n" + OUT.caption.tags);
+    btn.textContent = "복사됐습니다";
+    setTimeout(() => { btn.textContent = "📋 올릴 문구 복사"; }, 1600);
+  } catch {
+    btn.textContent = "복사 실패";
+    setTimeout(() => { btn.textContent = "📋 올릴 문구 복사"; }, 1600);
+  }
+};
+</script>
+</body>
+</html>
