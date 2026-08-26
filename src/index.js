@@ -1138,6 +1138,34 @@ app.post("/api/naver-blog/prepare", async (req, res) => {
 // 그래서 여기서는 확실히 아는 것만 봅니다. 글자 수, 소제목 수, 키워드 위치,
 // 어미 반복, 광고법에 걸릴 표현 — 전부 계산으로 확인되고 고치면 실제로 나아지는
 // 것들입니다. 추정한 숫자로 겁주는 대신 고칠 수 있는 것을 짚어줍니다.
+// ── 스레드 쇼핑 ──────────────────────────────────────────────
+//
+// ⚠️ 영상들이 가르치는 방식은 샤오홍슈에서 남의 사진을 가져다 쓰는 것이었습니다.
+// 여기서는 직접 찍은 사진만 받습니다. 10년 넘게 키운 계정을 걸 일이 아닙니다.
+const threadShop = require("./threadShop");
+
+app.post("/api/thread-shop/photos", uploadPhotos.array("photos", 6), async (req, res) => {
+  try {
+    const files = (req.files || []).map((f) => f.path);
+    const out = await threadShop.fromPhotos(files, {
+      note: req.body?.note || "",
+      product: req.body?.product || "",
+      affiliate: req.body?.affiliate !== "false",
+    });
+    res.json(out);
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
+app.post("/api/thread-shop/product", async (req, res) => {
+  try {
+    res.json(await threadShop.fromProduct(req.body || {}));
+  } catch (err) {
+    res.status(err.status || 500).json({ message: err.message });
+  }
+});
+
 // ── 사주 릴스 ────────────────────────────────────────────────
 //
 // ⚠️ 이건 사주 리포트를 팔기 위한 유입 장치입니다. 릴스로 돈을 벌 생각이 아니라,

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스레드 쇼핑 글 만들기 — 우수리미</title>
+
+<!-- ⚠️ 이 도구는 직접 찍은 사진만 받습니다.
+     참고한 영상들은 전부 "샤오홍슈에서 남의 사진 가져다 쓰세요"라고 가르쳤는데,
+     10년 넘게 키운 계정을 몇 만원에 걸 일이 아닙니다. -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+<style>
+:root{--bg:#F4F5F7;--card:#fff;--edge:#DFE2E8;--ink:#161A22;--ink2:#4E5665;--ink3:#868E9C;
+  --brand:#1F1F1F;--brass:#8A6A1F;--brass-bg:#F6F1E3;
+  --brick:#9B3B2E;--brick-bg:#FAEEEB;--moss:#2E6B4F;--moss-bg:#EAF3ED}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.8;font-size:16px;
+  font-family:"IBM Plex Sans KR",-apple-system,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:40px 20px 90px}
+h1{font-size:25px;margin:0 0 8px;letter-spacing:-.02em}
+.lead{color:var(--ink3);font-size:14.5px;margin:0 0 26px;line-height:1.75}
+.card{background:var(--card);border:1px solid var(--edge);border-radius:10px;padding:22px 22px;margin-bottom:14px}
+label{display:block;font-size:12.5px;color:var(--ink2);font-weight:600;margin:16px 0 6px}
+label:first-child{margin-top:0}
+input,textarea{width:100%;padding:11px 13px;border:1px solid var(--edge);border-radius:7px;
+  font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
+input:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(31,31,31,.08)}
+textarea{min-height:92px;resize:vertical;line-height:1.7}
+.hint{font-size:12px;color:var(--ink3);margin-top:6px;line-height:1.65}
+.go{width:100%;margin-top:18px;padding:14px;border:0;border-radius:8px;cursor:pointer;
+  background:var(--brand);color:#fff;font-weight:700;font-size:15.5px;font-family:inherit}
+.go:hover{background:#000}
+.go:disabled{background:#B9BDC4;cursor:default}
+.tabs{display:flex;gap:6px;margin-bottom:18px}
+.tab{flex:1;padding:10px;border:1px solid var(--edge);background:#fff;border-radius:8px;
+  font-size:13.5px;cursor:pointer;font-family:inherit;color:var(--ink2)}
+.tab.on{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}
+.hide{display:none!important}
+.drop{border:2px dashed var(--edge);border-radius:9px;padding:26px 18px;text-align:center;
+  cursor:pointer;color:var(--ink3);font-size:14px}
+.drop:hover{border-color:var(--brand);color:var(--ink2)}
+.drop.has{border-style:solid;border-color:var(--moss);color:var(--moss);background:var(--moss-bg)}
+.thumbs{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--edge)}
+.msg{margin-top:14px;font-size:13.5px;border-radius:7px;line-height:1.75}
+.msg:empty{display:none}
+.msg.wait{padding:12px 14px;background:var(--brass-bg);color:var(--brass)}
+.msg.bad{padding:12px 14px;background:var(--brick-bg);color:var(--brick)}
+.post{background:var(--card);border:1px solid var(--edge);border-radius:10px;
+  padding:20px 22px;margin-bottom:12px}
+.post .body{white-space:pre-wrap;font-size:15.5px;line-height:1.9}
+.post .why{font-size:12.5px;color:var(--ink3);margin-top:12px;padding-top:11px;
+  border-top:1px dashed var(--edge);line-height:1.65}
+.post .why b{color:var(--brass)}
+.post button{margin-top:12px;padding:8px 15px;border:1px solid var(--edge);border-radius:7px;
+  background:#fff;font-size:12.5px;cursor:pointer;font-family:inherit;color:var(--ink2)}
+.post button:hover{border-color:var(--brand);color:var(--ink)}
+.post button.done{background:var(--moss);color:#fff;border-color:var(--moss)}
+.warn{background:var(--brick-bg);border-left:3px solid var(--brick);border-radius:0 7px 7px 0;
+  padding:14px 17px;margin:14px 0;font-size:13.5px;color:var(--ink2);line-height:1.75}
+.warn b{color:var(--brick)}
+.mark{background:#12151C;color:#E7EAEF;border-radius:8px;padding:15px 17px;margin-top:12px;
+  font-size:13px;line-height:1.8;white-space:pre-wrap;position:relative;padding-right:70px}
+.mark button{position:absolute;top:10px;right:10px;background:#2C333F;color:#C9D0DA;border:0;
+  border-radius:6px;padding:6px 11px;font-size:11.5px;cursor:pointer;font-family:inherit}
+footer{margin-top:36px;font-size:12px;color:var(--ink3);line-height:1.85}
+footer a{color:var(--brass);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>스레드 쇼핑 글 만들기</h1>
+<p class="lead">
+  사진 한 장과 짧은 글이면 됩니다. 영상을 만들 필요가 없어요.
+  <b>직접 찍은 사진</b>을 올려주세요 — 남의 사진을 가져다 쓰면 10년 키운 계정이 위험합니다.
+</p>
+
+<div class="card">
+  <div class="tabs">
+    <button class="tab on" data-m="photo">사진으로</button>
+    <button class="tab" data-m="name">제품 이름만으로</button>
+  </div>
+
+  <div class="pane" data-p="photo">
+    <label>직접 찍은 사진 <span style="font-weight:400;color:var(--ink3)">(최대 6장)</span></label>
+    <div class="drop" id="drop">사진을 고르거나 여기로 끌어다 놓으세요</div>
+    <input type="file" id="files" accept="image/*" multiple class="hide">
+    <div class="thumbs" id="thumbs"></div>
+  </div>
+
+  <div class="pane hide" data-p="name">
+    <div class="warn" style="margin-top:0">
+      <b>사진이 없으면 글이 확실히 약해집니다.</b> 그래도 막지는 않았습니다 — 급할 때가 있으니까요.
+      대신 확인 안 된 성분·용량·가격은 쓰지 않도록 해뒀습니다.
+    </div>
+  </div>
+
+  <label for="product">제품 이름</label>
+  <input id="product" placeholder="예: VT PDRN 리들샷 앰플" autocomplete="off">
+
+  <label for="note">직접 써본 느낌</label>
+  <textarea id="note" placeholder="예: 바르고 자면 다음날 피부결이 정돈돼 있음. 근데 향이 좀 강해서 호불호 갈릴 듯"></textarea>
+  <p class="hint">
+    <b>여기가 글의 중심입니다.</b> 좋은 점만 쓰지 마시고 아쉬운 점도 한 줄 적어주세요.
+    단점이 있는 글이 훨씬 잘 읽히고, 실제로 더 팔립니다.
+  </p>
+
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400">
+    <input type="checkbox" id="aff" checked style="width:auto;margin:0">
+    쿠팡파트너스 링크를 달 예정 (광고 표기를 함께 만들어드립니다)
+  </label>
+
+  <button class="go" id="go">✍️ 스레드 글 3개 만들기</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div id="out"></div>
+
+<footer>
+  스레드는 광고처럼 쓰면 바로 죽습니다. 생활에서 쓰는 말로 쓰도록 해뒀고,
+  효능 단정·최상급 표현은 만들지 않습니다.
+  <br><br>
+  <a href="/">← 우수리미 도구로</a>
+</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? "" : s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+let MODE = "photo", FILES = [];
+
+document.querySelectorAll(".tab").forEach((b) => b.onclick = () => {
+  MODE = b.dataset.m;
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("hide", p.dataset.p !== MODE));
+});
+
+$("#drop").onclick = () => $("#files").click();
+$("#drop").ondragover = (e) => { e.preventDefault(); $("#drop").classList.add("has"); };
+$("#drop").ondragleave = () => { if (!FILES.length) $("#drop").classList.remove("has"); };
+$("#drop").ondrop = (e) => { e.preventDefault(); take(e.dataTransfer.files); };
+$("#files").onchange = (e) => take(e.target.files);
+
+function take(list) {
+  FILES = [...list].filter((f) => f.type.startsWith("image/")).slice(0, 6);
+  $("#drop").classList.toggle("has", FILES.length > 0);
+  $("#drop").textContent = FILES.length ? `사진 ${FILES.length}장 골랐습니다 (다시 누르면 바꿉니다)` : "사진을 고르거나 여기로 끌어다 놓으세요";
+  $("#thumbs").innerHTML = "";
+  for (const f of FILES) {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(f);
+    $("#thumbs").appendChild(img);
+  }
+}
+
+function say(html, kind) { $("#msg").className = "msg " + kind; $("#msg").innerHTML = html; }
+
+$("#go").onclick = async () => {
+  const product = $("#product").value.trim();
+  const note = $("#note").value.trim();
+  if (MODE === "photo" && !FILES.length) { say("사진을 올려주세요.", "bad"); return; }
+  if (MODE === "name" && !product) { say("제품 이름을 넣어주세요.", "bad"); return; }
+
+  const btn = $("#go"); btn.disabled = true; btn.textContent = "쓰는 중…";
+  say("AI가 글을 쓰고 있습니다. 20초쯤 걸려요.", "wait");
+  $("#out").innerHTML = "";
+
+  try {
+    let res;
+    if (MODE === "photo") {
+      const fd = new FormData();
+      for (const f of FILES) fd.append("photos", f);
+      fd.append("product", product);
+      fd.append("note", note);
+      fd.append("affiliate", $("#aff").checked ? "true" : "false");
+      res = await fetch("/api/thread-shop/photos", { method: "POST", body: fd });
+    } else {
+      res = await fetch("/api/thread-shop/product", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product, note, affiliate: $("#aff").checked }),
+      });
+    }
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.message || "만들지 못했습니다.");
+    say("", "wait");
+    draw(d);
+  } catch (e) {
+    say(esc(e.message), "bad");
+  }
+  btn.disabled = false; btn.textContent = "✍️ 스레드 글 3개 만들기";
+};
+
+function draw(d) {
+  $("#out").innerHTML =
+    d.posts.map((p, i) => `
+      <div class="post">
+        <div class="body">${esc(p.text)}</div>
+        ${p.why ? `<div class="why"><b>왜 먹힐까</b> — ${esc(p.why)}</div>` : ""}
+        <button data-i="${i}">📋 복사</button>
+      </div>`).join("") +
+    (d.comment ? `
+      <div class="card">
+        <div style="font-weight:600;font-size:15px;margin-bottom:4px">댓글에 넣을 것</div>
+        <p class="hint" style="margin-top:0">
+          ⚠️ 링크를 <b>본문이 아니라 댓글</b>에 다세요. 본문에 넣으면 스레드가 노출을 줄입니다.
+        </p>
+        <div class="mark">${esc(d.comment)}<button id="cm">복사</button></div>
+        ${d.reminder ? `<div class="warn" style="margin-bottom:0">${esc(d.reminder)}</div>` : ""}
+      </div>` : "");
+
+  $("#out").querySelectorAll(".post button").forEach((b) => b.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(d.posts[+b.dataset.i].text);
+      b.textContent = "복사됐습니다"; b.classList.add("done");
+      setTimeout(() => { b.textContent = "📋 복사"; b.classList.remove("done"); }, 1600);
+    } catch { b.textContent = "복사 실패"; }
+  });
+  const cm = $("#cm");
+  if (cm) cm.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(d.comment);
+      cm.textContent = "복사됨";
+      setTimeout(() => { cm.textContent = "복사"; }, 1600);
+    } catch {}
+  };
+  $("#out").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+</script>
+</body>
+</html>
