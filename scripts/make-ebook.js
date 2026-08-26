@@ -140,8 +140,26 @@ async function main() {
     const t0 = Date.now();
     process.stdout.write(`${i + 1}장 「${book.chapters[i].title}」… `);
     try {
-      parts.chapters[i] = await ebook.writeChapter(book, i, { material: MATERIAL, words: 1900 });
-      console.log(`${((Date.now() - t0) / 1000).toFixed(0)}초 · ${parts.chapters[i].replace(/\s/g, "").length}자`);
+      let ch = await ebook.writeChapter(book, i, { material: MATERIAL, words: 1900 });
+
+      // ⚠️ 파는 책입니다. 지어낸 숫자 하나가 들통나면 책 전체가 의심받습니다.
+      // 프롬프트로 막아도 뚫려서(첫 판에서 "클릭 단가 50원", "월 80만원"이 나왔습니다)
+      // 재료와 대조해 잡아내고 걷어냅니다.
+      const suspects = ebook.checkNumbers(ch, MATERIAL);
+      let fixed = 0;
+      if (suspects.length) {
+        const r = await ebook.stripUnsourcedNumbers(ch, suspects, MATERIAL);
+        ch = r.text;
+        fixed = r.fixed;
+      }
+      parts.chapters[i] = ch;
+
+      const left = ebook.checkNumbers(ch, MATERIAL);
+      console.log(
+        `${((Date.now() - t0) / 1000).toFixed(0)}초 · ${ch.replace(/\s/g, "").length}자` +
+        (fixed ? ` · 근거없는 숫자 ${fixed}곳 걷어냄` : "") +
+        (left.length ? ` · ⚠ 남은 것: ${left.join(", ")}` : "")
+      );
     } catch (e) {
       // ⚠️ 한 장이 실패해도 나머지는 살립니다. 통째로 날리면 안 됩니다.
       parts.chapters[i] = "";

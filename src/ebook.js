@@ -88,6 +88,81 @@ async function outline({ topic, audience, material = "", chapters = 8 } = {}) {
   };
 }
 
+/**
+ * 근거 없는 숫자를 찾아냅니다.
+ *
+ * ⚠️ 프롬프트에 "숫자를 지어내지 마세요"라고 못을 박아도 뚫립니다.
+ * 실제로 첫 책에서 "방문자 200명으로 월 80만원 버는 사람도 있습니다",
+ * "클릭 단가는 50원 정도입니다" 같은 문장이 나왔습니다. 재료에 없는 숫자입니다.
+ *
+ * 파는 책입니다. 지어낸 숫자 하나가 들통나면 책 전체가 의심받고,
+ * 수익을 암시하는 숫자는 표시광고법 문제까지 됩니다.
+ * 그래서 막는 걸로 끝내지 않고 **재료와 대조해서 잡아냅니다.**
+ */
+function checkNumbers(text, material) {
+  // 돈·비율·배수처럼 사실 주장이 되는 숫자만 봅니다.
+  // 장 번호나 "세 가지" 같은 건 문제가 아닙니다.
+  const found = [...new Set(
+    [...String(text).matchAll(/[\d,]+(?:\.\d+)?\s*(?:%|배|원|만원|억|천만|달러)/g)]
+      .map((m) => m[0].replace(/\s/g, ""))
+  )];
+
+  const mat = String(material).replace(/\s/g, "");
+  const suspects = [];
+  for (const n of found) {
+    if (mat.includes(n)) continue;                     // 재료에 그대로 있음
+    const bare = n.replace(/[,]/g, "");
+    if (mat.includes(bare)) continue;
+    // 재료의 숫자에서 계산으로 나올 수 있는 것(예: 136만/560만 = 0.24원)은
+    // 여기서 가려낼 수 없습니다. 그래서 "의심"이라고만 하고 사람이 보게 합니다.
+    suspects.push(n);
+  }
+  return suspects;
+}
+
+/**
+ * 근거 없는 숫자를 걷어냅니다.
+ *
+ * ⚠️ 숫자를 다른 숫자로 바꾸지 않습니다. 그것도 지어내는 겁니다.
+ * 숫자를 빼고 문장이 살아 있게 고칩니다.
+ * "클릭 단가는 50원 정도입니다" → "클릭 단가가 낮은 편입니다"
+ */
+async function stripUnsourcedNumbers(text, suspects, material) {
+  if (!suspects.length) return { text, fixed: 0 };
+  try {
+    const out = await callClaude({
+      system:
+        "글에서 근거 없는 숫자만 걷어냅니다.\n\n" +
+        "⚠️ 숫자를 **다른 숫자로 바꾸지 마세요.** 그것도 지어내는 겁니다.\n" +
+        "   숫자를 빼되 문장의 뜻은 살리세요.\n" +
+        "   예) '클릭 단가는 50원 정도입니다' → '클릭 단가가 낮은 편입니다'\n" +
+        "   예) '방문자 200명으로 월 80만원 버는 사람도 있습니다'\n" +
+        "       → '방문자가 적어도 수익이 잘 나오는 경우가 있습니다'\n\n" +
+        "⚠️ 아래 [근거 있는 숫자]에 들어 있는 값은 건드리지 마세요.\n\n" +
+        '{"fixes":[{"before":"원래 문장","after":"고친 문장"}]} JSON만 출력하세요.',
+      messages: [{
+        role: "user",
+        content:
+          `[근거 있는 숫자 — 이건 그대로 두세요]\n${material.slice(0, 4000)}\n\n` +
+          `[근거를 못 찾은 숫자]\n${suspects.join(", ")}\n\n` +
+          `[글]\n${text}`,
+      }],
+      maxTokens: 3000,
+      temperature: 0.3,
+    });
+    const map = (extractJson(out) || {}).fixes || [];
+    let fixed = 0, t = text;
+    for (const f of map) {
+      const before = String(f.before || "").trim();
+      const after = String(f.after || "").trim();
+      if (before && after && t.includes(before)) { t = t.split(before).join(after); fixed++; }
+    }
+    return { text: t, fixed };
+  } catch {
+    return { text, fixed: 0 };   // 못 고쳐도 원고는 살립니다. 대신 의심 목록을 남깁니다.
+  }
+}
+
 /** 한 장을 씁니다. */
 async function writeChapter(book, index, { material = "", words = 1800 } = {}) {
   if (!isConfigured()) {
@@ -228,4 +303,7 @@ function toHtml(book, parts) {
 </body></html>`;
 }
 
-module.exports = { outline, writeChapter, writeIntro, toHtml, VOICE };
+module.exports = {
+  outline, writeChapter, writeIntro, toHtml, VOICE,
+  checkNumbers, stripUnsourcedNumbers,
+};
