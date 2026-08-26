@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>사장님 화면</title>
+<meta name="robots" content="noindex,nofollow" />
+<link rel="stylesheet" href="/assets/ws.css" />
+<style>
+  .stat { text-align: center; padding: 14px 8px; }
+  .stat b { display: block; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; }
+  .stat span { font-size: 12px; color: var(--ink-3); }
+  .codes { font-family: ui-monospace, "Consolas", monospace; font-size: 13px; line-height: 2; user-select: all; }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who">사장님 전용</div>
+</div></div>
+
+<div class="wrap">
+  <h1>사장님 화면</h1>
+
+  <div class="card" id="gate">
+    <label for="pw">관리자 비밀번호</label>
+    <div class="row">
+      <input id="pw" type="password" autocomplete="current-password" />
+      <button id="enter">들어가기</button>
+    </div>
+    <div id="gateMsg"></div>
+    <p class="muted" style="margin-bottom:0">
+      서버 환경변수 <code>ADMIN_PASSWORD</code>에 정해둔 값입니다. 정해두지 않으면 이 화면이 열리지 않습니다.
+    </p>
+  </div>
+
+  <div id="app" hidden>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><b id="sTotal">-</b><span>전체 회원</span></div>
+        <div class="stat"><b id="sPaying" style="color:var(--brand)">-</b><span>유료 회원</span></div>
+        <div class="stat"><b id="sMrr">-</b><span>이번 달 예상 매출</span></div>
+      </div>
+    </div>
+
+    <h2>이용권 코드 발급</h2>
+    <div class="card">
+      <p style="margin-top:0;font-size:14px;color:var(--ink-2)">
+        스마트스토어 주문을 확인하고 여기서 코드를 뽑아 손님에게 보내세요.
+        코드는 <b>서버 파일이 날아가도 계속 유효</b>합니다(서명으로 검증하므로).
+        다만 <code>AUTH_SECRET</code>을 바꾸면 이미 발급한 코드가 전부 무효가 되니 바꾸지 마세요.
+      </p>
+      <div class="row" style="flex-wrap:wrap">
+        <select id="plan" style="padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;font-size:15px">
+          <option value="light">라이트</option>
+          <option value="pro" selected>프로</option>
+          <option value="biz">비즈니스</option>
+        </select>
+        <input id="months" type="text" value="1" style="max-width:80px" placeholder="개월" />
+        <input id="count" type="text" value="1" style="max-width:80px" placeholder="장수" />
+        <button id="issue">발급</button>
+      </div>
+      <div id="issueMsg"></div>
+      <div class="codes" id="codes"></div>
+    </div>
+
+    <h2>회원</h2>
+    <div class="card scroll-x">
+      <table id="users"></table>
+    </div>
+
+    <h2>순위 추적 현황</h2>
+    <div class="card" id="drops"></div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let PW = sessionStorage.getItem("wsboss") || "";
+
+const H = () => ({ "content-type": "application/json", "x-admin-password": PW });
+
+$("#enter").addEventListener("click", enter);
+$("#pw").addEventListener("keydown", (e) => { if (e.key === "Enter") enter(); });
+
+async function enter() {
+  PW = $("#pw").value;
+  const res = await fetch("/api/admin/users", { headers: H() });
+  if (!res.ok) {
+    const d = await res.json();
+    $("#gateMsg").innerHTML = `<div class="msg err">${esc(d.error)}</div>`;
+    return;
+  }
+  sessionStorage.setItem("wsboss", PW);
+  $("#gate").hidden = true;
+  $("#app").hidden = false;
+  load();
+}
+
+async function load() {
+  const d = await fetch("/api/admin/users", { headers: H() }).then((r) => r.json());
+  $("#sTotal").textContent = d.total;
+  $("#sPaying").textContent = d.paying;
+  $("#sMrr").textContent = d.mrr.toLocaleString() + "원";
+
+  $("#users").innerHTML =
+    `<tr><th>이름</th><th>이메일</th><th>블로그</th><th>요금제</th><th>만료</th><th>출석</th></tr>` +
+    (d.users.length
+      ? d.users.map((u) => `<tr>
+          <td>${esc(u.name)}</td>
+          <td class="muted">${esc(u.email)}</td>
+          <td class="muted">${esc(u.blogId || "-")}</td>
+          <td>${u.plan === "free" ? '<span class="tag skip">무료</span>' : `<span class="tag ok">${esc(u.plan)}</span>`}</td>
+          <td class="muted">${u.planUntil ? esc(u.planUntil.slice(0, 10)) : "-"}</td>
+          <td class="num">${u.streak || 0}일</td>
+        </tr>`).join("")
+      : `<tr><td colspan="6" class="muted">아직 회원이 없습니다.</td></tr>`);
+
+  const s = await fetch("/api/drop-stats").then((r) => r.json());
+  $("#drops").innerHTML = `<p style="margin:0">추적 중인 글 <b>${s.tracking}</b>건
+    · 최근 순위 이탈 <b>${s.recent.length}</b>건</p>`;
+}
+
+$("#issue").addEventListener("click", async () => {
+  const body = {
+    plan: $("#plan").value,
+    months: Number($("#months").value) || 1,
+    count: Number($("#count").value) || 1,
+  };
+  const res = await fetch("/api/admin/license/issue", { method: "POST", headers: H(), body: JSON.stringify(body) });
+  const d = await res.json();
+  if (!res.ok) { $("#issueMsg").innerHTML = `<div class="msg err">${esc(d.error)}</div>`; return; }
+  $("#issueMsg").innerHTML = `<div class="msg ok">${d.codes.length}장 발급했습니다. 아래를 복사해서 손님에게 보내세요.</div>`;
+  $("#codes").innerHTML = d.codes.map((c) => `<div>${esc(c.code)}</div>`).join("");
+});
+
+if (PW) enter();
+</script>
+</body>
+</html>

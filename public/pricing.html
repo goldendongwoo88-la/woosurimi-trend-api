@@ -2,75 +2,122 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>요금제</title>
+<link rel="stylesheet" href="/assets/ws.css" />
 <style>
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: #f5f6f8; color: #222; }
-  header { background: #fff; padding: 16px; border-bottom: 1px solid #e5e5e5; }
-  h1 { font-size: 18px; margin: 0; }
-  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 60px 16px; }
-  .note { background: #fff8e1; border: 1px solid #ffe08a; color: #7a5c00; font-size: 13px; padding: 12px 14px; margin-bottom: 16px; border-radius: 6px; line-height: 1.6; }
-  .plans { display: flex; flex-direction: column; gap: 12px; }
-  .plan {
-    background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-    border: 2px solid transparent;
+  .plan { position: relative; }
+  .plan.rec { border-color: var(--brand); border-width: 2px; }
+  .plan.rec::after {
+    content: "가장 많이 씁니다"; position: absolute; top: -10px; left: 18px;
+    background: var(--brand); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px;
   }
-  .plan.featured { border-color: #03c75a; }
-  .plan-name { font-size: 16px; font-weight: bold; }
-  .plan-price { font-size: 24px; font-weight: bold; margin: 8px 0; }
-  .plan-price span { font-size: 13px; color: #888; font-weight: normal; }
-  .plan-desc { font-size: 13px; color: #666; margin-bottom: 12px; }
-  .plan ul { padding-left: 18px; margin: 0 0 16px 0; font-size: 13px; color: #444; line-height: 1.8; }
-  .plan button {
-    width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer;
-    background: #f0f0f0; color: #333;
-  }
-  .plan.featured button { background: #03c75a; color: #fff; }
+  .price { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
+  .price small { font-size: 13px; font-weight: 500; color: var(--ink-3); }
+  .cmp td, .cmp th { text-align: center; white-space: nowrap; }
+  .cmp td:first-child, .cmp th:first-child { text-align: left; }
 </style>
 </head>
 <body>
-<header><a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a><h1>💳 요금제</h1></header>
-<main>
-  <div class="note">
-    ⚠️ 지금은 화면(UI)만 만들어 둔 상태입니다. 실제 결제는 아직 연결되어 있지 않아요 — "구독하기"를 눌러도 결제가 이루어지지 않습니다. 한국에서 실제로 결제를 받으려면 토스페이먼츠/아임포트 같은 PG(결제대행)사에 별도로 가입해야 하고, 보통 사업자 등록도 필요해서 이 부분은 직접 준비가 필요합니다. 준비되시면 연동을 도와드릴게요.
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+</div></div>
+
+<div class="wrap">
+  <h1>요금제</h1>
+  <p class="lede">먼저 무료로 진단해 보시고, 매일 쓰게 되면 그때 이용권을 사세요.</p>
+
+  <div id="plans"></div>
+
+  <h2>무엇이 다른가요</h2>
+  <div class="card scroll-x"><table class="cmp" id="cmp"></table></div>
+
+  <h2>이용권 등록</h2>
+  <div class="card">
+    <p style="margin-top:0;color:var(--ink-2);font-size:14px">
+      스마트스토어에서 결제하시면 이용권 코드를 보내드립니다. 아래에 넣으면 바로 적용됩니다.
+    </p>
+    <div class="row">
+      <input id="code" type="text" placeholder="WSU-PRO-1M-..." autocomplete="off" />
+      <button id="redeem">등록</button>
+    </div>
+    <div id="redeemMsg"></div>
   </div>
-  <div class="plans">
-    <div class="plan">
-      <div class="plan-name">무료</div>
-      <div class="plan-price">0원 <span>/ 월</span></div>
-      <div class="plan-desc">가볍게 시작하기</div>
-      <ul>
-        <li>황금 키워드 검색 1일 3회</li>
-        <li>엔터 뉴스 열람</li>
-        <li>숏폼 기획안 1일 1회</li>
-      </ul>
-      <button onclick="alert('무료 플랜은 별도 결제 없이 이용 가능합니다.')">시작하기</button>
-    </div>
-    <div class="plan featured">
-      <div class="plan-name">프로</div>
-      <div class="plan-price">9,900원 <span>/ 월</span></div>
-      <div class="plan-desc">본격적으로 콘텐츠를 만드는 분께</div>
-      <ul>
-        <li>황금 키워드 검색 무제한</li>
-        <li>엔터 뉴스 + 화제성 랭킹 무제한</li>
-        <li>숏폼 기획안 1일 20회</li>
-        <li>우선 지원</li>
-      </ul>
-      <button onclick="alert('결제 연동 준비 중입니다. 아직 실제 결제는 이루어지지 않아요.')">구독하기</button>
-    </div>
-    <div class="plan">
-      <div class="plan-name">비즈니스</div>
-      <div class="plan-price">문의 <span>/ 맞춤형</span></div>
-      <div class="plan-desc">팀/에이전시용</div>
-      <ul>
-        <li>모든 프로 기능 포함</li>
-        <li>계정 여러 개 관리</li>
-        <li>API 연동 지원</li>
-      </ul>
-      <button onclick="alert('결제 연동 준비 중입니다. 아직 실제 결제는 이루어지지 않아요.')">문의하기</button>
-    </div>
+
+  <h2>결제는 어떻게 하나요</h2>
+  <div class="card">
+    <p style="margin-top:0;font-size:14px;color:var(--ink-2)">
+      결제는 <b>네이버 스마트스토어</b>에서 받습니다. 우수리미 서버는 카드번호를 저장하지 않습니다.
+      환불도 스마트스토어 규정을 그대로 따릅니다.
+    </p>
+    <p id="storeLink" style="margin-bottom:0"></p>
   </div>
-</main>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const won = (n) => n.toLocaleString() + "원";
+
+async function load() {
+  const d = await fetch("/api/plans").then((r) => r.json());
+  const me = await fetch("/api/auth/me").then((r) => r.json());
+
+  $("#who").innerHTML = me.user
+    ? `<span class="pill">${esc(me.usage.planName)}</span><span>${esc(me.user.name)}</span>`
+    : `<a href="/join.html">로그인</a>`;
+
+  $("#plans").innerHTML = d.plans.map((p) => `
+    <div class="card plan ${p.recommended ? "rec" : ""}">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <div style="font-size:16px;font-weight:800">${esc(p.name)}</div>
+        <div class="price">${p.price === 0 ? "무료" : won(p.price)}
+          ${p.price ? "<small>/ 월 · VAT 포함</small>" : ""}</div>
+      </div>
+      <p style="color:var(--ink-2);font-size:14px;margin:6px 0 12px">${esc(p.blurb)}</p>
+      <table>
+        <tr><td>블로그 진단</td><td class="num">일 ${p.limits.diagnose.perDay}회</td></tr>
+        <tr><td>글 노출·누락 확인</td><td class="num">일 ${p.limits.postCheck.perDay}회</td></tr>
+        <tr><td>순위 추적 키워드</td><td class="num">${p.limits.rankKeywords}개</td></tr>
+        <tr><td>AI 크레딧</td><td class="num">${p.limits.aiCredits.perDay ? "일 " + p.limits.aiCredits.perDay : "없음"}</td></tr>
+      </table>
+      ${d.current === p.id ? `<div class="msg ok" style="margin-bottom:0">지금 쓰고 계신 요금제입니다.</div>` : ""}
+    </div>`).join("");
+
+  const c = d.comparison;
+  $("#cmp").innerHTML =
+    `<tr><th></th>${c.plans.map((p) => `<th>${esc(p.name)}</th>`).join("")}</tr>` +
+    c.rows.map((r) => `<tr><td>${esc(r.label)}</td>${r.values.map((v) => `<td>${esc(v)}</td>`).join("")}</tr>`).join("") +
+    c.extras.map((r) => `<tr><td>${esc(r.label)}</td>${r.values.map((v) => `<td>${esc(v)}</td>`).join("")}</tr>`).join("");
+
+  $("#storeLink").innerHTML = d.storeUrl
+    ? `<a href="${esc(d.storeUrl)}" target="_blank" rel="noopener"><button>스마트스토어에서 구매하기</button></a>`
+    : `<span class="muted">스마트스토어 상품이 아직 등록되지 않았습니다. 등록 후 이곳에 링크가 뜹니다.</span>`;
+}
+
+$("#redeem").addEventListener("click", async () => {
+  const code = $("#code").value.trim();
+  if (!code) return;
+  const res = await fetch("/api/license/redeem", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  const d = await res.json();
+  if (!res.ok) {
+    $("#redeemMsg").innerHTML = `<div class="msg err">${esc(d.error)}
+      ${d.login ? `<a href="${d.login}?next=/pricing.html">로그인하기</a>` : ""}</div>`;
+    return;
+  }
+  $("#redeemMsg").innerHTML = `<div class="msg ok">
+    <b>${esc(d.user.plan)}</b> 이용권이 적용됐습니다. ${esc(d.user.planUntil.slice(0, 10))}까지 쓰실 수 있습니다.</div>`;
+  setTimeout(load, 800);
+});
+
+load();
+</script>
 </body>
 </html>

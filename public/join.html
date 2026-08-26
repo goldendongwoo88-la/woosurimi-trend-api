@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>로그인 · 가입</title>
+<link rel="stylesheet" href="/assets/ws.css" />
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+</div></div>
+
+<div class="wrap" style="max-width:420px">
+  <h1 id="title">로그인</h1>
+  <p class="lede" id="sub">순위 추적과 AI 기능을 쓰려면 로그인이 필요합니다.</p>
+
+  <div class="card">
+    <div id="nameWrap" hidden>
+      <label for="name">이름 (또는 닉네임)</label>
+      <input id="name" type="text" autocomplete="nickname" />
+      <div style="height:12px"></div>
+    </div>
+
+    <label for="email">이메일</label>
+    <input id="email" type="email" autocomplete="email" />
+    <div style="height:12px"></div>
+
+    <label for="password">비밀번호</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <p class="muted" id="pwHint" hidden style="margin:6px 0 0">8자 이상으로 정해주세요.</p>
+
+    <div id="blogWrap" hidden>
+      <div style="height:12px"></div>
+      <label for="blogId">내 블로그 (나중에 정해도 됩니다)</label>
+      <input id="blogId" type="text" placeholder="blog.naver.com/아이디" />
+    </div>
+
+    <div id="msg"></div>
+    <div style="height:14px"></div>
+    <button id="submit" style="width:100%">로그인</button>
+
+    <p style="text-align:center;margin:14px 0 0;font-size:13px">
+      <a href="#" id="toggle">계정이 없으신가요? 가입하기</a>
+    </p>
+  </div>
+
+  <p class="muted" style="text-align:center">
+    비밀번호는 되돌릴 수 없는 형태로 저장합니다. 저희도 원문을 볼 수 없습니다.
+  </p>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let mode = new URLSearchParams(location.search).get("mode") === "signup" ? "signup" : "login";
+
+function paint() {
+  const signup = mode === "signup";
+  $("#title").textContent = signup ? "가입" : "로그인";
+  $("#sub").textContent = signup
+    ? "이메일과 비밀번호만 있으면 됩니다. 무료로 시작합니다."
+    : "순위 추적과 AI 기능을 쓰려면 로그인이 필요합니다.";
+  $("#nameWrap").hidden = !signup;
+  $("#blogWrap").hidden = !signup;
+  $("#pwHint").hidden = !signup;
+  $("#submit").textContent = signup ? "가입하고 시작하기" : "로그인";
+  $("#password").autocomplete = signup ? "new-password" : "current-password";
+  $("#toggle").textContent = signup ? "이미 계정이 있으신가요? 로그인" : "계정이 없으신가요? 가입하기";
+  $("#msg").innerHTML = "";
+}
+
+$("#toggle").addEventListener("click", (e) => { e.preventDefault(); mode = mode === "signup" ? "login" : "signup"; paint(); });
+$("#submit").addEventListener("click", submit);
+document.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+
+async function submit() {
+  const body = {
+    email: $("#email").value.trim(),
+    password: $("#password").value,
+  };
+  if (mode === "signup") {
+    body.name = $("#name").value.trim();
+    body.blogId = $("#blogId").value.trim();
+  }
+  $("#submit").disabled = true;
+  try {
+    const res = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      $("#msg").innerHTML = `<div class="msg err">${d.error}</div>`;
+      return;
+    }
+    // 돌아갈 곳이 지정돼 있으면 그리로, 없으면 순위추적으로
+    const next = new URLSearchParams(location.search).get("next") || "/rank.html";
+    location.href = next;
+  } catch {
+    $("#msg").innerHTML = `<div class="msg err">연결에 실패했습니다.</div>`;
+  } finally {
+    $("#submit").disabled = false;
+  }
+}
+
+paint();
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+/* 우수리미 공통 스타일 — 유료 서비스 화면용.
+   ⚠️ 손님 대부분이 폰으로 봅니다. 모바일을 기본으로 잡고 넓은 화면에서 늘립니다. */
+
+:root {
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --ink: #17181c;
+  --ink-2: #5a5f6b;
+  --ink-3: #8b909c;
+  --line: #e6e8ed;
+  --brand: #0b8f4d;
+  --brand-soft: #e8f6ee;
+  --danger: #d63b3b;
+  --danger-soft: #fdeceb;
+  --warn: #b7791f;
+  --warn-soft: #fdf5e4;
+  --ok: #0b8f4d;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(20, 22, 28, 0.06), 0 6px 20px rgba(20, 22, 28, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161a;
+    --card: #1c1f25;
+    --ink: #f0f1f3;
+    --ink-2: #b3b8c2;
+    --ink-3: #7d838f;
+    --line: #2b2f37;
+    --brand: #2fbe77;
+    --brand-soft: #16301f;
+    --danger: #ff6b6b;
+    --danger-soft: #331a1a;
+    --warn: #e0a13c;
+    --warn-soft: #302512;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo",
+    "Malgun Gothic", system-ui, sans-serif;
+  line-height: 1.65;
+  -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--brand); }
+
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px 80px; }
+
+/* 상단 바 */
+.topbar {
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20;
+}
+.topbar-in {
+  max-width: 760px; margin: 0 auto; padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.brand { font-weight: 800; font-size: 15px; letter-spacing: -0.02em; text-decoration: none; color: var(--ink); }
+.brand span { color: var(--brand); }
+.topbar .spacer { flex: 1; }
+.who { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 8px; }
+.pill {
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+  background: var(--brand-soft); color: var(--brand);
+}
+
+h1 { font-size: 24px; letter-spacing: -0.03em; margin: 28px 0 6px; text-wrap: balance; }
+h2 { font-size: 17px; letter-spacing: -0.02em; margin: 32px 0 10px; }
+.lede { color: var(--ink-2); font-size: 14px; margin: 0 0 20px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; box-shadow: var(--shadow); margin-bottom: 14px;
+}
+
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--ink-2); }
+
+input[type=text], input[type=email], input[type=password] {
+  width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg); color: var(--ink); font-family: inherit;
+}
+input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+button {
+  font-family: inherit; font-size: 15px; font-weight: 700; padding: 12px 18px;
+  border: none; border-radius: 10px; background: var(--brand); color: #fff; cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+button.ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line); }
+button.small { font-size: 13px; padding: 7px 12px; }
+
+.row { display: flex; gap: 8px; }
+.row > input { flex: 1; }
+
+.msg { font-size: 13px; padding: 11px 14px; border-radius: 9px; margin: 10px 0; line-height: 1.6; }
+.msg.err { background: var(--danger-soft); color: var(--danger); }
+.msg.ok { background: var(--brand-soft); color: var(--brand); }
+.msg.warn { background: var(--warn-soft); color: var(--warn); }
+
+.muted { color: var(--ink-3); font-size: 12px; }
+
+/* 점수 표시 */
+.score-big { font-size: 44px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+.grade { font-size: 15px; font-weight: 700; color: var(--brand); }
+
+.bar { height: 7px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 9px 6px; text-align: left; border-bottom: 1px solid var(--line); }
+th { color: var(--ink-3); font-weight: 600; font-size: 12px; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
+.tag.ok { background: var(--brand-soft); color: var(--brand); }
+.tag.bad { background: var(--danger-soft); color: var(--danger); }
+.tag.skip { background: var(--line); color: var(--ink-3); }
+
+.scroll-x { overflow-x: auto; }
+
+/* 넓은 화면에서만 두 칸 */
+@media (min-width: 640px) {
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+}

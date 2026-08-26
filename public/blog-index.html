@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>블로그 지수 진단</title>
+<meta name="description" content="네이버 블로그 주소만 넣으면 방문자·발행주기·검색노출을 한 번에 확인합니다. 내 글이 검색에서 빠졌는지도 바로 알려드립니다." />
+<link rel="stylesheet" href="/assets/ws.css" />
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+</div></div>
+
+<div class="wrap">
+  <h1>내 블로그, 지금 어떤 상태인가요?</h1>
+  <p class="lede">주소만 넣으면 됩니다. 로그인 없이 하루 3번까지 무료입니다.</p>
+
+  <div class="card">
+    <label for="blogId">네이버 블로그 주소 또는 아이디</label>
+    <div class="row">
+      <input id="blogId" type="text" placeholder="blog.naver.com/아이디  또는  아이디" autocomplete="off" />
+      <button id="go">진단</button>
+    </div>
+    <p class="muted" style="margin:10px 0 0">
+      남의 블로그도 볼 수 있습니다. 로그인 정보는 필요 없고, 누구나 볼 수 있는 공개 정보만 읽습니다.
+    </p>
+  </div>
+
+  <div id="out"></div>
+
+  <!-- 누락 검출 현황 — 블라이가 첫 화면에 띄우는 그 자리 -->
+  <div class="card" id="dropCard" hidden>
+    <h2 style="margin-top:0">최근 검색에서 빠진 글</h2>
+    <p class="muted" style="margin-top:-4px">우수리미가 추적 중인 글 가운데 순위권에서 사라진 건입니다.</p>
+    <div id="dropList"></div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ── 로그인 상태 ─────────────────────────────────────────
+async function loadMe() {
+  try {
+    const r = await fetch("/api/auth/me").then((x) => x.json());
+    const u = r.user;
+    const left = r.usage?.items?.diagnose;
+    const leftTxt = left ? `오늘 ${left.left}/${left.limit}회 남음` : "";
+    $("#who").innerHTML = u
+      ? `<span class="pill">${esc(r.usage.planName)}</span><span>${esc(u.name)}</span>
+         <span>·</span><span>${leftTxt}</span>
+         <a href="/rank.html" style="margin-left:4px">순위추적</a>`
+      : `<span>${leftTxt}</span><a href="/join.html">로그인</a>`;
+  } catch {}
+}
+
+// ── 진단 ────────────────────────────────────────────────
+$("#go").addEventListener("click", run);
+$("#blogId").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+
+async function run() {
+  const blogId = $("#blogId").value.trim();
+  if (!blogId) return;
+  $("#go").disabled = true;
+  $("#out").innerHTML = `<div class="card"><p style="margin:0">읽는 중입니다… 검색 노출까지 확인하느라 10초쯤 걸립니다.</p></div>`;
+
+  try {
+    const res = await fetch("/api/blog-index", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ blogId }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      $("#out").innerHTML = `<div class="card"><div class="msg err">${esc(d.error)}</div>${
+        d.upgrade ? `<a href="${d.upgrade}"><button>요금제 보기</button></a>` : ""
+      }</div>`;
+      return;
+    }
+    render(d);
+    loadMe();
+  } catch (e) {
+    $("#out").innerHTML = `<div class="card"><div class="msg err">연결에 실패했습니다. 잠시 뒤에 다시 해주세요.</div></div>`;
+  } finally {
+    $("#go").disabled = false;
+  }
+}
+
+function render(d) {
+  const m = d.measured, e = d.estimated;
+  const vis = m.visitors.map((v) => v.count);
+  const maxV = Math.max(1, ...vis);
+
+  const exposureRows = m.exposure.map((x) => {
+    const tag = x.state === "exposed" ? `<span class="tag ok">노출 ${x.rank}위</span>`
+      : x.state === "missing" ? `<span class="tag bad">검색에 없음</span>`
+      : `<span class="tag skip">확인 안 함</span>`;
+    return `<tr>
+      <td><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title.slice(0, 46))}</a>
+        ${x.why ? `<div class="muted">${esc(x.why)}</div>` : ""}</td>
+      <td style="text-align:right;white-space:nowrap">${tag}</td>
+    </tr>`;
+  }).join("");
+
+  $("#out").innerHTML = `
+    <div class="card">
+      <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+        <div>
+          <div class="score-big">${e.score}<span style="font-size:18px;color:var(--ink-3)">/100</span></div>
+          <div class="grade">${esc(e.grade.label)}</div>
+        </div>
+        <div style="flex:1;min-width:200px">
+          ${e.parts.map((p) => `
+            <div style="margin-bottom:7px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink-2)">
+                <span>${esc(p.key)} <span class="muted">${esc(p.detail)}</span></span>
+                <span style="font-variant-numeric:tabular-nums">${p.score}/${p.max}</span>
+              </div>
+              <div class="bar"><i style="width:${Math.round((p.score / p.max) * 100)}%"></i></div>
+            </div>`).join("")}
+        </div>
+      </div>
+      <p class="muted" style="margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line)">
+        ${esc(d.disclaimer)}
+      </p>
+    </div>
+
+    ${d.advice.map((a) => `<div class="msg ${a.level === "danger" ? "err" : a.level === "warn" ? "warn" : "ok"}">${esc(a.text)}</div>`).join("")}
+
+    <div class="two">
+      <div class="card">
+        <h2 style="margin-top:0">방문자</h2>
+        <div style="display:flex;align-items:flex-end;gap:5px;height:70px;margin-bottom:8px">
+          ${m.visitors.map((v) => `
+            <div style="flex:1;text-align:center">
+              <div title="${v.count}명" style="background:var(--brand);border-radius:3px 3px 0 0;height:${Math.round((v.count / maxV) * 56)}px"></div>
+              <div class="muted" style="font-size:10px;margin-top:3px">${v.date.slice(5)}</div>
+            </div>`).join("")}
+        </div>
+        <div style="font-size:13px">일평균 <b>${m.avgVisitors.toLocaleString()}명</b>
+          ${m.trend != null ? `<span class="muted">· 전일 대비 ${m.trend > 0 ? "+" : ""}${m.trend.toLocaleString()}</span>` : ""}
+        </div>
+        <p class="muted" style="margin:6px 0 0">맨 오른쪽 날짜는 오늘이라 아직 집계 중입니다.</p>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0">발행</h2>
+        <table>
+          <tr><td>전체 글</td><td class="num"><b>${m.totalPosts.toLocaleString()}</b>건</td></tr>
+          <tr><td>발행 주기</td><td class="num"><b>주 ${m.postsPerWeek}</b>회</td></tr>
+          <tr><td>검색 노출 확인</td><td class="num"><b>${m.judgedCount - m.missingCount}/${m.judgedCount}</b>건</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">최근 글이 검색에 뜨는지</h2>
+      <p class="muted" style="margin-top:-4px">
+        글 제목을 통째로 네이버에 검색해서 그 글이 실제로 나오는지 확인했습니다.
+        이건 추정이 아니라 <b>사실</b>이고, 사장님도 직접 검색해서 확인하실 수 있습니다.
+      </p>
+      <div class="scroll-x"><table>${exposureRows}</table></div>
+      ${d.plan === "free" ? `
+        <div class="msg warn" style="margin-bottom:0">
+          무료로는 최근 ${d.sampleSize}개만 봅니다. 이용권이 있으면 최대 12개까지 확인하고,
+          <b>매일 자동으로 다시 확인</b>해서 빠진 글이 생기면 알려드립니다.
+          <a href="/pricing.html">요금제 보기</a>
+        </div>` : `
+        <div class="msg ok" style="margin-bottom:0">
+          이 글들을 <a href="/rank.html">순위 추적</a>에 등록해 두면 매일 새벽에 다시 확인합니다.
+        </div>`}
+    </div>
+  `;
+  window.scrollTo({ top: 220, behavior: "smooth" });
+}
+
+// ── 공개 누락 현황 ──────────────────────────────────────
+async function loadDrops() {
+  try {
+    const d = await fetch("/api/drop-stats").then((r) => r.json());
+    if (!d.recent || !d.recent.length) return; // 아직 데이터가 없으면 아예 안 보여줍니다
+    $("#dropCard").hidden = false;
+    $("#dropList").innerHTML = `<table>${d.recent.map((x) => `
+      <tr><td>${esc(x.blogId)}</td><td>${esc(x.keyword)}</td>
+      <td class="num">${x.from}위 → <span style="color:var(--danger)">밖</span></td>
+      <td class="num muted">${esc(x.date.slice(5))}</td></tr>`).join("")}</table>
+      <p class="muted" style="margin:10px 0 0">현재 ${d.tracking}건을 추적하고 있습니다.</p>`;
+  } catch {}
+}
+
+loadMe();
+loadDrops();
+</script>
+</body>
+</html>

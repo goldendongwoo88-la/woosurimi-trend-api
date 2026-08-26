@@ -110,6 +110,10 @@ app.use(express.json()); // 숏폼 기획 등 POST 요청의 JSON 본문을 읽�
 app.use(express.static(path.join(__dirname, "..", "public"))); // /entertainment.html 같은 데모 화면용
 app.use("/bgm", express.static(path.join(__dirname, "..", "assets", "bgm"))); // 배경음악 미리듣기/렌더링용 정적 파일
 
+// 회원·요금제·블로그진단·순위추적. 이 한 줄이 "돈을 받을 수 있는 사이트"를 만듭니다.
+// 라우트가 많아 index.js가 더 길어지지 않게 별도 파일로 뺐습니다.
+require("./saasRoutes")(app);
+
 app.get("/api/trends", (req, res) => {
   const data = cache.getLatest();
   if (!data) {
@@ -1702,6 +1706,33 @@ cron.schedule(REFRESH_CRON, refresh);
 // 실행만 시켜두고 서버 시작을 막지 않습니다).
 warmBlogTopicsCache();
 cron.schedule(`*/${Math.max(1, Math.round(BLOG_TOPICS_TTL_MS / 60000))} * * * *`, warmBlogTopicsCache);
+
+// 순위 추적 — 매일 새벽 4시(한국)에 등록된 키워드 순위를 다시 잽니다.
+//
+// ⚠️ 새벽에 도는 이유가 둘입니다.
+//   1) 네이버 검색이 한가한 시간이라 막힐 확률이 낮습니다.
+//   2) 손님이 아침에 들어왔을 때 **이미 갱신된 숫자**가 있어야 합니다.
+//      로그인하고 나서 그때부터 30초 기다리게 하면 아무도 안 씁니다.
+// ⚠️ 무료 서버는 요청이 없으면 잠듭니다. 자는 동안엔 이 cron도 안 돕니다.
+//    그래서 손님이 직접 누르는 새로고침 버튼(/api/rank/refresh)을 함께 뒀습니다.
+const rankTracker = require("./rankTracker");
+cron.schedule(
+  "0 4 * * *",
+  async () => {
+    const started = Date.now();
+    try {
+      const r = await rankTracker.runAll();
+      console.log(
+        `[순위추적] ${r.checked}/${r.total}건 확인, 실패 ${r.failed}건, 변동 ${r.moved.length}건 — ${(
+          (Date.now() - started) / 1000
+        ).toFixed(0)}초`
+      );
+    } catch (e) {
+      console.error("[순위추적] 실패:", e.message);
+    }
+  },
+  { timezone: "Asia/Seoul" }
+);
 
 app.listen(PORT, () => {
   console.log(`우수리미 트렌드 API 서버 실행 중 — http://localhost:${PORT}`);

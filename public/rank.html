@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>순위 추적</title>
+<link rel="stylesheet" href="/assets/ws.css" />
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+</div></div>
+
+<div class="wrap">
+  <h1>내 글이 지금 몇 위인가요?</h1>
+  <p class="lede">키워드와 글 주소를 등록해 두면 매일 새벽 4시에 다시 확인합니다.</p>
+
+  <div class="card">
+    <label for="keyword">추적할 키워드</label>
+    <input id="keyword" type="text" placeholder="예: 김포 카페 추천" />
+    <div style="height:12px"></div>
+    <label for="postUrl">내 글 주소</label>
+    <input id="postUrl" type="text" placeholder="https://blog.naver.com/아이디/2243..." />
+    <div id="addMsg"></div>
+    <div style="height:12px"></div>
+    <button id="add">등록하고 지금 확인</button>
+    <span class="muted" id="quota" style="margin-left:10px"></span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin:26px 0 10px">
+    <h2 style="margin:0;flex:1">추적 중</h2>
+    <button class="ghost small" id="refresh">지금 다시 확인</button>
+  </div>
+  <div id="list"></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function loadMe() {
+  const r = await fetch("/api/auth/me").then((x) => x.json());
+  if (!r.user) { location.href = "/join.html?next=/rank.html"; return null; }
+  $("#who").innerHTML = `<span class="pill">${esc(r.usage.planName)}</span>
+    <span>${esc(r.user.name)}</span>
+    ${r.user.streak ? `<span title="연속 출석">🔥${r.user.streak}일</span>` : ""}
+    <a href="/pricing.html">요금제</a>`;
+  return r.user;
+}
+
+async function loadList() {
+  const d = await fetch("/api/rank/list").then((r) => r.json());
+  if (d.error) return;
+  $("#quota").textContent = `${d.items.length} / ${d.limit}개 등록됨`;
+
+  if (!d.items.length) {
+    $("#list").innerHTML = `<div class="card"><p style="margin:0;color:var(--ink-2)">
+      아직 등록한 키워드가 없습니다. 위에서 하나 등록해 보세요.<br>
+      <span class="muted">어떤 글을 넣을지 모르겠다면 <a href="/blog-index.html">블로그 진단</a>에서 잘 나오는 글부터 골라보세요.</span>
+    </p></div>`;
+    return;
+  }
+
+  $("#list").innerHTML = d.items.map((x) => {
+    const cur = x.current == null
+      ? `<span class="tag bad">30위 밖</span>`
+      : `<b style="font-size:20px">${x.current}</b><span class="muted">위</span>`;
+    let chg = "";
+    if (x.change === 99) chg = `<span class="tag ok">새로 진입</span>`;
+    else if (x.change === -99) chg = `<span class="tag bad">순위권 이탈</span>`;
+    else if (x.change > 0) chg = `<span style="color:var(--ok);font-weight:700">▲ ${x.change}</span>`;
+    else if (x.change < 0) chg = `<span style="color:var(--danger);font-weight:700">▼ ${-x.change}</span>`;
+    else if (x.change === 0) chg = `<span class="muted">변동 없음</span>`;
+
+    // 지난 기록을 작은 막대로
+    const h = (x.history || []).slice(-14);
+    const spark = h.map((p) => {
+      const height = p.rank == null ? 2 : Math.max(2, 30 - p.rank);
+      const color = p.rank == null ? "var(--danger)" : "var(--brand)";
+      return `<div title="${p.date} ${p.rank ?? "밖"}" style="flex:1;background:${color};height:${height}px;border-radius:2px 2px 0 0;opacity:.85"></div>`;
+    }).join("");
+
+    return `<div class="card">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700">${esc(x.keyword)}</div>
+          <div class="muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title || x.url)}</a>
+          </div>
+        </div>
+        <div style="text-align:right;white-space:nowrap">
+          ${cur}<div style="font-size:12px">${chg}</div>
+        </div>
+      </div>
+      ${h.length > 1 ? `<div style="display:flex;align-items:flex-end;gap:2px;height:32px;margin-top:12px">${spark}</div>` : ""}
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+        <span class="muted">${x.best != null ? `최고 ${x.best}위` : ""} ${x.checkedAt ? `· ${x.checkedAt} 확인` : ""}</span>
+        <div style="flex:1"></div>
+        <button class="ghost small" data-del="${esc(x.id)}">삭제</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  document.querySelectorAll("[data-del]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      if (!confirm("이 키워드 추적을 지울까요? 지난 기록도 함께 사라집니다.")) return;
+      await fetch("/api/rank/" + b.dataset.del, { method: "DELETE" });
+      loadList();
+    })
+  );
+}
+
+$("#add").addEventListener("click", async () => {
+  const keyword = $("#keyword").value.trim();
+  const postUrl = $("#postUrl").value.trim();
+  if (!keyword || !postUrl) { $("#addMsg").innerHTML = `<div class="msg err">키워드와 글 주소를 모두 넣어주세요.</div>`; return; }
+  $("#add").disabled = true;
+  $("#addMsg").innerHTML = `<div class="msg">네이버에서 확인하는 중입니다…</div>`;
+  try {
+    const res = await fetch("/api/rank/add", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keyword, postUrl }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      $("#addMsg").innerHTML = `<div class="msg err">${esc(d.error)}
+        ${d.upgrade ? `<a href="${d.upgrade}">요금제 보기</a>` : ""}</div>`;
+      return;
+    }
+    $("#addMsg").innerHTML = "";
+    $("#keyword").value = ""; $("#postUrl").value = "";
+    loadList();
+  } finally { $("#add").disabled = false; }
+});
+
+$("#refresh").addEventListener("click", async () => {
+  $("#refresh").disabled = true;
+  $("#refresh").textContent = "확인 중…";
+  try {
+    const res = await fetch("/api/rank/refresh", { method: "POST" });
+    const d = await res.json();
+    if (!res.ok) alert(d.error);
+    loadList();
+  } finally {
+    $("#refresh").disabled = false;
+    $("#refresh").textContent = "지금 다시 확인";
+  }
+});
+
+(async () => { if (await loadMe()) loadList(); })();
+</script>
+</body>
+</html>
