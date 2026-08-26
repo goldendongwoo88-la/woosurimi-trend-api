@@ -78,7 +78,10 @@ async function checkExposure(blogId, post) {
     return { ...post, state: "skipped", why: r.why || "지금은 확인할 수 없었습니다" };
 
   const hit = r.results.find((x) => x.blogId === blogId && x.logNo === post.logNo);
+  // 찾았으면 결과가 몇 건이든 그게 답입니다. 긴 제목은 원래 결과가 적습니다.
   if (hit) return { ...post, state: "exposed", rank: hit.rank };
+  // 못 찾았는데 결과까지 적으면, 없는 건지 못 본 건지 알 수 없습니다.
+  if (r.lowConfidence) return { ...post, state: "skipped", why: r.why };
   return { ...post, state: "missing" };
 }
 

@@ -128,12 +128,43 @@ async function fetchPostList(blogId, { page = 1, countPerPage = 30 } = {}) {
   return { total: Number(data.totalCount || 0), posts };
 }
 
+/**
+ * 제목을 사람이 읽는 형태로 되돌립니다.
+ *
+ * ⚠️ URL 디코딩만 하면 부족합니다. 네이버가 돌려주는 제목에는 HTML 기호가
+ * 그대로 들어 있습니다: &quot; &#39; &amp; …
+ *
+ * 이걸 안 풀면 제목이 이렇게 됩니다:
+ *   &quot;못생긴 니가 꺼져&quot; 티빙도 예상 못한 불량연애2
+ * 그 상태로 네이버에 검색하면 당연히 아무것도 안 나옵니다. 그러면 우리 코드는
+ * "결과가 너무 적다 → 판정 포기"로 넘어가고, **노출 검사가 통째로 죽습니다.**
+ *
+ * 실제로 두 블로그를 진단했더니 검사한 글이 전부 '확인 안 함'으로 나왔습니다.
+ * 하필 연예·이슈 블로그는 제목에 따옴표를 거의 다 씁니다.
+ * 이 시장에서 못 쓰는 도구가 될 뻔했습니다.
+ */
+function decodeEntities(s) {
+  return String(s)
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    // &amp; 는 맨 마지막에 풀어야 합니다. 먼저 풀면 &amp;quot; 가 &quot; 가 됐다가
+    // 다시 " 로 바뀌어, 원래 글에 있던 문자를 우리가 바꿔버리게 됩니다.
+    .replace(/&amp;/g, "&");
+}
+
 function safeDecode(s) {
+  let out = s;
   try {
-    return decodeURIComponent(s);
+    out = decodeURIComponent(s);
   } catch {
-    return s;
+    // 인코딩이 깨져 있으면 원문 그대로 두고 기호만 풀어줍니다.
   }
+  return decodeEntities(out);
 }
 
 /**
@@ -198,21 +229,27 @@ async function searchBlogRanking(keyword, { limit = 30, retry = 1 } = {}) {
     return { ok: true, results: [], why: "검색 결과 없음" };
   }
 
-  // 결과가 수상하게 적으면 판정하지 않습니다. 재시도를 한 번 해봅니다.
-  if (results.length < SUSPICIOUS_MIN) {
-    if (retry > 0) {
-      await new Promise((r) => setTimeout(r, 3000));
-      return searchBlogRanking(keyword, { limit, retry: retry - 1 });
-    }
-    return {
-      ok: false,
-      blocked: true,
-      why: `검색 결과가 ${results.length}건뿐이라 순위를 판정하지 않았습니다. 네이버가 잠시 막았을 수 있습니다.`,
-      results,
-    };
-  }
+  // ⚠️ 결과가 적다고 무조건 "막혔다"고 보면 안 됩니다.
+  //
+  // 처음엔 10건 미만이면 판정을 포기하게 했습니다. 차단을 걸러내려던 건데,
+  // **긴 제목으로 검색하면 원래 결과가 적습니다.** 실측: 30자짜리 기사 제목으로
+  // 검색하니 4~6건이 나왔고, 그 안에 찾던 글이 **1위**로 들어 있었습니다.
+  // 그런데 코드는 "10건 미만이니 모르겠다"며 그 1위를 버렸습니다.
+  //
+  // 답이 눈앞에 있는데 안 본 겁니다. 그래서 판단을 부르는 쪽으로 넘깁니다.
+  //   - 찾던 글이 결과 안에 있으면 → 건수와 무관하게 그게 답입니다.
+  //   - 없는데 결과까지 적으면 → 그때는 "모르겠다"가 맞습니다.
+  // 이 구분은 여기서 못 합니다. 무엇을 찾는지는 부르는 쪽만 아니까요.
+  const lowConfidence = results.length < SUSPICIOUS_MIN;
 
-  return { ok: true, results };
+  return {
+    ok: true,
+    results,
+    lowConfidence,
+    why: lowConfidence
+      ? `검색 결과가 ${results.length}건뿐입니다. 찾는 글이 여기 없다면 판정하지 않는 편이 안전합니다.`
+      : undefined,
+  };
 }
 
 /**

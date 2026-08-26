@@ -132,6 +132,9 @@ async function checkOne(item) {
   if (!r.ok) return { ok: false, why: r.why, blocked: !!r.blocked };
 
   const hit = r.results.find((x) => x.blogId === item.blogId && x.logNo === item.logNo);
+  // 못 찾았는데 결과까지 적으면 "순위 밖"이 아니라 "모르겠다"입니다.
+  // null로 적으면 다음날 손님에게 "순위권 이탈" 알림이 잘못 갑니다.
+  if (!hit && r.lowConfidence) return { ok: false, why: r.why, blocked: false };
   const rank = hit ? hit.rank : null;
   const date = todayStr();
 
