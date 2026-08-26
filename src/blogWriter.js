@@ -18,6 +18,9 @@
 const cache = require("./cache");
 const { findOpportunities } = require("./opportunityFinder");
 const claudeClient = require("./claudeClient");
+// 상위 글의 분량·구성을 보고 그에 맞춰 쓰기 위해. 순환 참조는 없습니다
+// (competitorCompare는 blogFetch·postAudit·naverBlogData만 씁니다).
+const competitorCompare = require("./competitorCompare");
 const { extractPageData } = require("./pageExtractor");
 
 const CATEGORIES = [
@@ -181,16 +184,75 @@ const CATEGORY_TONE = {
   daily_hobby: "일상생활 꿀팁·취미를 다루는 블로그 글 — 상황 공감, 노하우/팁, 직접 해본 경험, 마무리 조언 순서",
 };
 
-async function callClaude(topic, cat, imageCount) {
-  const sectionCount = 4;
+/**
+ * 경쟁 글 실측치를 프롬프트에 얹습니다.
+ *
+ * ⚠️ 원래는 소제목 4개, 길이 지정 없이 통으로 썼습니다. 그러면 주제가 뭐든 같은 모양이
+ * 나오고, 그 자리에서 이미 이기고 있는 글들과 형태가 어긋납니다.
+ * 상위 글 평균이 2,254자인데 1,200자를 써주면 그냥 짧은 글입니다.
+ *
+ * ⚠️ 다만 "이 길이로 쓰면 1위가 된다"는 게 아닙니다. 상위 글들이 그 정도 분량으로
+ * 쓰고 있다는 사실을 알려주는 것뿐이고, 그 이상 약속하면 거짓말이 됩니다.
+ * 그래서 프롬프트에도 '기준'이 아니라 '지금 상위에 있는 글들의 모습'이라고 적습니다.
+ */
+function benchmarkBlock(bench) {
+  if (!bench) return "";
+  const bits = [];
+  if (bench.chars) bits.push(`본문 길이 약 ${bench.chars.toLocaleString()}자`);
+  if (bench.headings) bits.push(`소제목 ${bench.headings}개`);
+  if (bench.images) bits.push(`사진 ${bench.images}장`);
+  if (bench.keywordCount) bits.push(`본문에서 핵심 키워드 ${bench.keywordCount}번 정도 사용`);
+  if (!bits.length) return "";
+  return (
+    `\n[지금 이 키워드로 상위에 있는 글들의 모습]\n` +
+    bits.map((b) => `- ${b}`).join("\n") +
+    (bench.keywordInTitleRate >= 60 ? `\n- ${bench.keywordInTitleRate}%가 제목에 핵심 키워드를 넣었습니다` : "") +
+    (bench.mapRate >= 60 ? `\n- ${bench.mapRate}%가 지도를 넣었습니다 (본문에 지도 넣을 자리를 표시해 주세요)` : "") +
+    `\n이건 상위 노출의 원인이 아니라 그 자리 글들의 공통점입니다. ` +
+    `분량과 구성을 여기에 맞춰 주시되, 채우려고 같은 말을 반복하지는 마세요. ` +
+    `할 말이 모자라면 억지로 늘리는 대신 ✏️ 표시로 남겨두세요.\n`
+  );
+}
+
+/**
+ * 한 꼭지가 얼마나 채워져야 하는지를 **글자 수가 아니라 뼈대로** 알려줍니다.
+ *
+ * ⚠️ 여기에 이유가 있습니다. "500자 안팎으로 쓰세요"라고 지시하면 모델이 잘 안 늘립니다.
+ * 실측했더니 1,899자를 목표로 잡았는데 1,371자만 나왔습니다(28% 부족).
+ * 전자책을 만들 때도 똑같은 일을 겪었고, 그때는 **무엇을 담아야 하는지 항목으로 나눠주니**
+ * 분량이 따라왔습니다. 사람도 "500자 쓰세요"보다 "이 네 가지를 다루세요"가 쉽습니다.
+ */
+function sectionSkeleton(perSection) {
+  // 한국어 한 문장이 대략 45자쯤 됩니다. 필요한 문장 수를 역산해서 항목으로 나눕니다.
+  const sentences = Math.max(4, Math.round(perSection / 45));
+  const beats = Math.min(5, Math.max(3, Math.round(sentences / 2.5)));
+  return (
+    `이 소제목 아래를 ${beats}개의 이야기 덩어리로 채우세요. ` +
+    `각 덩어리는 서로 다른 내용이어야 합니다 — 예: 무엇인지 / 어떤 점이 좋은지 / ` +
+    `주의할 점 / 누구에게 맞는지 / 실제로 어떻게 하면 되는지. ` +
+    `전체 ${sentences}문장 이상. 같은 말을 바꿔 쓰며 늘리지 말고, ` +
+    `할 말이 모자라면 그 자리를 ✏️(직접 확인 후 채워주세요: ...) 로 남기세요.`
+  );
+}
+
+async function callClaude(topic, cat, imageCount, bench = null) {
+  // 상위 글이 소제목을 몇 개 쓰는지 알면 그걸 따르고, 모르면 4개로 둡니다.
+  const sectionCount = bench && bench.headings ? Math.min(8, Math.max(3, bench.headings)) : 4;
+  const targetChars = bench && bench.chars ? bench.chars : null;
+  // 소제목 하나가 맡을 분량 — 이렇게 나눠줘야 전체 길이가 맞습니다.
+  const perSection = targetChars ? Math.round((targetChars * 0.8) / sectionCount) : null;
+
   const prompt =
     `당신은 네이버 블로그에 올릴 "${CATEGORY_TONE[cat]}" 글을 쓰는 한국어 블로그 작가입니다.\n` +
-    `주제: "${topic}"\n\n` +
-    `아래 JSON 형식으로만 응답하세요(다른 설명 없이 JSON 객체 하나만):\n` +
+    `주제: "${topic}"\n` +
+    benchmarkBlock(bench) +
+    `\n아래 JSON 형식으로만 응답하세요(다른 설명 없이 JSON 객체 하나만):\n` +
     `{\n` +
     `  "title": "클릭하고 싶어지는 블로그 제목 (30자 내외)",\n` +
     `  "intro": "두세 문장의 도입부(후킹)",\n` +
-    `  "sections": [ { "heading": "소제목", "body": "3~5문장 본문" } 총 ${sectionCount}개 ],\n` +
+    `  "sections": [ { "heading": "소제목", "body": "${
+      perSection ? sectionSkeleton(perSection) : "3~5문장 본문"
+    }" } 총 ${sectionCount}개 ],\n` +
     `  "cta": "마무리 인사말 겸 CTA 한두 문장",\n` +
     `  "hashtags": ["#해시태그", ... 5~6개]\n` +
     `}\n\n` +
@@ -199,10 +261,25 @@ async function callClaude(topic, cat, imageCount) {
     `"지어내지 말고", 그 자리에 "✏️(직접 확인 후 채워주세요: 예상되는 내용)" 형태로 표시해서 사용자가 실제 정보로 ` +
     `채워 넣을 자리를 명확히 남겨두세요. 일반적으로 알려진 상식 수준의 설명, 글의 흐름, 문장력은 자유롭게 잘 써도 됩니다.`;
 
+  // ⚠️ maxTokens가 2000으로 고정돼 있었습니다. 한국어는 글자당 토큰이 많이 들어서
+  // 2,000토큰으로는 1,300자쯤에서 잘립니다. 상위 글에 맞춰 2,200자를 쓰라고 시켜놓고
+  // 정작 그만큼 쓸 자리를 안 준 셈이라, 응답이 중간에 끊겨 JSON 파싱까지 실패합니다.
+  // 목표 분량에 맞춰 늘려 잡습니다.
+  const maxTokens = targetChars
+    ? Math.min(8000, Math.max(2000, Math.round(targetChars * 2.2)))
+    : 2000;
+
+  // ⚠️ 제한시간 기본값이 45초입니다. maxTokens를 4,000 넘게 올려놓고 45초를 그대로 두면
+  // 생성이 끝나기 전에 끊깁니다. 실제로 "This operation was aborted"가 났고,
+  // 템플릿으로 대체되면서 409자짜리 빈 껍데기가 나왔습니다.
+  // 긴 글을 시켰으면 기다릴 시간도 같이 줘야 합니다.
+  const timeoutMs = Math.min(150000, Math.max(45000, maxTokens * 30));
+
   const text = await claudeClient.callClaude({
     messages: [{ role: "user", content: prompt }],
-    maxTokens: 2000,
+    maxTokens,
     temperature: 0.8,
+    timeoutMs,
   });
   const parsed = claudeClient.extractJson(text);
 
@@ -440,7 +517,16 @@ function assembleDraft(cleanTopic, cat, content, mode, images, note) {
  *            가져와 그 내용을 바탕으로 초안을 씁니다. mode가 text_images인데 사용자가 이미지를
  *            안 올렸으면, 원문 페이지에 실제로 있던 사진을 대신 씁니다.
  */
-async function generateDraft({ topic, category, mode = "text", images = [], sourceUrl } = {}) {
+async function generateDraft({
+  topic,
+  category,
+  mode = "text",
+  images = [],
+  sourceUrl,
+  // 이 키워드로 상위에 있는 글들을 먼저 보고, 그 분량·구성에 맞춰 씁니다.
+  // 비워두면 예전처럼 그냥 씁니다(느려지지 않습니다).
+  benchmarkKeyword = null,
+} = {}) {
   const cat = CATEGORIES.some((c) => c.id === category) ? category : "info_post";
 
   if (sourceUrl) {
@@ -499,14 +585,32 @@ async function generateDraft({ topic, category, mode = "text", images = [], sour
 
   if (writerConfigured()) {
     try {
-      const content = await callClaude(cleanTopic, cat, images.length);
+      // 상위 글을 먼저 보고 그 모양에 맞춰 씁니다.
+      // ⚠️ 여기서 실패해도 글쓰기는 계속돼야 합니다. 네이버가 막혔다고 원고를 못 받으면
+      // 손님 입장에서는 그냥 고장 난 겁니다. 벤치마크는 있으면 더 좋은 부가정보입니다.
+      let bench = null;
+      if (benchmarkKeyword) {
+        try {
+          const r = await competitorCompare.compare({ keyword: benchmarkKeyword, topN: 3 });
+          if (r.ok) bench = r.bench;
+        } catch (e) {
+          console.warn("[blogWriter] 경쟁 글을 못 봤습니다. 그냥 씁니다:", e.message);
+        }
+      }
+
+      const content = await callClaude(cleanTopic, cat, images.length, bench);
       return assembleDraft(
         cleanTopic,
         cat,
         content,
         mode,
         images,
-        "Claude API로 실제 문장을 생성한 초안입니다. ✏️ 표시된 부분은 Claude가 실시간/구체적 사실(가격·날짜·통계 등)을 모르기 때문에 지어내지 않고 비워둔 자리이니, 실제 정보로 채운 뒤 발행해 주세요. 나머지 문장도 사실 확인 후 게시하는 걸 권장합니다."
+        (bench
+          ? `지금 "${benchmarkKeyword}"로 상위에 있는 글 ${
+              bench.chars ? `평균 ${bench.chars.toLocaleString()}자` : ""
+            }에 맞춰 분량과 소제목 수를 잡았습니다. 상위 노출을 보장하는 건 아니고, 그 자리 글들의 모습을 따른 것입니다. `
+          : "") +
+          "Claude API로 실제 문장을 생성한 초안입니다. ✏️ 표시된 부분은 Claude가 실시간/구체적 사실(가격·날짜·통계 등)을 모르기 때문에 지어내지 않고 비워둔 자리이니, 실제 정보로 채운 뒤 발행해 주세요. 나머지 문장도 사실 확인 후 게시하는 걸 권장합니다."
       );
     } catch (err) {
       console.error("[blogWriter] Claude API 호출 실패, 템플릿으로 대체합니다:", err.message);

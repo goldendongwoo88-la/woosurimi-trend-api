@@ -176,6 +176,15 @@ function countHeadings(rawBody) {
   const hTags = (html.match(/<h[1-6][^>]*>/gi) || []).length;
   if (hTags) return { count: hTags, how: "html", certain: true };
 
+  // 1-b) 스마트에디터 인용구
+  //
+  // ⚠️ 네이버 블로그에는 h1~h6가 거의 없습니다. 스마트에디터에 '제목' 서식이
+  // 따로 없어서, 사람들이 **인용구(se-quotation)를 소제목처럼** 씁니다.
+  // 그래서 주소로 글을 읽어와 진단할 때 소제목이 늘 "알 수 없음"으로 나왔습니다.
+  // 인용구를 세면 실제 소제목 수에 맞습니다 (실측: 인용구 9개인 글의 소제목이 9개).
+  const quotes = (html.match(/class="se-component se-quotation/gi) || []).length;
+  if (quotes) return { count: quotes, how: "quotation", certain: true };
+
   const text = stripHtml(html);
 
   // 2) 마크다운 ## 또는 흔히 쓰는 소제목 표시
