@@ -63,6 +63,62 @@
      네이버에 글쓰기 API가 없어서 자동 발행은 불가능합니다.
      대신 제목·본문·태그를 각각 클립보드에 담아주고 글쓰기 창을 열어줍니다.
      사용자가 할 일은 칸마다 붙여넣기 한 번씩입니다. */
+/* ── 글 진단 ──────────────────────────────────────────────
+     발행 전에 이 글이 괜찮은지 봐줍니다. 네이버 지수를 추정하는 게 아니라
+     확실히 아는 것(글자수·키워드 위치·어미 반복·위험 표현)만 봅니다. */
+  .audit { border: 1px solid #e8e2d4; background: #fdfbf6; border-radius: 10px; padding: 16px; margin-top: 14px; }
+  .audit-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+  .audit-score {
+    width: 58px; height: 58px; border-radius: 50%; flex: 0 0 auto;
+    display: grid; place-items: center; position: relative;
+  }
+  .audit-score .inner {
+    width: 46px; height: 46px; border-radius: 50%; background: #fdfbf6;
+    display: grid; place-items: center; line-height: 1;
+  }
+  .audit-score b { font-size: 17px; color: #3a3226; }
+  .audit-score small { font-size: 9px; color: #9a8f7a; }
+  .audit-grade { font-size: 15px; font-weight: 700; color: #3a3226; }
+  .audit-sum { font-size: 12px; color: #8a7f6a; margin-top: 2px; }
+  .audit-counts { display: flex; gap: 8px; font-size: 11px; margin-top: 5px; }
+  .audit-counts span { padding: 1px 7px; border-radius: 9px; }
+  .ac-good { background: #e8f6ec; color: #1f6b32; }
+  .ac-warn { background: #fdf3e0; color: #8a6112; }
+  .ac-bad  { background: #fdeaea; color: #a52c2c; }
+
+  .audit-stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 6px; margin: 12px 0; padding: 10px; background: #fff; border-radius: 8px;
+  }
+  .audit-stats div { text-align: center; }
+  .audit-stats b { display: block; font-size: 14px; color: #3a3226; font-variant-numeric: tabular-nums; }
+  .audit-stats span { font-size: 10px; color: #9a8f7a; }
+
+  .audit-item {
+    display: grid; grid-template-columns: 16px 1fr; gap: 8px;
+    padding: 8px 0; border-top: 1px solid #f0ebe0; font-size: 12.5px;
+  }
+  .audit-item:first-of-type { border-top: none; }
+  .audit-item .dot { font-size: 11px; line-height: 1.5; }
+  .audit-item .t { color: #3a3226; font-weight: 600; }
+  .audit-item .d { color: #7a7060; font-size: 11.5px; margin-top: 1px; }
+  .audit-item .f { color: #1f6b32; font-size: 11.5px; margin-top: 3px; }
+  .audit-item.bad .f { color: #a52c2c; }
+
+  .audit-risk { background: #fdeaea; border-radius: 8px; padding: 11px 13px; margin-top: 10px; }
+  .audit-risk .rt { font-size: 12px; font-weight: 700; color: #a52c2c; margin-bottom: 6px; }
+  .audit-risk .ri { font-size: 11.5px; color: #7a3535; line-height: 1.7; margin-bottom: 5px; }
+  .audit-risk .ri b { background: #fff; padding: 1px 5px; border-radius: 3px; }
+
+  .audit-note {
+    font-size: 10.5px; color: #9a8f7a; line-height: 1.65;
+    margin-top: 12px; padding-top: 10px; border-top: 1px solid #f0ebe0;
+  }
+  .audit-toggle {
+    background: none; border: none; color: #8a7f6a; font-size: 11.5px;
+    cursor: pointer; padding: 6px 0; font-family: inherit;
+  }
+
   .naver-panel {
     border: 1px solid #d8e8d0; background: #f6fbf4; border-radius: 10px;
     padding: 16px; margin-top: 14px;
@@ -254,7 +310,7 @@
 <body>
 <header>
   <a href="/" style="font-size:13px;color:#888;text-decoration:none;">← 홈으로</a>
-  <h1>우수리미 · 맞춤형 글쓰기 프롬프트 (데모)</h1>
+  <h1 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">우수리미 · 맞춤형 글쓰기 프롬프트 (데모)<a href="/toolkit.html" style="font-size:12px;font-weight:400;color:#03c75a;text-decoration:none;white-space:nowrap">🔍 키워드·글 진단 →</a></h1>
 </header>
 <main>
   <div class="note">
@@ -491,6 +547,79 @@
     }
   }
 
+  /** 진단 결과를 그립니다. */
+  function auditHtml(a) {
+    if (!a) return "";
+    const ring = a.score >= 80 ? "#03c75a" : a.score >= 55 ? "#e0a72e" : "#d05252";
+    const deg = Math.round((a.score / 100) * 360);
+    const s = a.stats;
+    const icon = (c) => (c.ok ? "🟢" : c.level === "bad" ? "🔴" : "🟡");
+
+    const fails = a.checks.filter((c) => !c.ok);
+    const passes = a.checks.filter((c) => c.ok);
+
+    return `
+      <div class="audit">
+        <div class="audit-head">
+          <div class="audit-score" style="background:conic-gradient(${ring} ${deg}deg, #ece5d8 0)">
+            <div class="inner"><div><b>${a.score}</b><br><small>점</small></div></div>
+          </div>
+          <div>
+            <div class="audit-grade">${escapeHtml(a.grade)}</div>
+            <div class="audit-sum">${escapeHtml(a.summary)}</div>
+            <div class="audit-counts">
+              <span class="ac-good">통과 ${a.counts.good}</span>
+              ${a.counts.warn ? `<span class="ac-warn">주의 ${a.counts.warn}</span>` : ""}
+              ${a.counts.bad ? `<span class="ac-bad">문제 ${a.counts.bad}</span>` : ""}
+            </div>
+          </div>
+        </div>
+
+        <div class="audit-stats">
+          <div><b>${s.charsNoSpace.toLocaleString()}</b><span>글자(공백뺀)</span></div>
+          <div><b>${s.headings}</b><span>소제목</span></div>
+          <div><b>${s.paragraphs}</b><span>문단</span></div>
+          <div><b>${s.images}</b><span>이미지</span></div>
+          <div><b>${s.tags}</b><span>태그</span></div>
+          <div><b>${s.endingVariety}</b><span>어미 종류</span></div>
+        </div>
+
+        ${fails.map((c) => `
+          <div class="audit-item ${c.level}">
+            <span class="dot">${icon(c)}</span>
+            <span>
+              <span class="t">${escapeHtml(c.label)}</span>
+              <div class="d">${escapeHtml(c.detail)}</div>
+              ${c.fix ? `<div class="f">→ ${escapeHtml(c.fix)}</div>` : ""}
+            </span>
+          </div>`).join("")}
+
+        ${a.risks && a.risks.length ? `
+          <div class="audit-risk">
+            <div class="rt">⚠️ 고쳐야 할 표현</div>
+            ${a.risks.map((r) => `
+              <div class="ri">
+                <b>${r.words.map(escapeHtml).join("</b> <b>")}</b>
+                — ${escapeHtml(r.why)}<br>
+                <span style="opacity:.8">→ ${escapeHtml(r.fix)}</span>
+              </div>`).join("")}
+          </div>` : ""}
+
+        ${passes.length ? `
+          <details>
+            <summary class="audit-toggle">통과한 항목 ${passes.length}개 보기</summary>
+            ${passes.map((c) => `
+              <div class="audit-item">
+                <span class="dot">🟢</span>
+                <span><span class="t">${escapeHtml(c.label)}</span>
+                <div class="d">${escapeHtml(c.detail)}</div></span>
+              </div>`).join("")}
+          </details>` : ""}
+
+        <div class="audit-note">${escapeHtml(a.disclaimer)}</div>
+      </div>`;
+  }
+
   function naverPanelHtml(d) {
     const s = d.stats;
     const blogId = localStorage.getItem("naverBlogId") || "";
@@ -547,14 +676,14 @@
           <button class="np-copy" id="saveBlogId">저장</button>
         </div>
 
+        ${auditHtml(d.audit)}
+
         <div class="np-note">
           <b>순서</b> ① 제목 복사 → 글쓰기 창에서 제목 칸에 붙여넣기<br>
           ② 본문 복사 → 본문 칸에 붙여넣기 (소제목·인용 서식이 그대로 들어갑니다)<br>
           ③ 사진은 <b>[ 사진 자리 ]</b> 라고 적힌 곳에 직접 넣고 그 글자를 지워주세요<br>
           ④ 태그 복사 → 맨 아래 태그 칸에 붙여넣기<br><br>
-          ${s.chars < 1500
-            ? `⚠️ 공백 뺀 글자가 ${s.chars}자예요. 네이버 홈판을 노리신다면 1500자 이상을 권합니다.`
-            : `✅ 글 길이는 넉넉합니다.`}
+          ⑤ 위 진단에서 빨간 항목이 있으면 고치고 올리시는 게 좋아요
         </div>
 
         <button class="naver-btn" id="naverRedo" style="background:#8a9487;margin-top:12px">다시 정리하기</button>

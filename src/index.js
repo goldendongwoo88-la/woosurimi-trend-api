@@ -17,6 +17,8 @@ const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
 const naverBlogExport = require("./naverBlogExport");
+const postAudit = require("./postAudit");
+const keywordInsight = require("./keywordInsight");
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
 const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
@@ -1102,16 +1104,65 @@ app.post("/api/naver-blog/prepare", async (req, res) => {
 
   try {
     const post = await naverBlogExport.preparePost(raw, { hint });
+    const plain = naverBlogExport.toPlain(post);
+    const html = naverBlogExport.toHtml(post);
     res.json({
-      post,
-      html: naverBlogExport.toHtml(post),
-      plain: naverBlogExport.toPlain(post),
+      post, html, plain,
       tagLine: naverBlogExport.toTagLine(post),
       stats: naverBlogExport.stats(post),
       writeUrl: naverBlogExport.writeUrl(blogId),
+      // 발행 직전에 한 번 더 봐줍니다. 올리고 나서 고치는 것보다 낫습니다.
+      audit: postAudit.audit({
+        title: post.title,
+        body: html,
+        tags: post.tags,
+        keyword: req.body.keyword || "",
+        images: post.blocks.filter((b) => b.type === "image").length,
+      }),
     });
   } catch (err) {
     res.status(400).json({ error: "prepare_failed", message: err.message });
+  }
+});
+
+// ── 글 진단 ──────────────────────────────────────────────────
+//
+// 판다랭크·블라이 같은 곳은 "블로그 지수 78점"처럼 숫자를 보여줍니다. 그런데
+// 네이버의 실제 검색 순위 알고리즘은 공개된 적이 없습니다. 그런 숫자도 결국
+// 겉으로 관찰되는 것들로 추정한 값입니다.
+//
+// 그래서 여기서는 확실히 아는 것만 봅니다. 글자 수, 소제목 수, 키워드 위치,
+// 어미 반복, 광고법에 걸릴 표현 — 전부 계산으로 확인되고 고치면 실제로 나아지는
+// 것들입니다. 추정한 숫자로 겁주는 대신 고칠 수 있는 것을 짚어줍니다.
+app.post("/api/post-audit", (req, res) => {
+  const { title, body, tags, keyword, images } = req.body || {};
+  if (!String(body || "").trim()) {
+    return res.status(400).json({ error: "empty", message: "진단할 글이 없습니다." });
+  }
+  try {
+    res.json(postAudit.audit({ title, body, tags, keyword, images }));
+  } catch (err) {
+    res.status(400).json({ error: "audit_failed", message: err.message });
+  }
+});
+
+// ── 키워드 진단 ──────────────────────────────────────────────
+//
+// 카테고리를 골라 좋은 키워드를 찾아주는 건 이미 /api/opportunity가 합니다.
+// 여기는 반대 방향입니다. 이미 쓰려는 키워드가 있을 때 "이거 쓸 만한가"를 봅니다.
+// 검색량(수요)과 문서 수(공급)를 함께 봐야 알 수 있습니다.
+app.get("/api/keyword/status", (req, res) => {
+  res.json(keywordInsight.status());
+});
+
+app.get("/api/keyword/inspect", async (req, res) => {
+  const kw = String(req.query.q || "").trim();
+  if (!kw) return res.status(400).json({ error: "missing", message: "키워드를 입력해 주세요." });
+  try {
+    res.json(await keywordInsight.inspect(kw));
+  } catch (err) {
+    const code = err.code === "no_keys" ? 503 : 400;
+    res.status(code).json({ error: err.code || "inspect_failed", message: err.message, status: keywordInsight.status() });
   }
 });
 

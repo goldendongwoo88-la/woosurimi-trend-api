@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>글쓰기 도구 · 우수리미</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   판다랭크·블라이가 하는 일 중 우리에게 없던 두 가지를 담았습니다.
+     1) 키워드 진단 — 이 키워드로 써도 될까 (검색량 vs 문서 수)
+     2) 글 진단 — 이 글 이대로 올려도 될까 (길이·구조·표현 위험)
+
+   ⚠️ 둘 다 "네이버 지수"를 추정하지 않습니다. 그 알고리즘은 공개된 적이 없어서
+   누가 내놓든 추정치일 뿐입니다. 확실히 셀 수 있는 것만 보여줍니다.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --bg: #f5f6f8;
+  --card: #fff;
+  --ink: #24282e;
+  --ink2: #5c6470;
+  --ink3: #98a0ac;
+  --line: #e6e8ec;
+  --brand: #03c75a;
+  --gold: #d9a326;
+  --red: #d24b4b;
+  --amber: #e0952e;
+  --green: #2f9e5e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  line-height: 1.65;
+}
+header {
+  background: #fff; border-bottom: 1px solid var(--line);
+  padding: 14px 16px; position: sticky; top: 0; z-index: 10;
+}
+header .row { max-width: 900px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+h1 { font-size: 17px; margin: 0; flex: 1; }
+.back { font-size: 13px; color: var(--ink3); text-decoration: none; }
+.back:hover { color: var(--ink2); }
+
+main { max-width: 900px; margin: 0 auto; padding: 16px 16px 80px; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+.tabs button {
+  flex: 1; padding: 11px; border: 1px solid var(--line); background: #fff;
+  border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--ink2);
+  cursor: pointer; font-family: inherit;
+}
+.tabs button[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.card { background: var(--card); border-radius: 12px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.card h2 { font-size: 15px; margin: 0 0 4px; }
+.card .sub { font-size: 12.5px; color: var(--ink3); margin-bottom: 14px; line-height: 1.6; }
+
+label { display: block; font-size: 12px; color: var(--ink2); margin: 12px 0 5px; font-weight: 600; }
+input[type=text], textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px;
+  font-size: 14px; font-family: inherit; color: var(--ink);
+}
+textarea { min-height: 200px; resize: vertical; line-height: 1.7; }
+input:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: -1px; border-color: var(--brand); }
+
+.btn {
+  border: none; border-radius: 8px; padding: 12px 18px; font-size: 14px;
+  font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.btn-main { background: var(--brand); color: #fff; width: 100%; margin-top: 14px; }
+.btn-main:hover { filter: brightness(1.06); }
+.btn-main:disabled { background: #b9c6be; cursor: default; }
+.btn-sm { padding: 7px 12px; font-size: 12px; background: #f0f2f5; color: var(--ink2); }
+
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+
+/* 진단 결과 */
+.score-row { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+.ring { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; }
+.ring .in { width: 52px; height: 52px; border-radius: 50%; background: #fff; display: grid; place-items: center; line-height: 1.1; }
+.ring b { font-size: 19px; } .ring small { font-size: 9px; color: var(--ink3); }
+.grade { font-size: 17px; font-weight: 700; }
+.grade-note { font-size: 12.5px; color: var(--ink2); margin-top: 2px; }
+
+.pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.pill { font-size: 11px; padding: 2px 9px; border-radius: 10px; }
+.p-good { background: #e8f6ec; color: var(--green); }
+.p-warn { background: #fdf3e0; color: #8a6112; }
+.p-bad { background: #fdeaea; color: var(--red); }
+.p-gray { background: #eef0f3; color: var(--ink3); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 8px; margin: 14px 0; }
+.stats > div { background: #f7f8fa; border-radius: 8px; padding: 10px 6px; text-align: center; }
+.stats b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+.stats span { font-size: 10.5px; color: var(--ink3); }
+
+.item { display: grid; grid-template-columns: 18px 1fr; gap: 9px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.item:first-of-type { border-top: none; }
+.item .t { font-weight: 600; }
+.item .d { color: var(--ink2); font-size: 12px; margin-top: 1px; }
+.item .f { color: var(--green); font-size: 12px; margin-top: 3px; }
+.item.bad .f { color: var(--red); }
+
+.risk { background: #fdeaea; border-radius: 9px; padding: 12px 14px; margin-top: 12px; }
+.risk .h { font-size: 12.5px; font-weight: 700; color: var(--red); margin-bottom: 7px; }
+.risk .i { font-size: 12px; color: #8a3a3a; line-height: 1.7; margin-bottom: 6px; }
+.risk .i b { background: #fff; padding: 1px 6px; border-radius: 3px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+th { font-size: 11px; color: var(--ink3); font-weight: 600; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.hi td { background: #fffbf0; }
+
+.note { font-size: 11px; color: var(--ink3); line-height: 1.7; margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--line); }
+.warn-box { background: #fff8e6; border: 1px solid #f0dfae; border-radius: 9px; padding: 13px 15px; font-size: 12.5px; color: #7a5c00; line-height: 1.7; }
+.warn-box code { background: #fff; padding: 1px 5px; border-radius: 3px; font-size: 11.5px; }
+.err { background: #fdeaea; color: #a52c2c; border-radius: 8px; padding: 12px 14px; font-size: 13px; }
+.loading { text-align: center; padding: 26px 0; color: var(--ink3); font-size: 13px; }
+.spin { display: inline-block; animation: sp 1s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg) } }
+.hidden { display: none !important; }
+details summary { cursor: pointer; font-size: 12px; color: var(--ink3); padding: 8px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="row">
+    <h1>글쓰기 도구</h1>
+    <a class="back" href="/prompt-studio.html">맞춤형 글쓰기 →</a>
+  </div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button data-tab="keyword" aria-selected="true">키워드 진단</button>
+    <button data-tab="post" aria-selected="false">글 진단</button>
+  </div>
+
+  <!-- ── 키워드 진단 ── -->
+  <section id="tab-keyword">
+    <div class="card">
+      <h2>이 키워드로 써도 될까</h2>
+      <div class="sub">
+        찾는 사람은 많은데 글은 적은 키워드를 골라야 합니다.
+        검색량만 보면 큰 키워드에 묻히고, 문서 수만 보면 아무도 안 찾는 키워드를 잡습니다.
+      </div>
+      <input type="text" id="kwInput" placeholder="예: 제주도 카페" autocomplete="off">
+      <button class="btn btn-main" id="kwBtn">진단하기</button>
+      <div id="kwOut"></div>
+    </div>
+  </section>
+
+  <!-- ── 글 진단 ── -->
+  <section id="tab-post" class="hidden">
+    <div class="card">
+      <h2>이 글 이대로 올려도 될까</h2>
+      <div class="sub">
+        글자 수, 소제목, 키워드 위치, 어미 반복, 그리고 광고법에 걸릴 만한 표현을 봅니다.
+        전부 계산으로 확인되는 것들이라 고치면 실제로 나아집니다.
+      </div>
+
+      <div class="row2">
+        <div>
+          <label for="pTitle">제목</label>
+          <input type="text" id="pTitle" placeholder="글 제목을 붙여넣으세요">
+        </div>
+        <div>
+          <label for="pKw">노리는 키워드 <span style="font-weight:400;color:var(--ink3)">(선택)</span></label>
+          <input type="text" id="pKw" placeholder="예: 제주도 카페">
+        </div>
+      </div>
+
+      <label for="pBody">본문</label>
+      <textarea id="pBody" placeholder="본문을 통째로 붙여넣으세요. 네이버 에디터에서 복사해 오셔도 됩니다."></textarea>
+
+      <div class="row2">
+        <div>
+          <label for="pTags">태그 <span style="font-weight:400;color:var(--ink3)">(쉼표나 # 로 구분)</span></label>
+          <input type="text" id="pTags" placeholder="#제주도카페 #애월 #카페추천">
+        </div>
+        <div>
+          <label for="pImg">이미지 개수</label>
+          <input type="text" id="pImg" inputmode="numeric" placeholder="예: 6">
+        </div>
+      </div>
+
+      <button class="btn btn-main" id="pBtn">진단하기</button>
+      <div id="pOut"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const n = (v) => (v == null ? "—" : Number(v).toLocaleString());
+
+/* ── 탭 ── */
+document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach((x) =>
+    x.setAttribute("aria-selected", String(x === b)));
+  $("#tab-keyword").classList.toggle("hidden", b.dataset.tab !== "keyword");
+  $("#tab-post").classList.toggle("hidden", b.dataset.tab !== "post");
+}));
+
+/* ═══════════════════════════════════════════════════════════
+   키워드 진단
+   ═══════════════════════════════════════════════════════════ */
+const TONE = { gold: "#d9a326", green: "#2f9e5e", amber: "#e0952e", red: "#d24b4b", gray: "#98a0ac" };
+
+async function inspectKeyword() {
+  const kw = $("#kwInput").value.trim();
+  if (!kw) { $("#kwInput").focus(); return; }
+  const btn = $("#kwBtn");
+  const out = $("#kwOut");
+  btn.disabled = true;
+  out.innerHTML = `<div class="loading"><span class="spin">◠</span> 네이버에서 확인하는 중…</div>`;
+
+  try {
+    const res = await fetch(`/api/keyword/inspect?q=${encodeURIComponent(kw)}`);
+    const d = await res.json();
+
+    if (!res.ok) {
+      // 키가 없어서 못 하는 경우는 어떻게 채우는지까지 알려줍니다.
+      if (d.status && !d.status.ready) { out.innerHTML = keyGuideHtml(d.status, d.message); }
+      else out.innerHTML = `<div class="err">${esc(d.message)}</div>`;
+      btn.disabled = false;
+      return;
+    }
+    out.innerHTML = keywordResultHtml(d);
+  } catch (e) {
+    out.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+  btn.disabled = false;
+}
+
+function keyGuideHtml(st, msg) {
+  const g = st.guide;
+  const row = (ok, info) => `
+    <div style="margin-top:10px">
+      <b>${ok ? "✅" : "⬜"} ${esc(info.what)}</b><br>
+      <span style="opacity:.85">받는 곳: ${esc(info.where)} · ${esc(info.cost)}</span><br>
+      <span style="opacity:.85">.env에 넣을 것: ${info.keys.map((k) => `<code>${esc(k)}</code>`).join(" ")}</span>
+    </div>`;
+  return `<div class="warn-box" style="margin-top:14px">
+    <b>네이버 API 키가 필요합니다</b><br>
+    ${esc(msg || "")}
+    ${row(st.ad, g.ad)}
+    ${row(st.search, g.search)}
+    <div style="margin-top:12px;opacity:.8">
+      둘 다 무료이고, 하나만 있어도 그만큼은 볼 수 있습니다.
+      키를 넣으신 뒤 서버를 다시 켜면 바로 동작합니다.
+    </div>
+  </div>`;
+}
+
+function keywordResultHtml(d) {
+  const tone = TONE[d.tone] || TONE.gray;
+  const scoreShown = d.score != null ? d.score.toFixed(2) : "—";
+  // 점수는 0~1.5 범위를 원으로 그립니다. 그 이상은 꽉 찬 것으로.
+  const deg = d.score != null ? Math.min(360, Math.round((d.score / 1.5) * 360)) : 0;
+
+  return `
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+      <div class="score-row">
+        <div class="ring" style="background:conic-gradient(${tone} ${deg}deg, #eef0f3 0)">
+          <div class="in"><div style="text-align:center"><b>${scoreShown}</b><br><small>기회</small></div></div>
+        </div>
+        <div>
+          <div class="grade" style="color:${tone}">${esc(d.grade || "판단 불가")}</div>
+          <div class="grade-note">${esc(d.advice || "")}</div>
+          <div class="pills">
+            ${d.competition ? `<span class="pill p-gray">네이버 경쟁 ${esc(d.competition)}</span>` : ""}
+            ${d.heat ? `<span class="pill ${d.heat.level.includes("뜨") ? "p-warn" : "p-good"}">${esc(d.heat.level)}</span>` : ""}
+          </div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div><b>${n(d.volume ? d.volume.total : null)}</b><span>월 검색량</span></div>
+        <div><b>${n(d.volume ? d.volume.mobile : null)}</b><span>모바일</span></div>
+        <div><b>${n(d.volume ? d.volume.pc : null)}</b><span>PC</span></div>
+        <div><b>${n(d.docs)}</b><span>블로그 글</span></div>
+        <div><b>${n(d.todayDocs)}</b><span>오늘 올라온</span></div>
+      </div>
+
+      ${d.heat ? `<div style="font-size:12px;color:var(--ink2)">${esc(d.heat.note)}</div>` : ""}
+
+      ${d.related && d.related.length ? `
+        <div style="margin-top:20px">
+          <b style="font-size:13.5px">함께 볼 만한 키워드</b>
+          <div style="font-size:11.5px;color:var(--ink3);margin-top:2px">기회가 좋은 순입니다. 노란 줄이 특히 쓸 만합니다.</div>
+          <table>
+            <thead><tr><th>키워드</th><th class="num">월 검색</th><th class="num">글 수</th><th class="num">기회</th><th>판정</th></tr></thead>
+            <tbody>${d.related.map((r) => `
+              <tr class="${r.grade === "황금" ? "hi" : ""}">
+                <td>${esc(r.keyword)}</td>
+                <td class="num">${n(r.total)}</td>
+                <td class="num">${n(r.docs)}</td>
+                <td class="num">${r.score != null ? r.score.toFixed(2) : "—"}</td>
+                <td>${r.grade ? esc(r.grade) : "—"}</td>
+              </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>` : ""}
+
+      ${d.limits && d.limits.length ? `
+        <div class="warn-box" style="margin-top:14px">
+          <b>못 본 것</b><br>${d.limits.map(esc).join("<br>")}
+        </div>` : ""}
+
+      <div class="note">${esc(d.note)}</div>
+    </div>`;
+}
+
+$("#kwBtn").onclick = inspectKeyword;
+$("#kwInput").addEventListener("keydown", (e) => { if (e.key === "Enter") inspectKeyword(); });
+
+/* ═══════════════════════════════════════════════════════════
+   글 진단
+   ═══════════════════════════════════════════════════════════ */
+async function auditPost() {
+  const body = $("#pBody").value.trim();
+  if (!body) { $("#pBody").focus(); return; }
+  const btn = $("#pBtn");
+  const out = $("#pOut");
+  btn.disabled = true;
+  out.innerHTML = `<div class="loading"><span class="spin">◠</span> 살펴보는 중…</div>`;
+
+  const tags = $("#pTags").value.split(/[,\s]+/).map((s) => s.replace(/^#/, "").trim()).filter(Boolean);
+  const imgRaw = $("#pImg").value.trim();
+
+  try {
+    const res = await fetch("/api/post-audit", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: $("#pTitle").value,
+        body,
+        tags,
+        keyword: $("#pKw").value.trim(),
+        images: imgRaw === "" ? null : Number(imgRaw),
+      }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.message || "진단하지 못했습니다.");
+    out.innerHTML = auditResultHtml(d);
+  } catch (e) {
+    out.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+  btn.disabled = false;
+}
+
+function auditResultHtml(a) {
+  const color = a.score >= 80 ? TONE.green : a.score >= 55 ? TONE.amber : TONE.red;
+  const deg = Math.round((a.score / 100) * 360);
+  const s = a.stats;
+  const icon = (c) => (c.ok ? "🟢" : c.level === "bad" ? "🔴" : "🟡");
+  const fails = a.checks.filter((c) => !c.ok);
+  const passes = a.checks.filter((c) => c.ok);
+
+  return `
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+      <div class="score-row">
+        <div class="ring" style="background:conic-gradient(${color} ${deg}deg, #eef0f3 0)">
+          <div class="in"><div style="text-align:center"><b>${a.score}</b><br><small>점</small></div></div>
+        </div>
+        <div>
+          <div class="grade" style="color:${color}">${esc(a.grade)}</div>
+          <div class="grade-note">${esc(a.summary)}</div>
+          <div class="pills">
+            <span class="pill p-good">통과 ${a.counts.good}</span>
+            ${a.counts.warn ? `<span class="pill p-warn">주의 ${a.counts.warn}</span>` : ""}
+            ${a.counts.bad ? `<span class="pill p-bad">문제 ${a.counts.bad}</span>` : ""}
+          </div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div><b>${n(s.charsNoSpace)}</b><span>글자(공백뺀)</span></div>
+        <div><b>${s.headings}</b><span>소제목</span></div>
+        <div><b>${s.paragraphs}</b><span>문단</span></div>
+        <div><b>${s.avgParagraph}</b><span>문단 평균</span></div>
+        <div><b>${s.images}</b><span>이미지</span></div>
+        <div><b>${s.tags}</b><span>태그</span></div>
+        <div><b>${s.endingVariety}</b><span>어미 종류</span></div>
+      </div>
+
+      ${fails.length ? `<b style="font-size:13.5px">고칠 것 ${fails.length}가지</b>` : `<b style="font-size:13.5px;color:${TONE.green}">고칠 것이 없습니다</b>`}
+      ${fails.map((c) => `
+        <div class="item ${c.level}">
+          <span>${icon(c)}</span>
+          <span>
+            <span class="t">${esc(c.label)}</span>
+            <div class="d">${esc(c.detail)}</div>
+            ${c.fix ? `<div class="f">→ ${esc(c.fix)}</div>` : ""}
+          </span>
+        </div>`).join("")}
+
+      ${a.risks && a.risks.length ? `
+        <div class="risk">
+          <div class="h">⚠️ 광고법에 걸릴 수 있는 표현</div>
+          ${a.risks.map((r) => `
+            <div class="i">
+              <b>${r.words.map(esc).join("</b> <b>")}</b> — ${esc(r.why)}<br>
+              <span style="opacity:.8">→ ${esc(r.fix)}</span>
+            </div>`).join("")}
+        </div>` : ""}
+
+      ${passes.length ? `
+        <details style="margin-top:10px">
+          <summary>통과한 항목 ${passes.length}개 보기</summary>
+          ${passes.map((c) => `
+            <div class="item">
+              <span>🟢</span>
+              <span><span class="t">${esc(c.label)}</span><div class="d">${esc(c.detail)}</div></span>
+            </div>`).join("")}
+        </details>` : ""}
+
+      <div class="note">${esc(a.disclaimer)}</div>
+    </div>`;
+}
+
+$("#pBtn").onclick = auditPost;
+
+/* 주소에 ?tab=post 가 붙어 있으면 글 진단부터 엽니다. */
+const params = new URLSearchParams(location.search);
+if (params.get("tab") === "post") document.querySelector('[data-tab="post"]').click();
+if (params.get("q")) { $("#kwInput").value = params.get("q"); inspectKeyword(); }
+</script>
+</body>
+</html>
