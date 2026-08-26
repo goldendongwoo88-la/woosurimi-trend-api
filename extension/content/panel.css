@@ -117,3 +117,52 @@
 .ws-lv-mid  { background: #fff4e5; color: #92551a; }
 .ws-lv-hard { background: #fdeceb; color: #9b2c23; }
 .ws-kwbox .ws-note { font-size: 10.5px; color: #9ca3af; margin-top: 8px; line-height: 1.6; }
+
+/* ── 글쓰기 창 도구 막대 (늑대플 형태) ───────────────────────
+   ⚠️ 네이버 에디터 위에 얹히는 것이라 z-index를 충분히 높이고,
+   네이버 CSS에 물들지 않도록 값을 전부 직접 지정합니다. */
+#ws-tools-bar {
+  position: fixed; top: 12px; right: 16px; z-index: 2147483000;
+  display: flex; align-items: center; gap: 14px;
+  background: #fff; border: 1px solid #e6e8ed; border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(20,22,28,.14);
+  padding: 8px 12px; font-size: 13px; line-height: 1.4;
+  font-family: -apple-system, "Malgun Gothic", sans-serif; color: #17181c;
+}
+#ws-tools-bar.ws-collapsed .ws-tb-counts,
+#ws-tools-bar.ws-collapsed .ws-tb-actions button:not(.ws-tb-min) { display: none; }
+
+#ws-tools-bar .ws-tb-counts { display: flex; gap: 14px; align-items: center; }
+#ws-tools-bar .ws-tb-item { display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+#ws-tools-bar .ws-tb-item b { font-size: 15px; font-variant-numeric: tabular-nums; }
+#ws-tools-bar .ws-tb-item small { color: #8b909c; font-size: 11px; }
+#ws-tools-bar .ws-tb-item em { color: #8b909c; font-size: 11px; font-style: normal; margin-left: 4px; }
+
+#ws-tools-bar .ws-tb-actions { display: flex; gap: 6px; border-left: 1px solid #e6e8ed; padding-left: 12px; }
+#ws-tools-bar .ws-tb-actions button {
+  font: inherit; font-size: 12px; font-weight: 600; padding: 5px 9px;
+  border: 1px solid #e6e8ed; border-radius: 7px; background: #f7f8fa; color: #17181c; cursor: pointer;
+}
+#ws-tools-bar .ws-tb-actions button:hover { background: #eef0f4; }
+#ws-tools-bar .ws-tb-min { min-width: 28px; }
+
+#ws-tools-panel {
+  position: fixed; top: 58px; right: 16px; z-index: 2147483000;
+  width: 340px; max-height: 70vh; overflow-y: auto;
+  background: #fff; border: 1px solid #e6e8ed; border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(20,22,28,.18); padding: 16px;
+  font-size: 13px; line-height: 1.6; color: #17181c;
+  font-family: -apple-system, "Malgun Gothic", sans-serif;
+}
+#ws-tools-panel h4 { margin: 0 0 10px; font-size: 14px; }
+#ws-tools-panel p { margin: 8px 0; }
+#ws-tools-panel .ws-panel-close {
+  position: absolute; top: 10px; right: 10px; border: none; background: none;
+  font-size: 15px; color: #8b909c; cursor: pointer; padding: 2px 6px;
+}
+#ws-tools-panel .ws-row { padding: 9px 11px; border-radius: 7px; margin-bottom: 7px; }
+#ws-tools-panel .ws-row.bad  { background: #fdeceb; color: #a02c2c; }
+#ws-tools-panel .ws-row.warn { background: #fdf5e4; color: #8a5c11; }
+#ws-tools-panel .ws-row.good { background: #e8f6ee; color: #0b6b3c; }
+#ws-tools-panel .ws-dim { color: #8b909c; font-size: 12px; }
+#ws-tools-panel .ws-list { margin: 6px 0; padding-left: 20px; }
