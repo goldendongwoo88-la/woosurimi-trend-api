@@ -113,6 +113,24 @@ th { font-size: 11px; color: var(--ink3); font-weight: 600; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.hi td { background: #fffbf0; }
 
+/* 상위 노출 글 */
+.comp { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.comp-advice { background: #f0f7ff; border: 1px solid #cfe0f5; border-radius: 9px; padding: 13px 15px; margin-bottom: 12px; }
+.comp-advice .a { font-size: 12.5px; color: #2c4f7c; line-height: 1.75; padding: 3px 0; }
+.comp-advice .a::before { content: "→ "; opacity: .6; }
+.comp-bars { display: grid; gap: 7px; margin: 12px 0; }
+.cbar { display: grid; grid-template-columns: 96px 1fr 40px; align-items: center; gap: 9px; font-size: 12px; }
+.cbar .nm { color: var(--ink2); }
+.cbar .tr { height: 7px; background: #eef0f3; border-radius: 99px; overflow: hidden; }
+.cbar .fl { height: 100%; background: #5b8dd6; border-radius: 99px; }
+.cbar .vl { text-align: right; color: var(--ink3); font-variant-numeric: tabular-nums; }
+.post { display: block; padding: 10px 0; border-top: 1px solid var(--line); text-decoration: none; color: inherit; }
+.post:first-of-type { border-top: none; }
+.post .pt { font-size: 13px; color: var(--ink); line-height: 1.5; }
+.post .pm { font-size: 11px; color: var(--ink3); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
+.post:hover .pt { color: var(--brand); }
+.tagmini { font-size: 10px; background: #eef0f3; color: var(--ink3); padding: 1px 6px; border-radius: 8px; }
+
 /* 고쳐쓰기 결과 */
 .fixed { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
 .delta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -252,6 +270,8 @@ async function inspectKeyword() {
       return;
     }
     out.innerHTML = keywordResultHtml(d);
+    const cb = $("#compBtn");
+    if (cb) cb.onclick = scanCompetitors;
   } catch (e) {
     out.innerHTML = `<div class="err">${esc(e.message)}</div>`;
   }
@@ -333,7 +353,108 @@ function keywordResultHtml(d) {
           <b>못 본 것</b><br>${d.limits.map(esc).join("<br>")}
         </div>` : ""}
 
+      <button class="btn btn-main" id="compBtn" style="margin-top:16px;background:#5b8dd6">
+        📄 지금 위에 올라와 있는 글들 보기
+      </button>
+      <div style="font-size:11.5px;color:var(--ink3);text-align:center;margin-top:6px">
+        이 키워드에서 상위에 있는 글들이 제목을 어떻게 쓰는지, 언제 올라온 글인지 봐드려요
+      </div>
+      <div id="compOut"></div>
+
       <div class="note">${esc(d.note)}</div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   상위 노출 글 뜯어보기
+
+   "1500자 이상 쓰세요" 같은 일반론보다, 그 키워드에서 실제로 위에 올라와 있는
+   글들이 어떻게 생겼는지가 훨씬 쓸모 있습니다.
+   ═══════════════════════════════════════════════════════════ */
+async function scanCompetitors() {
+  const kw = $("#kwInput").value.trim();
+  if (!kw) return;
+  const btn = $("#compBtn");
+  const out = $("#compOut");
+  btn.disabled = true;
+  btn.textContent = "가져오는 중…";
+
+  try {
+    const res = await fetch(`/api/keyword/competitors?q=${encodeURIComponent(kw)}`);
+    const d = await res.json();
+    if (!res.ok) {
+      if (d.status && !d.status.search) out.innerHTML = keyGuideHtml(d.status, d.message);
+      else out.innerHTML = `<div class="err" style="margin-top:12px">${esc(d.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = "📄 지금 위에 올라와 있는 글들 보기";
+      return;
+    }
+    out.innerHTML = competitorHtml(d);
+    btn.classList.add("hidden");
+  } catch (e) {
+    out.innerHTML = `<div class="err" style="margin-top:12px">${esc(e.message)}</div>`;
+    btn.disabled = false;
+    btn.textContent = "📄 지금 위에 올라와 있는 글들 보기";
+  }
+}
+
+function competitorHtml(d) {
+  if (!d.items.length) {
+    return `<div class="warn-box" style="margin-top:14px">${d.advice.map(esc).join("<br>")}</div>`;
+  }
+  const p = d.patterns;
+  const bar = (label, v) => `
+    <div class="cbar">
+      <span class="nm">${esc(label)}</span>
+      <span class="tr"><span class="fl" style="width:${v}%"></span></span>
+      <span class="vl">${v}%</span>
+    </div>`;
+
+  const ago = (n) => (n == null ? "" : n === 0 ? "오늘" : n < 7 ? `${n}일 전` : n < 30 ? `${Math.floor(n/7)}주 전` : n < 365 ? `${Math.floor(n/30)}개월 전` : `${Math.floor(n/365)}년 전`);
+
+  return `
+    <div class="comp">
+      <b style="font-size:13.5px">상위 ${p.count}개 글에서 읽은 것</b>
+
+      <div class="comp-advice" style="margin-top:10px">
+        ${d.advice.map((a) => `<div class="a">${esc(a)}</div>`).join("")}
+      </div>
+
+      <div class="stats">
+        <div><b>${p.title.median}</b><span>제목 길이 중앙값</span></div>
+        <div><b>${p.title.min}~${p.title.max}</b><span>제목 길이 범위</span></div>
+        <div><b>${p.freshness.within7}</b><span>일주일 내 글</span></div>
+        <div><b>${p.freshness.within30}</b><span>한 달 내 글</span></div>
+      </div>
+
+      <div class="comp-bars">
+        ${bar("제목에 키워드", p.keywordInTitle)}
+        ${bar("맨 앞에 키워드", p.keywordAtStart)}
+        ${bar("숫자 사용", p.hasNumber)}
+        ${bar("후기·리뷰형", p.hasReview)}
+        ${bar("추천·모음형", p.hasRecommend)}
+        ${bar("질문형", p.hasQuestion)}
+      </div>
+
+      <details>
+        <summary>상위 글 ${p.count}개 제목 보기</summary>
+        <div style="margin-top:6px">
+          ${d.items.map((it, i) => `
+            <a class="post" href="${esc(it.link)}" target="_blank" rel="noopener">
+              <div class="pt">${i + 1}. ${esc(it.title)}</div>
+              <div class="pm">
+                <span>${esc(it.blogName || "")}</span>
+                <span>${esc(ago(it.daysAgo))}</span>
+                ${it.keywordAtStart ? '<span class="tagmini">맨앞 키워드</span>' : ""}
+                ${it.features.hasNumber ? '<span class="tagmini">숫자</span>' : ""}
+                ${it.features.hasReview ? '<span class="tagmini">후기형</span>' : ""}
+                ${it.features.hasRecommend ? '<span class="tagmini">모음형</span>' : ""}
+              </div>
+            </a>`).join("")}
+        </div>
+      </details>
+
+      <div class="note">${d.limits.map(esc).join("<br>")}</div>
     </div>`;
 }
 

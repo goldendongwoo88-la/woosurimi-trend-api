@@ -20,6 +20,7 @@ const naverBlogExport = require("./naverBlogExport");
 const postAudit = require("./postAudit");
 const keywordInsight = require("./keywordInsight");
 const postImprove = require("./postImprove");
+const competitorScan = require("./competitorScan");
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
 const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
@@ -1168,6 +1169,20 @@ app.post("/api/post-improve", async (req, res) => {
 
 app.get("/api/keyword/status", (req, res) => {
   res.json(keywordInsight.status());
+});
+
+// 상위 노출 글이 어떻게 생겼는지.
+// "1500자 이상 쓰세요" 같은 일반론보다, 그 키워드에서 실제로 위에 올라와 있는 글들이
+// 어떤 제목을 쓰고 언제 올라왔는지가 훨씬 쓸모 있습니다.
+app.get("/api/keyword/competitors", async (req, res) => {
+  const kw = String(req.query.q || "").trim();
+  if (!kw) return res.status(400).json({ error: "missing", message: "키워드를 입력해 주세요." });
+  try {
+    res.json(await competitorScan.scan(kw, { count: Number(req.query.count) || 20 }));
+  } catch (err) {
+    const code = err.code === "no_keys" ? 503 : 400;
+    res.status(code).json({ error: err.code || "scan_failed", message: err.message, status: keywordInsight.status() });
+  }
 });
 
 app.get("/api/keyword/inspect", async (req, res) => {
