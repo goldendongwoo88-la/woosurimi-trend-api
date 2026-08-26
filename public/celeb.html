@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>연예인 소재 찾기</title>
+<meta name="description" content="연예인 이름만 넣으면 사람들이 실제로 검색하는 뷰티·패션 키워드를 캐냅니다." />
+<link rel="stylesheet" href="/assets/ws.css" />
+<style>
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    font-size: 13px; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); cursor: pointer; font-family: inherit; color: var(--ink);
+  }
+  .chip:hover { border-color: var(--brand); }
+  .chip.warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+  .chip.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .src { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .src:last-child { border-bottom: none; }
+  .src a { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+</div></div>
+
+<div class="wrap">
+  <h1>사람들이 실제로 검색하는 연예인 소재</h1>
+  <p class="lede">지어낸 목록이 아닙니다. 네이버가 자동완성으로 띄우는 말을 그대로 캐옵니다.</p>
+
+  <div class="card">
+    <label for="name">연예인 이름</label>
+    <div class="row">
+      <input id="name" type="text" placeholder="예: 장원영, 제니, 한소희" autocomplete="off" />
+      <button id="go">찾기</button>
+    </div>
+    <div style="height:12px"></div>
+    <div class="seg">
+      <button class="chip on" data-cat="beauty">뷰티</button>
+      <button class="chip on" data-cat="fashion">패션</button>
+      <button class="chip" data-cat="issue">이슈</button>
+    </div>
+    <p class="muted" style="margin:0">
+      여러 명을 쉼표로 넣으셔도 됩니다. 한 명당 5초쯤 걸립니다.
+    </p>
+  </div>
+
+  <div id="out"></div>
+
+  <h2>참고할 곳</h2>
+  <p class="sub muted" style="margin-top:-8px">
+    소재를 얻는 곳이지 퍼오는 곳이 아닙니다. 사진은 저작권과 초상권이 함께 걸려 특히 위험합니다.
+  </p>
+  <div id="sources"></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+document.querySelectorAll("[data-cat]").forEach((b) =>
+  b.addEventListener("click", () => b.classList.toggle("on"))
+);
+
+async function loadMe() {
+  const r = await fetch("/api/auth/me").then((x) => x.json());
+  $("#who").innerHTML = r.user
+    ? `<span class="pill">${esc(r.usage.planName)}</span><span>${esc(r.user.name)}</span><a href="/compare.html">경쟁비교</a>`
+    : `<a href="/join.html">로그인</a>`;
+}
+
+$("#go").addEventListener("click", run);
+$("#name").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+
+async function run() {
+  const names = $("#name").value.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5);
+  if (!names.length) return;
+  const categories = [...document.querySelectorAll("[data-cat].on")].map((b) => b.dataset.cat);
+  if (!categories.length) { $("#out").innerHTML = `<div class="card"><div class="msg err">분야를 하나 이상 골라주세요.</div></div>`; return; }
+
+  $("#go").disabled = true;
+  $("#out").innerHTML = `<div class="card"><p style="margin:0">네이버에서 캐는 중입니다…</p></div>`;
+  const blocks = [];
+  try {
+    for (const name of names) {
+      const res = await fetch("/api/celeb/mine", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, categories }),
+      });
+      const d = await res.json();
+      if (!res.ok) { blocks.push(`<div class="card"><div class="msg err">${esc(name)} — ${esc(d.error)}</div></div>`); continue; }
+      blocks.push(renderOne(d));
+      $("#out").innerHTML = blocks.join("");
+    }
+    if (!blocks.length) $("#out").innerHTML = `<div class="card"><div class="msg err">결과가 없습니다.</div></div>`;
+  } finally { $("#go").disabled = false; loadMe(); }
+}
+
+function renderOne(d) {
+  const groups = {};
+  d.items.forEach((x) => { (groups[x.topic] = groups[x.topic] || []).push(x); });
+  const order = ["뷰티", "패션", "이슈", "기타"];
+
+  return `<div class="card">
+    <h2 style="margin-top:0">${esc(d.name)} <span class="muted" style="font-size:13px;font-weight:400">${d.total}건</span></h2>
+    ${order.filter((g) => groups[g]).map((g) => `
+      <div style="margin-bottom:14px">
+        <div class="muted" style="margin-bottom:6px">${g}</div>
+        <div class="chips">
+          ${groups[g].map((x) => `<button class="chip ${x.caution ? "warn" : ""}"
+             data-kw="${esc(x.keyword)}"
+             title="${x.caution ? "사람 이름이 붙은 소재입니다. 열애설일 수 있으니 확인하고 쓰세요." : "눌러서 복사"}"
+             >${esc(x.keyword)}${x.caution ? " ⚠" : ""}</button>`).join("")}
+        </div>
+      </div>`).join("")}
+    ${d.note ? `<div class="msg warn" style="margin-bottom:0">${esc(d.note)}</div>` : ""}
+    <p class="muted" style="margin:10px 0 0">
+      ⚠ 표시는 뒤에 사람 이름이 붙은 소재입니다. 열애설일 수 있어 그대로 쓰면 위험합니다.
+      눌러서 복사한 뒤 <a href="/compare.html">경쟁 글 비교</a>에 넣어보세요.
+    </p>
+  </div>`;
+}
+
+// 칩을 누르면 복사
+document.addEventListener("click", (e) => {
+  const kw = e.target.closest("[data-kw]")?.dataset.kw;
+  if (!kw) return;
+  navigator.clipboard.writeText(kw).then(() => {
+    const el = e.target.closest("[data-kw]");
+    const old = el.textContent;
+    el.textContent = "복사됨";
+    setTimeout(() => (el.textContent = old), 900);
+  }).catch(() => {});
+});
+
+async function loadSources() {
+  const d = await fetch("/api/celeb/sources").then((r) => r.json());
+  $("#sources").innerHTML = Object.entries(d.sources).map(([cat, list]) => `
+    <div class="card">
+      <h3 style="margin:0 0 6px;font-size:15px">${esc(cat)}</h3>
+      ${list.map((s) => `<div class="src">
+        <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a>
+        <div class="muted">${esc(s.what)}</div>
+      </div>`).join("")}
+    </div>`).join("");
+}
+
+loadMe();
+loadSources();
+</script>
+</body>
+</html>

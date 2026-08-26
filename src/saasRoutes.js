@@ -12,6 +12,7 @@ const blogIndex = require("./blogIndex");
 const rankTracker = require("./rankTracker");
 const naverData = require("./naverBlogData");
 const competitorCompare = require("./competitorCompare");
+const celebFinder = require("./celebFinder");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -216,6 +217,22 @@ module.exports = function attachSaas(app) {
       res.status(502).json({ error: "비교에 실패했습니다. 잠시 뒤에 다시 해주세요." });
     }
   });
+
+  // ── 연예인 소재 찾기 ───────────────────────────────────
+  app.post("/api/celeb/mine", usage.gate("keyword"), async (req, res) => {
+    const { name, categories } = req.body || {};
+    try {
+      const r = await celebFinder.mine(name, {
+        categories: Array.isArray(categories) && categories.length ? categories : ["beauty", "fashion"],
+      });
+      if (!r.ok) return res.status(400).json({ error: r.why });
+      res.json({ ...r, usage: req.usage });
+    } catch (e) {
+      res.status(502).json({ error: "네이버에서 소재를 가져오지 못했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  app.get("/api/celeb/sources", (req, res) => res.json({ sources: celebFinder.SOURCES }));
 
   // ── 순위 추적 ──────────────────────────────────────────
   app.get("/api/rank/list", requireLogin, (req, res) => {
