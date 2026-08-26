@@ -14,6 +14,7 @@
 const fs = require("fs");
 const path = require("path");
 const { searchBlogRanking, parsePostUrl } = require("./naverBlogData");
+const notify = require("./notify");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const FILE = path.join(DATA_DIR, "ranks.json");
@@ -156,25 +157,62 @@ async function runAll({ delayMs = 1500, max = 500 } = {}) {
   const items = Object.values(store.items).slice(0, max);
   let done = 0;
   let failed = 0;
-  const moved = [];
+  // 사람별로 모읍니다. 알림은 사람 단위로 나가야 하니까요.
+  const byOwner = new Map();
 
   for (const item of items) {
-    const before = decorate(item).current;
+    // ⚠️ decorate().current를 쓰면 안 됩니다. 그건 **가장 최근 기록**이고,
+    // 오늘 이미 한 번 잰 적이 있으면 그게 오늘 값입니다.
+    // checkOne이 오늘 칸을 덮어쓰므로 before와 after가 같아져서
+    // **변동이 항상 0으로 나옵니다.** 실제로 20위→2위인데 알림이 안 갔습니다.
+    // 비교 대상은 '오늘이 아닌 마지막 기록', 즉 어제입니다.
+    const today = todayStr();
+    const past = (item.history || []).filter((h) => h.date !== today);
+    const yesterday = past.length ? past[past.length - 1] : null;
+    const before = yesterday ? yesterday.rank : undefined;
+
     const r = await checkOne(item);
     if (r.ok) {
       done++;
-      // 3계단 이상 움직였으면 알려줄 거리가 됩니다.
-      if (before != null && r.rank != null && Math.abs(before - r.rank) >= 3)
-        moved.push({ ...item, from: before, to: r.rank });
-      if (before != null && r.rank == null)
-        moved.push({ ...item, from: before, to: null, dropped: true });
+      // before가 undefined면 비교할 어제가 없다는 뜻입니다(오늘 처음 등록).
+      // 이때는 알리지 않습니다. 첫날부터 "진입했습니다"는 알림은 의미가 없습니다.
+      //
+      // ⚠️ notifiedOn을 함께 봅니다. 이게 없으면 하루에 두 번 돌 때 **같은 변동을
+      // 두 번 알립니다.** 새벽 cron이 돌고 나서 손님이 새로고침을 누르거나,
+      // 서버가 재시작돼 cron이 다시 걸리면 실제로 일어납니다.
+      // 같은 소식이 두 번 오면 알림 자체를 안 믿게 됩니다.
+      if (before !== undefined && before !== r.rank && item.notifiedOn !== today) {
+        const list = byOwner.get(item.owner) || [];
+        list.push({ keyword: item.keyword, url: item.url, from: before, to: r.rank });
+        byOwner.set(item.owner, list);
+        item.notifiedOn = today;
+      }
     } else {
       failed++;
     }
     await new Promise((res) => setTimeout(res, delayMs));
   }
   save();
-  return { checked: done, failed, total: items.length, moved };
+
+  // 알림 만들기 — 알릴 만한 것만 걸러집니다(notify가 판단).
+  let notified = 0;
+  for (const [owner, changes] of byOwner) {
+    if (!owner) continue;
+    const n = notify.push(owner, changes);
+    notified += n;
+    if (n) {
+      const fresh = notify.listFor(owner, { unreadOnly: true }).filter((x) => x.date === todayStr());
+      await notify.deliver(owner, fresh);
+    }
+  }
+
+  return {
+    checked: done,
+    failed,
+    total: items.length,
+    notified,
+    owners: byOwner.size,
+  };
 }
 
 /** 특정 사용자 것만 지금 바로 돌립니다(수동 새로고침용). */

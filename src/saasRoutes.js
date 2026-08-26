@@ -16,6 +16,7 @@ const celebFinder = require("./celebFinder");
 const sharePage = require("./sharePage");
 const homefeedAudit = require("./homefeedAudit");
 const titleRewrite = require("./titleRewrite");
+const notify = require("./notify");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -366,6 +367,24 @@ module.exports = function attachSaas(app) {
     } catch (e) {
       res.status(502).json({ error: "새로고침에 실패했습니다." });
     }
+  });
+
+  // ── 알림 ───────────────────────────────────────────────
+  app.get("/api/notify", requireLogin, (req, res) => {
+    res.json({
+      items: notify.listFor(req.user.email),
+      unread: notify.unreadCount(req.user.email),
+    });
+  });
+
+  app.post("/api/notify/read", requireLogin, (req, res) => {
+    const n = notify.markRead(req.user.email, (req.body || {}).id || null);
+    res.json({ ok: true, marked: n, unread: notify.unreadCount(req.user.email) });
+  });
+
+  app.delete("/api/notify", requireLogin, (req, res) => {
+    notify.clear(req.user.email);
+    res.json({ ok: true });
   });
 
   // 첫 화면에 띄울 공개 통계 — 블라이의 "최근 누락 검출"과 같은 자리
