@@ -75,6 +75,28 @@ input:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: -
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
 
+/* 주소로 가져오기 */
+.urlbox { background:#f0f7ff; border:1px solid #cfe0f5; border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+.urlbox label { color:#2c4f7c; }
+.urlrow { display:flex; gap:8px; }
+.urlrow input { flex:1; }
+.urlgo { background:#3d7ec9; color:#fff; font-weight:700; white-space:nowrap; padding:11px 16px; font-size:13px; }
+.urlgo:hover { filter:brightness(1.08); }
+.urlgo:disabled { background:#a9c1dd; }
+.urlhint { font-size:11.5px; color:#5b7fa8; margin-top:7px; line-height:1.6; }
+.orline { display:flex; align-items:center; gap:10px; margin:16px 0 4px; }
+.orline::before, .orline::after { content:""; flex:1; height:1px; background:var(--line); }
+.orline span { font-size:11.5px; color:var(--ink3); }
+.fetched { background:#fff; border:1px solid #cfe0f5; border-radius:8px; padding:11px 13px; margin-top:10px; font-size:12.5px; }
+.fetched .ft { font-weight:600; color:var(--ink); line-height:1.5; }
+.fetched .fm { display:flex; gap:10px; flex-wrap:wrap; font-size:11.5px; color:#5b7fa8; margin-top:5px; }
+.fetched .fw { font-size:11.5px; color:#8a6112; background:#fff8e6; border-radius:6px; padding:8px 10px; margin-top:8px; line-height:1.65; }
+
+/* 위험 표현에 걸린 문장 */
+.riskhit { background:#fff; border-radius:6px; padding:7px 10px; margin-top:5px; font-size:11.5px;
+  color:#5c4444; line-height:1.6; }
+.riskhit b { background:#ffe0e0; padding:0 3px; border-radius:3px; }
+
 /* 진단 결과 */
 .score-row { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
 .ring { width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; }
@@ -217,6 +239,19 @@ details summary { cursor: pointer; font-size: 12px; color: var(--ink3); padding:
         글자 수, 소제목, 키워드 위치, 어미 반복, 그리고 광고법에 걸릴 만한 표현을 봅니다.
         전부 계산으로 확인되는 것들이라 고치면 실제로 나아집니다.
       </div>
+
+      <!-- ⚠️ 손으로 옮겨 적게 하면 아무도 안 씁니다. 이미 올린 글이면 주소만 있으면 됩니다. -->
+      <div class="urlbox">
+        <label for="pUrl" style="margin-top:0">이미 올린 글이면 주소만 넣어주세요</label>
+        <div class="urlrow">
+          <input type="text" id="pUrl" placeholder="https://blog.naver.com/아이디/글번호" autocomplete="off">
+          <button class="btn btn-sm urlgo" id="pUrlBtn">가져와서 진단</button>
+        </div>
+        <div class="urlhint">제목·본문·사진 개수·태그를 알아서 읽어옵니다. 아래는 안 채우셔도 돼요.</div>
+        <div id="urlOut"></div>
+      </div>
+
+      <div class="orline"><span>또는 직접 붙여넣기</span></div>
 
       <div class="row2">
         <div>
@@ -574,6 +609,7 @@ function auditResultHtml(a) {
             <div class="i">
               <b>${r.words.map(esc).join("</b> <b>")}</b> — ${esc(r.why)}<br>
               <span style="opacity:.8">→ ${esc(r.fix)}</span>
+              ${(r.hits || []).map((h) => `<div class="riskhit">${esc(h.where)}</div>`).join("")}
             </div>`).join("")}
         </div>` : ""}
 
@@ -797,7 +833,7 @@ function titlesHtml(d) {
    서버로는 안 보냅니다 — 남의 글을 서버에 쌓아둘 이유가 없습니다.
    ═══════════════════════════════════════════════════════════ */
 const DRAFT_KEY = "toolkit.draft";
-const FIELDS = ["pTitle", "pKw", "pBody", "pTags", "pImg"];
+const FIELDS = ["pUrl", "pTitle", "pKw", "pBody", "pTags", "pImg"];
 
 let saveTimer = null;
 function saveDraft() {
@@ -848,6 +884,64 @@ function restoreDraft() {
 
 FIELDS.forEach((id) => $("#" + id).addEventListener("input", saveDraft));
 restoreDraft();
+
+/* ═══════════════════════════════════════════════════════════
+   주소로 가져와서 진단
+
+   손으로 옮겨 적게 하면 아무도 안 씁니다. 본문을 복사하면 사진은 안 따라오고
+   태그도 하나씩 옮겨야 하니까요. 이미 올린 글이면 주소만 있으면 됩니다.
+   ═══════════════════════════════════════════════════════════ */
+async function auditByUrl() {
+  const url = $("#pUrl").value.trim();
+  if (!url) { $("#pUrl").focus(); return; }
+  const btn = $("#pUrlBtn");
+  const info = $("#urlOut");
+  const out = $("#pOut");
+  btn.disabled = true;
+  btn.textContent = "읽는 중…";
+  info.innerHTML = "";
+  out.innerHTML = `<div class="loading"><span class="spin">◠</span> 글을 읽어오는 중…</div>`;
+
+  try {
+    const res = await fetch("/api/post-audit/url", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, keyword: $("#pKw").value.trim() }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.message || "읽어오지 못했습니다.");
+
+    const f = d.fetched;
+    // 읽어온 걸 아래 칸에도 채워둡니다. 고쳐쓰기나 제목 후보를 바로 쓸 수 있게요.
+    $("#pTitle").value = f.title || "";
+    $("#pBody").value = f.bodyText || "";
+    $("#pTags").value = (f.tags || []).map((s) => "#" + s).join(" ");
+    $("#pImg").value = f.images != null ? String(f.images) : "";
+    saveDraft();
+
+    info.innerHTML = `
+      <div class="fetched">
+        <div class="ft">${esc(f.title || "(제목을 못 읽었습니다)")}</div>
+        <div class="fm">
+          <span>본문 ${(f.bodyText || "").length.toLocaleString()}자</span>
+          <span>사진 ${f.images}장</span>
+          <span>태그 ${(f.tags || []).length}개</span>
+        </div>
+        ${(f.warnings || []).length ? `<div class="fw">${f.warnings.map(esc).join("<br>")}</div>` : ""}
+      </div>`;
+
+    out.innerHTML = auditResultHtml(d.audit);
+    const fb = $("#fixBtn");
+    if (fb) fb.onclick = improvePost;
+  } catch (e) {
+    out.innerHTML = "";
+    info.innerHTML = `<div class="err" style="margin-top:10px">${esc(e.message)}</div>`;
+  }
+  btn.disabled = false;
+  btn.textContent = "가져와서 진단";
+}
+
+$("#pUrlBtn").onclick = auditByUrl;
+$("#pUrl").addEventListener("keydown", (e) => { if (e.key === "Enter") auditByUrl(); });
 
 $("#tlBtn").onclick = makeTitles;
 $("#pBtn").onclick = auditPost;

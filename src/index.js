@@ -20,6 +20,7 @@ const naverBlogExport = require("./naverBlogExport");
 const postAudit = require("./postAudit");
 const keywordInsight = require("./keywordInsight");
 const postImprove = require("./postImprove");
+const blogFetch = require("./blogFetch");
 const competitorScan = require("./competitorScan");
 const titleLab = require("./titleLab");
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
@@ -1156,6 +1157,41 @@ app.post("/api/post-audit", (req, res) => {
 // 검색량(수요)과 문서 수(공급)를 함께 봐야 알 수 있습니다.
 // 진단한 걸 실제로 고쳐 씁니다.
 // 진단만 하고 끝나면 결국 사람이 다시 앉아서 고쳐야 해서, 오히려 일을 늘린 셈이 됩니다.
+/**
+ * 주소 하나로 진단.
+ *
+ * ⚠️ 손으로 옮겨 적게 하면 아무도 안 씁니다. 본문을 복사하면 사진은 안 따라오니
+ * 이미지 수를 세서 넣어야 하고, 태그도 하나씩 옮겨야 합니다. 이미 올려둔 글이면
+ * 주소만 있으면 전부 읽어올 수 있는데 그럴 이유가 없습니다.
+ */
+app.post("/api/post-audit/url", async (req, res) => {
+  const { url, keyword } = req.body || {};
+  if (!String(url || "").trim()) {
+    return res.status(400).json({ error: "missing", message: "블로그 글 주소를 넣어주세요." });
+  }
+  try {
+    const post = await blogFetch.fetchPost(url);
+    if (!post.bodyText || post.bodyText.length < 50) {
+      return res.status(400).json({
+        error: "empty",
+        message: "본문을 읽지 못했습니다. 비공개 글이거나 주소가 글 하나를 가리키지 않을 수 있어요.",
+        fetched: post,
+      });
+    }
+    // 소제목을 세려면 서식이 필요해서, 있으면 HTML 쪽을 넘깁니다.
+    const audit = postAudit.audit({
+      title: post.title,
+      body: post.bodyHtml || post.bodyText,
+      tags: post.tags,
+      keyword: keyword || "",
+      images: post.images,
+    });
+    res.json({ fetched: post, audit });
+  } catch (err) {
+    res.status(400).json({ error: "fetch_failed", message: err.message });
+  }
+});
+
 app.post("/api/post-improve", async (req, res) => {
   const { title, body, tags, keyword, images } = req.body || {};
   if (!String(body || "").trim()) {
