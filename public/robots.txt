@@ -1,0 +1,43 @@
+# 우수리미
+#
+# ⚠️ 손님에게 보여줄 화면만 검색에 열어둡니다.
+# 사장님 전용 도구(이용권 발급·캐릭터 만들기·발행 도구 등)는 막습니다.
+# 막는다고 접근이 차단되는 건 아닙니다. 검색에 안 잡히게 할 뿐입니다.
+# 실제 접근 차단은 서버의 관리자 비밀번호가 합니다.
+
+User-agent: *
+
+# 손님 화면 — 열어둡니다
+Allow: /blog-index.html
+Allow: /homefeed.html
+Allow: /compare.html
+Allow: /celeb.html
+Allow: /pricing.html
+Allow: /join.html
+Allow: /extension.html
+Allow: /d/
+
+# 사장님 전용 — 검색에 뜨면 안 됩니다
+Disallow: /boss.html
+Disallow: /characters.html
+Disallow: /publish.html
+Disallow: /copy.html
+Disallow: /store-guide.html
+Disallow: /saju-reels.html
+Disallow: /thread-shop.html
+Disallow: /long-to-shorts.html
+Disallow: /benchmark.html
+Disallow: /prompt-studio.html
+Disallow: /setup.html
+Disallow: /toolkit.html
+Disallow: /login.html
+
+# 결과물·업로드 — 검색에 뜰 이유가 없습니다
+Disallow: /uploads/
+Disallow: /renders/
+Disallow: /downloads/
+
+# API는 사람이 읽는 문서가 아닙니다
+Disallow: /api/
+
+Sitemap: https://woosurimi-trend-api.onrender.com/sitemap.xml
