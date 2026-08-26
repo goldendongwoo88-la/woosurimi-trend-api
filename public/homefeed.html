@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>홈피드 진단</title>
+<meta name="description" content="검색 말고 홈피드. 잘 되는 블로그와 내 글의 생김새를 숫자로 견줍니다." />
+<link rel="stylesheet" href="/assets/ws.css" />
+<style>
+  .dev { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .dev:last-child { border-bottom: none; }
+  .dev .mark { font-size: 15px; text-align: center; }
+  .dev .mark.ok { color: var(--brand); }
+  .dev .mark.no { color: var(--danger); }
+  .dev .bar { margin-top: 5px; }
+  .dev .n { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+  .todo { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .todo:last-child { border-bottom: none; }
+  .todo .idx { flex: none; width: 25px; height: 25px; border-radius: 50%; background: var(--brand); color: #fff;
+    font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .todo h4 { margin: 0 0 3px; font-size: 15px; }
+  .todo p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+  .vs-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .vs-row:last-child { border-bottom: none; }
+  .vs-row .k { grid-column: 1/-1; font-size: 12px; color: var(--ink-3); margin-bottom: -5px; }
+  .vs-row b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .vs-row .r { text-align: right; }
+  .behind b { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+</div></div>
+
+<div class="wrap">
+  <h1>검색 말고 홈피드</h1>
+  <p class="lede">
+    다른 분석 도구는 전부 검색 노출만 봅니다. 그런데 요즘 사람이 많이 오는 자리는 홈피드입니다.
+    여기서는 <b>글의 생김새</b>를 잽니다.
+  </p>
+
+  <div class="card">
+    <label for="blogId">내 블로그</label>
+    <input id="blogId" type="text" placeholder="blog.naver.com/아이디  또는  아이디" autocomplete="off" />
+    <div style="height:12px"></div>
+    <label for="rivalId">비교할 블로그 <span class="muted">(선택 — 잘 되는 블로그를 넣어보세요)</span></label>
+    <input id="rivalId" type="text" placeholder="비워두면 내 블로그만 봅니다" autocomplete="off" />
+    <div style="height:14px"></div>
+    <button id="go">진단</button>
+    <span class="muted" id="quota" style="margin-left:10px"></span>
+  </div>
+
+  <div id="out"></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+async function loadMe() {
+  const r = await fetch("/api/auth/me").then((x) => x.json());
+  const c = r.usage?.items?.compare;
+  $("#quota").textContent = c ? `오늘 ${c.left}/${c.limit}회 남음` : "";
+  $("#who").innerHTML = r.user
+    ? `<span class="pill">${esc(r.usage.planName)}</span><span>${esc(r.user.name)}</span><a href="/compare.html">경쟁비교</a>`
+    : `<a href="/join.html">로그인</a>`;
+}
+
+$("#go").addEventListener("click", run);
+async function run() {
+  const blogId = $("#blogId").value.trim();
+  if (!blogId) return;
+  const rivalId = $("#rivalId").value.trim();
+  $("#go").disabled = true;
+  $("#out").innerHTML = `<div class="card"><p style="margin:0">글을 한 편씩 열어보는 중입니다… ${rivalId ? "20" : "10"}초쯤 걸립니다.</p></div>`;
+  try {
+    const res = await fetch("/api/homefeed", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ blogId, rivalId: rivalId || undefined }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      $("#out").innerHTML = `<div class="card"><div class="msg err">${esc(d.error)}</div>
+        ${d.upgrade ? `<a href="${d.upgrade}"><button>요금제 보기</button></a>` : ""}</div>`;
+      return;
+    }
+    d.rows ? renderVersus(d) : renderOne(d);
+    loadMe();
+  } catch {
+    $("#out").innerHTML = `<div class="card"><div class="msg err">연결에 실패했습니다.</div></div>`;
+  } finally { $("#go").disabled = false; }
+}
+
+function devicesCard(a) {
+  return `<div class="card">
+    <h2 style="margin-top:0">제목에 쓰는 장치</h2>
+    <p class="muted" style="margin-top:-4px">최근 글 ${a.titleSample}편의 제목을 형태별로 셌습니다.</p>
+    ${Object.values(a.devices).map((d) => `
+      <div class="dev">
+        <div class="mark ${d.ok ? "ok" : "no"}">${d.ok ? "○" : "✗"}</div>
+        <div>
+          <div style="font-size:14px">${esc(d.label)}</div>
+          <div class="bar"><i style="width:${Math.min(100, d.rate)}%;background:${d.ok ? "var(--brand)" : "var(--danger)"}"></i></div>
+        </div>
+        <div class="n">${d.rate}%<div class="muted" style="font-weight:400;font-size:11px">권장 ${d.good}%↑</div></div>
+      </div>`).join("")}
+  </div>`;
+}
+
+function bodyCard(a) {
+  return `<div class="card">
+    <h2 style="margin-top:0">글의 생김새</h2>
+    <p class="muted" style="margin-top:-4px">최근 ${a.deepSample}편을 실제로 열어 셌습니다.</p>
+    <table>
+      <tr><td>소제목(인용구)</td><td class="num"><b>${a.body.subheads ?? "—"}</b>개</td></tr>
+      <tr><td>사진</td><td class="num"><b>${a.body.images ?? "—"}</b>장</td></tr>
+      <tr><td>본문 길이</td><td class="num"><b>${(a.body.chars ?? 0).toLocaleString()}</b>자</td></tr>
+      <tr><td>링크 카드</td><td class="num"><b>${a.body.linkCards ?? "—"}</b>개</td></tr>
+      <tr><td>주제 순도</td><td class="num"><b>${a.purity}</b>%</td></tr>
+    </table>
+  </div>`;
+}
+
+function todosCard(a) {
+  if (!a.todos.length) return `<div class="msg ok">고칠 것을 찾지 못했습니다. 지금 생김새가 잘 되는 블로그들과 같습니다.</div>`;
+  return `<div class="card">
+    <h2 style="margin-top:0">고칠 것 <span class="muted" style="font-size:13px;font-weight:400">중요한 순서</span></h2>
+    ${a.todos.map((t, i) => `<div class="todo">
+      <div class="idx">${i + 1}</div>
+      <div><h4>${esc(t.title)}</h4><p>${esc(t.detail)}</p></div>
+    </div>`).join("")}
+  </div>`;
+}
+
+function renderOne(a) {
+  $("#out").innerHTML = `
+    <div class="card">
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:baseline">
+        <div><div class="muted">일 방문자</div><div class="score-big">${a.avgVisitors.toLocaleString()}</div></div>
+        <div><div class="muted">고칠 것</div><div class="score-big" style="color:${a.todos.length ? "var(--warn)" : "var(--brand)"}">${a.todos.length}<span style="font-size:16px">건</span></div></div>
+      </div>
+    </div>
+    ${todosCard(a)}
+    ${devicesCard(a)}
+    ${bodyCard(a)}
+    <div class="msg">${esc(a.note)}</div>
+    ${a.plan === "free" ? `<div class="msg warn">
+      무료로는 최근 ${a.deepSample}편만 열어봅니다. 이용권이 있으면 8편까지 보고,
+      <b>잘 되는 블로그와 나란히 견주기</b>도 됩니다. <a href="/pricing.html">요금제 보기</a></div>` : ""}
+  `;
+  window.scrollTo({ top: 200, behavior: "smooth" });
+}
+
+function renderVersus(d) {
+  $("#out").innerHTML = `
+    <div class="card">
+      <h2 style="margin-top:0">${esc(d.mine.blogId)} vs ${esc(d.rival.blogId)}</h2>
+      ${d.rows.map((r) => `<div class="vs-row ${r.behind ? "behind" : ""}">
+        <div class="k">${esc(r.label)}</div>
+        <div><b>${r.mine.toLocaleString()}</b><span class="muted">${esc(r.unit)}</span><div class="muted">내 블로그</div></div>
+        <div class="muted" style="font-size:11px">vs</div>
+        <div class="r"><b>${r.rival.toLocaleString()}</b><span class="muted">${esc(r.unit)}</span><div class="muted">비교 대상</div></div>
+      </div>`).join("")}
+      <p class="muted" style="margin:12px 0 0">빨간 숫자가 뒤지는 항목입니다.</p>
+    </div>
+    ${todosCard(d.mine)}
+    ${devicesCard(d.mine)}
+    ${bodyCard(d.mine)}
+    <div class="msg">${esc(d.mine.note)}</div>
+  `;
+  window.scrollTo({ top: 200, behavior: "smooth" });
+}
+
+loadMe();
+</script>
+</body>
+</html>

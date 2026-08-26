@@ -54,9 +54,10 @@ async function loadMe() {
     $("#who").innerHTML = u
       ? `<span class="pill">${esc(r.usage.planName)}</span><span>${esc(u.name)}</span>
          <span>·</span><span>${leftTxt}</span>
-         <a href="/compare.html" style="margin-left:4px">경쟁비교</a>
+         <a href="/homefeed.html" style="margin-left:4px">홈피드</a>
+         <a href="/compare.html">경쟁비교</a>
          <a href="/rank.html">순위추적</a>`
-      : `<span>${leftTxt}</span><a href="/compare.html">경쟁비교</a><a href="/join.html">로그인</a>`;
+      : `<span>${leftTxt}</span><a href="/homefeed.html">홈피드</a><a href="/compare.html">경쟁비교</a><a href="/join.html">로그인</a>`;
   } catch {}
 }
 

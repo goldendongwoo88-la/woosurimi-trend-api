@@ -14,6 +14,7 @@ const naverData = require("./naverBlogData");
 const competitorCompare = require("./competitorCompare");
 const celebFinder = require("./celebFinder");
 const sharePage = require("./sharePage");
+const homefeedAudit = require("./homefeedAudit");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -260,6 +261,37 @@ module.exports = function attachSaas(app) {
     } catch (e) {
       console.error("[compare]", e.message);
       res.status(502).json({ error: "비교에 실패했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  // ── 홈피드 진단 ────────────────────────────────────────
+  // ⚠️ 경쟁 서비스는 전부 검색 노출만 봅니다. 그런데 지금 네이버 트래픽은
+  // 홈피드에서 더 많이 옵니다. 여기가 우리만 하는 것입니다.
+  app.post("/api/homefeed", usage.gate("compare"), async (req, res) => {
+    const { blogId, rivalId } = req.body || {};
+    const planId = req.user ? req.user.plan : "free";
+    // 본문을 여는 게 느립니다. 무료는 얕게, 유료는 깊게 봅니다.
+    const deep = planId === "free" ? 3 : planId === "light" ? 5 : 8;
+    const sample = planId === "free" ? 30 : 60;
+    try {
+      if (rivalId) {
+        // 비교는 두 배로 무겁습니다. 유료만 열어둡니다.
+        if (planId === "free") {
+          return res.status(402).json({
+            error: "두 블로그 비교는 이용권이 필요합니다.",
+            upgrade: "/pricing.html",
+          });
+        }
+        const r = await homefeedAudit.versus(blogId, rivalId, { deep, sample });
+        if (!r.ok) return res.status(400).json({ error: r.why });
+        return res.json({ ...r, usage: req.usage, plan: planId });
+      }
+      const r = await homefeedAudit.audit(blogId, { deep, sample });
+      if (!r.ok) return res.status(404).json({ error: r.why });
+      res.json({ ...r, usage: req.usage, plan: planId });
+    } catch (e) {
+      console.error("[homefeed]", e.message);
+      res.status(502).json({ error: "진단에 실패했습니다. 잠시 뒤에 다시 해주세요." });
     }
   });
 
