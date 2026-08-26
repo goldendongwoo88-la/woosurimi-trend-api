@@ -31,6 +31,23 @@ const BODY_MARGIN_V = 68; // ≈ 302px (화면 아래에서부터)
 // 상단 후킹 문구 기본형: 굵은 흰 글씨 + 두꺼운 검은 테두리(어떤 사진 위에서도 잘 보임).
 const HOOK_BASE = `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`;
 
+// ⚠️ 강조색 — 요즘 한국 숏폼의 가장 큰 특징입니다.
+//
+// 참고하신 릴스들을 다시 보니, 자막 한 줄을 통째로 같은 색으로 쓰는 경우가 거의
+// 없습니다. 핵심 단어 한둘만 색을 바꿔서 눈이 거기에 먼저 가게 만듭니다.
+// 소리를 끄고 보는 사람이 많아서, 색이 바뀐 단어만 훑어도 내용이 전달되게 하는
+// 장치입니다.
+//
+// libass는 자막 안에서 {\c&HBBGGRR&} 로 색을 바꿀 수 있습니다. 대본에 *별표*로
+// 표시된 부분을 이 색으로 바꿔서 넣습니다(videoRenderer의 applyEmphasis).
+const ACCENT = {
+  "bold-black": "&H0000E0FF",   // 노랑 — 검은 박스 위에서 가장 잘 보입니다
+  "soft-cream": "&H004466DD",   // 벽돌색 — 크림 배경에 어울리는 따뜻한 대비
+  "neon-pink": "&H00FFFF00",    // 하늘색 — 핑크 글씨와 보색
+  "vivid-yellow": "&H00FFFFFF", // 흰색 — 노란 글씨 사이에서 튀게
+  "clean-blue": "&H0000E0FF",   // 노랑
+};
+
 const TEMPLATES = [
   {
     id: "bold-black",
@@ -38,7 +55,7 @@ const TEMPLATES = [
     description: "흰 글씨 + 검은 반투명 박스, 화면 아래쪽 — 어디에나 무난하게 잘 어울려요",
     moodKeywords: ["세일", "할인", "핫딜", "특가", "정보", "리뷰", "후기"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00FFFFFF,` +
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},Bold=1,PrimaryColour=&H00FFFFFF,` +
       `BorderStyle=3,OutlineColour=&H99000000,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
     hookStyle: HOOK_BASE,
   },
@@ -48,7 +65,7 @@ const TEMPLATES = [
     description: "짙은 글씨 + 따뜻한 크림색 박스, 화면 아래쪽 — 카페/여행/일상 브이로그에 잘 어울려요",
     moodKeywords: ["카페", "감성", "여행", "일상", "브이로그", "힐링", "하루"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00303030,` +
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},Bold=1,PrimaryColour=&H00303030,` +
       `BorderStyle=3,OutlineColour=&HB0E8F0F5,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
     // 크림 톤에 맞춰 상단 후킹도 따뜻한 아이보리 글씨로.
     hookStyle: `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H00F0F6FA,OutlineColour=&H00202020,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`,
@@ -59,7 +76,7 @@ const TEMPLATES = [
     description: "핑크색 글씨 + 박스 없이 테두리만, 화면 아래쪽 — 트렌디하고 힙한 콘텐츠에 잘 어울려요",
     moodKeywords: ["숏폼", "챌린지", "트렌드", "밈", "힙", "스타일", "패션"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00AA5AFF,OutlineColour=&H00201020,` +
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},Bold=1,PrimaryColour=&H00AA5AFF,OutlineColour=&H00201020,` +
       `BorderStyle=1,Outline=3,Shadow=1,Alignment=2,MarginV=${BODY_MARGIN_V}`,
     hookStyle: `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H00AA5AFF,OutlineColour=&H00201020,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`,
   },
@@ -69,7 +86,7 @@ const TEMPLATES = [
     description: "노란 글씨 + 검은 박스 — 세일/이벤트처럼 눈에 확 띄어야 할 때 잘 어울려요",
     moodKeywords: ["이벤트", "오픈", "런칭", "신상", "인기", "대박", "쇼핑"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H0000D6FF,` +
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},Bold=1,PrimaryColour=&H0000D6FF,` +
       `BorderStyle=3,OutlineColour=&H99000000,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
     // 상단 후킹도 노란 글씨로 통일해서 강한 대비를 유지합니다.
     hookStyle: `FontName=${FONT_NAME},FontSize=${HOOK_FONT_SIZE},Bold=1,PrimaryColour=&H0000D6FF,OutlineColour=&H00000000,BorderStyle=1,Outline=1.4,Shadow=1,Alignment=6,MarginV=${HOOK_MARGIN_V}`,
@@ -80,14 +97,20 @@ const TEMPLATES = [
     description: "흰 글씨 + 차분한 블루 박스, 화면 아래쪽 — 제품 소개/정보성 콘텐츠에 잘 어울려요",
     moodKeywords: ["가격", "스펙", "비교", "추천", "가이드", "정리"],
     forceStyle:
-      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},PrimaryColour=&H00FFFFFF,` +
+      `FontName=${FONT_NAME},FontSize=${BODY_FONT_SIZE},Bold=1,PrimaryColour=&H00FFFFFF,` +
       `BorderStyle=3,OutlineColour=&HA0783C1E,Outline=1,Shadow=0,Alignment=2,MarginV=${BODY_MARGIN_V}`,
     hookStyle: HOOK_BASE,
   },
 ];
 
-function getTemplate(id) {
+function _getTemplateRaw(id) {
   return TEMPLATES.find((t) => t.id === id) || TEMPLATES[0];
+}
+
+/** 템플릿에 강조색을 붙여서 돌려줍니다. */
+function getTemplate(id) {
+  const tpl = _getTemplateRaw(id);
+  return { ...tpl, accent: ACCENT[tpl.id] || "&H0000E0FF" };
 }
 
 // bgmLibrary.recommendBgm과 같은 방식으로, 대본 키워드를 보고 5개 템플릿을 어울리는

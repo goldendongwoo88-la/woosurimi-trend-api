@@ -66,6 +66,35 @@ function shorten(text, maxChars) {
   return out || clean.slice(0, maxChars);
 }
 
+/**
+ * 별표(*강조*)를 유지하면서 길이를 줄입니다.
+ *
+ * ⚠️ 그냥 자르면 여는 별표만 남는 경우가 생깁니다. 그러면 자막에 별표가 그대로
+ * 찍혀서 "이번 세일 *반값" 처럼 나옵니다. 별표를 뺀 글자 수로 길이를 재고,
+ * 자른 뒤 짝이 안 맞으면 남은 별표를 지웁니다.
+ */
+function shortenKeepingMarks(text, maxChars) {
+  const s = String(text == null ? "" : text).trim();
+  const visible = s.replace(/\*/g, "");
+  if (visible.length <= maxChars) return s;
+
+  // 별표를 세지 않으면서 maxChars만큼만 남깁니다.
+  let out = "";
+  let count = 0;
+  for (const ch of s) {
+    if (ch !== "*") {
+      if (count >= maxChars) break;
+      count++;
+    }
+    out += ch;
+  }
+
+  // 별표 개수가 홀수면 마지막 여는 별표를 지웁니다.
+  const marks = (out.match(/\*/g) || []).length;
+  if (marks % 2 === 1) out = out.replace(/\*([^*]*)$/, "$1");
+  return out.trim();
+}
+
 // 제목에서 후킹 문구를 만듭니다. 블로그 제목에 흔히 붙는 군더더기(사이트명, 대괄호
 // 태그 등)를 떼고 짧게 줄입니다.
 function buildTemplateHook(title) {
@@ -141,6 +170,19 @@ const SYSTEM_PROMPT = `당신은 한국어 이슈/정보 숏폼(유튜브 쇼츠
 - 첫 줄은 곧바로 본론으로 들어가는 도입(인사말 금지).
 - 마지막 줄만 자연스러운 마무리로 씁니다.
 
+[강조 표시 — 이게 요즘 숏폼의 핵심입니다]
+- 각 줄에서 **가장 중요한 단어 하나**를 별표로 감싸 주세요. 예: 여기 진짜 *대박*이었어요
+- 그 부분만 자막에서 다른 색으로 나옵니다. 소리를 끄고 보는 사람이 색 바뀐 단어만
+  훑어도 내용이 전달되게 하는 장치입니다.
+- 한 줄에 별표는 **한 쌍만**. 두 개 이상 넣으면 강조가 아니라 그냥 알록달록해집니다.
+- 강조하면 좋은 것: 숫자, 가격, 놀라운 사실, 감정이 실린 단어(대박·충격·역대급),
+  핵심 명사(반값·품절·재입고)
+- 강조하지 말 것: 조사, 어미, 흔한 동사("좋아요", "있어요"), 문장 전체
+- 강조할 만한 단어가 딱히 없는 줄은 별표 없이 그냥 두셔도 됩니다.
+- hook에도 한 쌍 넣으면 좋습니다. 예: 논란이라는 100만 인플루언서 *'실물'*
+- ⚠️ 별표는 강조 표시일 뿐이고 화면에 별표가 보이지는 않습니다. 마크다운 굵게가
+  아니므로 별표를 두 개씩(**) 쓰지 마세요. 한 개씩만 씁니다.
+
 반드시 아래 JSON 형식으로만 답하세요(설명 문장 없이):
 {"hook": "...", "lines": ["...", "...", "..."]}`;
 
@@ -163,9 +205,12 @@ lines는 정확히 ${sceneCount}개로 만들어 주세요.`;
     temperature: 0.9,
   });
   const parsed = extractJson(raw);
-  const hook = shorten(String(parsed.hook || "").trim(), MAX_HOOK_CHARS);
+  // ⚠️ 별표는 화면에 안 보이는 표시입니다. 길이를 잴 때 함께 세면 실제보다 길다고
+  // 판단해서 멀쩡한 문장을 잘라냅니다. 별표를 뺀 길이로 재고, 자를 때도 짝이 맞게
+  // 자릅니다(여는 별표만 남으면 자막에 별표가 그대로 찍힙니다).
+  const hook = shortenKeepingMarks(String(parsed.hook || "").trim(), MAX_HOOK_CHARS);
   const lines = (Array.isArray(parsed.lines) ? parsed.lines : [])
-    .map((l) => shorten(String(l || "").trim(), MAX_LINE_CHARS))
+    .map((l) => shortenKeepingMarks(String(l || "").trim(), MAX_LINE_CHARS))
     .filter(Boolean);
   if (!hook || !lines.length) throw new Error("Claude 응답에 hook/lines가 없습니다.");
   return { hook, lines };

@@ -30,6 +30,7 @@ const crypto = require("crypto");
 const { execFile } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 const { getTemplate } = require("./videoTemplates");
+const { buildAss } = require("./assSubtitle");
 
 const WIDTH = 720;
 const HEIGHT = 1280;
@@ -185,14 +186,48 @@ function estimateMinDurationForCaption(text) {
 }
 
 // duration(초) 동안 chunks를 순서대로 균등하게 나눠 보여주는 .srt 내용을 만듭니다.
-function buildCaptionSrt(text, duration) {
+/**
+ * 대본에 *별표*로 표시된 부분을 강조색으로 바꿉니다.
+ *
+ * ⚠️ 요즘 한국 숏폼의 가장 큰 특징입니다. 자막 한 줄을 통째로 같은 색으로 쓰는
+ * 경우가 거의 없고, 핵심 단어 한둘만 색을 바꿔서 눈이 거기 먼저 가게 만듭니다.
+ * 소리를 끄고 보는 사람이 많아서, 색이 바뀐 단어만 훑어도 내용이 전달되게 하는
+ * 장치입니다.
+ *
+ * libass는 자막 안에서 {\c&HBBGGRR&} 로 색을 바꿉니다. 바꾼 뒤에는 {\c} 로
+ * 되돌려야 그다음 글자가 원래 색으로 나옵니다.
+ */
+function applyEmphasis(text, accentColour) {
+  const s = String(text == null ? "" : text);
+  if (!accentColour) return s.replace(/\*([^*\n]+)\*/g, "$1");
+  return s.replace(/\*([^*\n]+)\*/g, (_, word) => "{\\c" + accentColour + "&}" + word + "{\\c}");
+}
+
+/** 장면 자막을 .ass 이벤트 목록으로. */
+function buildCaptionEvents(text, duration, accent) {
+  const chunks = buildCaptionChunks(text);
+  if (!chunks.length) return [];
+  const per = duration / chunks.length;
+  return chunks.map((chunk, i) => ({
+    start: i * per,
+    end: i === chunks.length - 1 ? duration : (i + 1) * per,
+    style: "Body",
+    // 자막이 툭 튀어나왔다 툭 사라지면 딱딱합니다. 살짝 흐려지며 들어오게 합니다.
+    text: `{\\fad(150,100)}${applyEmphasis(chunk, accent)}`,
+  }));
+}
+
+function buildCaptionSrt(text, duration, opts) {
+  const { accent = null, fade = true } = opts || {};
   const chunks = buildCaptionChunks(text);
   const perChunk = duration / chunks.length;
   let srt = "";
   chunks.forEach((chunk, i) => {
     const start = i * perChunk;
     const end = i === chunks.length - 1 ? duration : (i + 1) * perChunk;
-    srt += `${i + 1}\n${srtTimestamp(start)} --> ${srtTimestamp(end)}\n${chunk}\n\n`;
+    // 자막이 툭 튀어나왔다 툭 사라지면 딱딱합니다. 살짝 흐려지며 들어오게 합니다.
+    const anim = fade ? "{\\fad(150,100)}" : "";
+    srt += `${i + 1}\n${srtTimestamp(start)} --> ${srtTimestamp(end)}\n${anim}${applyEmphasis(chunk, accent)}\n\n`;
   });
   return srt;
 }
@@ -314,34 +349,46 @@ async function renderSceneSegment({
   fadeIn = true,
   fadeOut = true,
 }) {
-  const srtFile = outPath.replace(/\.mp4$/, ".srt");
   // 자막 전체를 한 화면에 몰아넣지 않고, 2줄씩 순서대로 바뀌도록 여러 개의 자막
   // 구간(cue)으로 나눠서 만듭니다 — 글자가 잘리지 않으면서도 화면을 덜 가립니다.
-  const srtContent = buildCaptionSrt(captionText, duration);
-  fs.writeFileSync(srtFile, srtContent, "utf8");
+  const template = getTemplate(templateId);
+
+  // ⚠️ .srt가 아니라 .ass로 만듭니다.
+  //
+  // 핵심 단어만 색을 바꾸는 게 요즘 숏폼의 특징인데, .srt로는 안 됩니다.
+  // {\c&H...&} 같은 색 태그를 넣어도 ffmpeg의 subrip 디코더가 중괄호를 이스케이프해
+  // 버려서 그냥 사라집니다(렌더해서 확인했습니다 — 태그가 찍히지도 않고 색도 안 바뀜).
+  // .ass는 그 태그가 원래 자기 문법이라 그대로 먹습니다.
+  //
+  // 겸사겸사 두 겹이던 자막 필터도 하나로 합쳤습니다. 예전엔 하단 자막용 .srt와
+  // 상단 후킹용 .srt를 따로 만들어 subtitles 필터를 두 번 걸었는데, .ass는 한 파일에
+  // 스타일을 여러 개 둘 수 있어서 필터 한 번이면 됩니다. 인코딩도 그만큼 가벼워집니다.
+  const assFile = outPath.replace(/\.mp4$/, ".ass");
+  const events = buildCaptionEvents(captionText, duration, template.accent);
+
+  if (hookText && hookText.trim()) {
+    events.push({
+      start: 0,
+      end: duration,
+      style: "Hook",
+      // 후킹은 시작 때 한 번만 부드럽게 들어오면 됩니다(끝은 그대로 유지).
+      text: `{\\fad(250,0)}${applyEmphasis(wrapHookLines(hookText.trim()).join("\n"), template.accent)}`,
+    });
+  }
+
+  fs.writeFileSync(assFile, buildAss({
+    width: WIDTH,
+    height: HEIGHT,
+    styles: [
+      { name: "Body", forceStyle: template.forceStyle },
+      { name: "Hook", forceStyle: template.hookStyle },
+    ],
+    events,
+  }), "utf8");
 
   const fontsDir = escapeFilterPath(path.dirname(FONT_PATH));
-  const template = getTemplate(templateId);
-  const tempFiles = [srtFile];
-
-  // 자막은 두 겹입니다(유튜브 쇼츠에서 흔히 쓰는 구성):
-  //   - 상단: 영상 내내 안 바뀌는 후킹 문구(hookText) — 스크롤하다 멈추게 만드는 역할
-  //   - 하단: 장면마다 바뀌는 구어체 멘트(captionText) — 실제 내용 전달
-  // libass subtitles 필터를 두 번 이어 붙여서 각각 다른 스타일/위치로 얹습니다.
-  const subtitleFilters = [
-    `subtitles=filename='${escapeFilterPath(srtFile)}':fontsdir='${fontsDir}':force_style='${template.forceStyle}'`,
-  ];
-  if (hookText && hookText.trim()) {
-    const hookSrtFile = outPath.replace(/\.mp4$/, ".hook.srt");
-    // 후킹 문구는 장면 내내 계속 떠 있어야 해서 구간을 하나만 만듭니다.
-    const hookLines = wrapHookLines(hookText.trim()).join("\n");
-    fs.writeFileSync(hookSrtFile, `1\n${srtTimestamp(0)} --> ${srtTimestamp(duration)}\n${hookLines}\n\n`, "utf8");
-    tempFiles.push(hookSrtFile);
-    subtitleFilters.push(
-      `subtitles=filename='${escapeFilterPath(hookSrtFile)}':fontsdir='${fontsDir}':force_style='${template.hookStyle}'`
-    );
-  }
-  const subtitles = subtitleFilters.join(",");
+  const tempFiles = [assFile];
+  const subtitles = `subtitles=filename='${escapeFilterPath(assFile)}':fontsdir='${fontsDir}'`;
 
   const fadeSteps = [];
   if (fadeIn) fadeSteps.push(`fade=t=in:st=0:d=${FADE_SEC}`);
@@ -747,4 +794,4 @@ async function renderShortformVideo(
   }
 }
 
-module.exports = { renderShortformVideo, RENDERS_DIR, FRAME_STYLES };
+module.exports = { renderShortformVideo, RENDERS_DIR, FRAME_STYLES, applyEmphasis, buildCaptionSrt, buildCaptionEvents };
