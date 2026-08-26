@@ -59,7 +59,82 @@
   }
   .tool-title { font-size: 15px; font-weight: bold; margin-bottom: 4px; color: #222; }
   .tool-desc { font-size: 12.5px; color: #777; line-height: 1.5; margin-bottom: 10px; flex: 1; }
-  .tool-bullets { font-size: 11.5px; color: #999; line-height: 1.7; margin: 0 0 12px 0; padding-left: 16px; }
+  /* ── 네이버 블로그 발행 도우미 ────────────────────────────
+     네이버에 글쓰기 API가 없어서 자동 발행은 불가능합니다.
+     대신 제목·본문·태그를 각각 클립보드에 담아주고 글쓰기 창을 열어줍니다.
+     사용자가 할 일은 칸마다 붙여넣기 한 번씩입니다. */
+  .naver-panel {
+    border: 1px solid #d8e8d0; background: #f6fbf4; border-radius: 10px;
+    padding: 16px; margin-top: 14px;
+  }
+  .naver-panel h4 {
+    margin: 0 0 4px; font-size: 14px; color: #1f6b32; display: flex; align-items: center; gap: 6px;
+  }
+  .naver-panel .np-sub { font-size: 11.5px; color: #6b7f68; margin-bottom: 12px; line-height: 1.6; }
+  .np-step {
+    display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: start;
+    padding: 10px 0; border-top: 1px solid #e3efdd;
+  }
+  .np-step:first-of-type { border-top: none; }
+  .np-num {
+    width: 22px; height: 22px; border-radius: 50%; background: #03c75a; color: #fff;
+    font-size: 11px; font-weight: 700; display: grid; place-items: center;
+  }
+  .np-label { font-size: 12.5px; color: #33403a; font-weight: 600; }
+  .np-preview {
+    font-size: 11.5px; color: #6b7f68; margin-top: 3px; line-height: 1.55;
+    max-height: 62px; overflow: hidden; word-break: break-all;
+  }
+  .np-copy {
+    background: #03c75a; color: #fff; border: none; border-radius: 6px;
+    padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+    white-space: nowrap; font-family: inherit;
+  }
+  .np-copy:hover { filter: brightness(1.06); }
+  .np-copy.done { background: #2b7a45; }
+  .np-open {
+    display: block; width: 100%; text-align: center; margin-top: 12px;
+    background: #03c75a; color: #fff; text-decoration: none; border-radius: 8px;
+    padding: 12px; font-size: 14px; font-weight: 700;
+  }
+  .np-open:hover { filter: brightness(1.06); }
+  .np-stats {
+    display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: #6b7f68;
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid #e3efdd;
+  }
+  .np-stats b { color: #1f6b32; }
+  .np-id {
+    display: flex; gap: 6px; align-items: center; margin-top: 10px;
+    font-size: 11.5px; color: #6b7f68;
+  }
+  .np-id input {
+    flex: 1; border: 1px solid #cfe0c8; border-radius: 6px; padding: 6px 9px;
+    font-size: 12px; font-family: inherit;
+  }
+  .np-note {
+    font-size: 11px; color: #7c8b78; line-height: 1.65; margin-top: 12px;
+    padding-top: 10px; border-top: 1px solid #e3efdd;
+  }
+  .naver-btn {
+    width: 100%; margin-top: 10px; background: #03c75a; color: #fff; border: none;
+    border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
+  .naver-btn:hover { filter: brightness(1.06); }
+  .naver-btn:disabled { background: #a9c9b4; cursor: default; }
+
+  /* 카드마다 설명 불릿이 대여섯 줄씩 깔리니 화면이 지저분해집니다.
+     정보를 없애지는 않고 접어둡니다. 궁금한 사람만 펴 보면 됩니다. */
+  .tool-more { margin: 0 0 12px; }
+  .tool-more > summary {
+    font-size: 11.5px; color: #9a8f7a; cursor: pointer; list-style: none;
+    padding: 2px 0; user-select: none;
+  }
+  .tool-more > summary::-webkit-details-marker { display: none; }
+  .tool-more > summary::before { content: "＋ "; }
+  .tool-more[open] > summary::before { content: "－ "; }
+  .tool-more > summary:hover { color: #6b6252; }
+  .tool-bullets { font-size: 11.5px; color: #999; line-height: 1.7; margin: 8px 0 0; padding-left: 16px; }
   button.use-btn {
     padding: 10px;
     background: #ffb300;
@@ -204,6 +279,8 @@
       <div class="send-row">
         <button class="send-btn" id="sendBtn">생성하기</button>
       </div>
+      <!-- 글이 만들어지면 여기에 네이버 블로그 발행 도우미가 나타납니다 -->
+      <div id="naverArea"></div>
     </div>
   </div>
 </div>
@@ -230,7 +307,13 @@
           <span class="badge">${escapeHtml(t.badge)}</span>
           <div class="tool-title">${escapeHtml(t.title)}</div>
           <div class="tool-desc">${escapeHtml(t.desc)}</div>
-          <ul class="tool-bullets">${t.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>
+          ${
+            t.bullets && t.bullets.length
+              ? `<details class="tool-more"><summary>자세히</summary>
+                   <ul class="tool-bullets">${t.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>
+                 </details>`
+              : ""
+          }
           <button class="use-btn" onclick="openTool('${t.id}')">챗봇 사용하기</button>
           ${
             t.opensExternal
@@ -266,6 +349,8 @@
     document.getElementById("modalBody").innerHTML = `<div class="status">${escapeHtml(currentTool.desc)}<br>아래에 ${escapeHtml(currentTool.inputLabel)}을(를) 입력하고 생성하기를 눌러주세요.</div>`;
     document.getElementById("chatInput").placeholder = currentTool.inputPlaceholder || "";
     document.getElementById("chatInput").value = "";
+    naverPost = null;
+    renderNaverArea();
     document.getElementById("modalBackdrop").classList.add("open");
   }
 
@@ -348,7 +433,193 @@
     } finally {
       sendBtn.disabled = false;
       sendBtn.textContent = "생성하기";
+      naverPost = null;      // 글이 바뀌었으니 정리해둔 것도 버립니다
+      renderNaverArea();
     }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     네이버 블로그로 넘기기
+     ═══════════════════════════════════════════════════════ */
+
+  let naverPost = null;
+
+  function hasGenerated() {
+    return conversation.some((m) => m.role === "assistant" && m.content && m.content !== "..." && !m.content.startsWith("⚠️"));
+  }
+
+  /** 생성된 글이 있으면 발행 버튼을 띄웁니다. */
+  function renderNaverArea() {
+    const box = document.getElementById("naverArea");
+    if (!box) return;
+    if (!hasGenerated()) { box.innerHTML = ""; return; }
+
+    if (!naverPost) {
+      box.innerHTML = `<button class="naver-btn" id="naverPrep">📗 네이버 블로그로 보내기</button>
+        <div style="font-size:11px;color:#8a9487;text-align:center;margin-top:6px">
+          글에서 제목·본문·태그만 골라내 붙여넣기 좋게 정리해드려요
+        </div>`;
+      document.getElementById("naverPrep").onclick = prepareNaver;
+      return;
+    }
+    box.innerHTML = naverPanelHtml(naverPost);
+    bindNaverPanel(naverPost);
+  }
+
+  async function prepareNaver() {
+    const btn = document.getElementById("naverPrep");
+    btn.disabled = true;
+    btn.textContent = "정리하는 중… (20초쯤 걸려요)";
+    try {
+      const res = await fetch("/api/naver-blog/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation,
+          blogId: localStorage.getItem("naverBlogId") || "",
+          hint: currentTool ? currentTool.title : "",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "정리하지 못했어요.");
+      naverPost = data;
+      renderNaverArea();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = "📗 네이버 블로그로 보내기";
+      alert(err.message);
+    }
+  }
+
+  function naverPanelHtml(d) {
+    const s = d.stats;
+    const blogId = localStorage.getItem("naverBlogId") || "";
+    const cut = (str, n) => (str.length > n ? str.slice(0, n) + "…" : str);
+    return `
+      <div class="naver-panel">
+        <h4>📗 네이버 블로그 발행</h4>
+        <div class="np-sub">
+          네이버는 외부에서 글을 자동으로 올리는 기능을 제공하지 않아요.
+          대신 칸마다 복사해 드릴 테니 <b>붙여넣기만</b> 하시면 됩니다.
+        </div>
+
+        <div class="np-step">
+          <span class="np-num">1</span>
+          <span>
+            <span class="np-label">제목</span>
+            <div class="np-preview">${escapeHtml(d.post.title || "(제목 없음)")}</div>
+          </span>
+          <button class="np-copy" data-copy="title">복사</button>
+        </div>
+
+        <div class="np-step">
+          <span class="np-num">2</span>
+          <span>
+            <span class="np-label">본문 <span style="font-weight:400;color:#8a9487">(소제목·굵기 서식 그대로)</span></span>
+            <div class="np-preview">${escapeHtml(cut(d.plain, 140))}</div>
+          </span>
+          <button class="np-copy" data-copy="body">복사</button>
+        </div>
+
+        <div class="np-step">
+          <span class="np-num">3</span>
+          <span>
+            <span class="np-label">태그 ${s.tags}개</span>
+            <div class="np-preview">${escapeHtml(d.tagLine || "(없음)")}</div>
+          </span>
+          <button class="np-copy" data-copy="tags">복사</button>
+        </div>
+
+        <a class="np-open" href="${d.writeUrl}" target="_blank" rel="noopener">
+          네이버 블로그 글쓰기 창 열기 ↗
+        </a>
+
+        <div class="np-stats">
+          <span>공백 뺀 글자 <b>${s.chars.toLocaleString()}</b></span>
+          <span>문단 <b>${s.paragraphs}</b></span>
+          <span>소제목 <b>${s.headings}</b></span>
+          <span>사진 자리 <b>${s.images}</b></span>
+        </div>
+
+        <div class="np-id">
+          <span>내 블로그 아이디</span>
+          <input id="naverBlogId" value="${escapeHtml(blogId)}" placeholder="blog.naver.com/여기">
+          <button class="np-copy" id="saveBlogId">저장</button>
+        </div>
+
+        <div class="np-note">
+          <b>순서</b> ① 제목 복사 → 글쓰기 창에서 제목 칸에 붙여넣기<br>
+          ② 본문 복사 → 본문 칸에 붙여넣기 (소제목·인용 서식이 그대로 들어갑니다)<br>
+          ③ 사진은 <b>[ 사진 자리 ]</b> 라고 적힌 곳에 직접 넣고 그 글자를 지워주세요<br>
+          ④ 태그 복사 → 맨 아래 태그 칸에 붙여넣기<br><br>
+          ${s.chars < 1500
+            ? `⚠️ 공백 뺀 글자가 ${s.chars}자예요. 네이버 홈판을 노리신다면 1500자 이상을 권합니다.`
+            : `✅ 글 길이는 넉넉합니다.`}
+        </div>
+
+        <button class="naver-btn" id="naverRedo" style="background:#8a9487;margin-top:12px">다시 정리하기</button>
+      </div>`;
+  }
+
+  function bindNaverPanel(d) {
+    document.querySelectorAll("[data-copy]").forEach((b) => {
+      b.onclick = async () => {
+        const kind = b.dataset.copy;
+        try {
+          if (kind === "title") await copyText(d.post.title || "");
+          else if (kind === "tags") await copyText(d.tagLine || "");
+          else await copyRich(d.html, d.plain);
+          const old = b.textContent;
+          b.textContent = "복사됨";
+          b.classList.add("done");
+          setTimeout(() => { b.textContent = old; b.classList.remove("done"); }, 1600);
+        } catch (err) {
+          alert("복사하지 못했어요: " + err.message);
+        }
+      };
+    });
+
+    const save = document.getElementById("saveBlogId");
+    if (save) save.onclick = () => {
+      const v = document.getElementById("naverBlogId").value.trim();
+      localStorage.setItem("naverBlogId", v);
+      save.textContent = "저장됨";
+      setTimeout(() => { save.textContent = "저장"; naverPost = null; prepareNaver(); }, 900);
+    };
+
+    const redo = document.getElementById("naverRedo");
+    if (redo) redo.onclick = () => { naverPost = null; renderNaverArea(); };
+  }
+
+  async function copyText(s) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(s);
+    // 예전 브라우저나 http 환경을 위한 예비 방법
+    const ta = document.createElement("textarea");
+    ta.value = s; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+  }
+
+  /**
+   * 서식을 살려서 복사합니다.
+   *
+   * 스마트에디터는 text/html 로 복사된 것을 붙여넣으면 소제목·인용 서식을 살려줍니다.
+   * 그냥 글자만 복사하면 전부 평범한 문단이 돼서, 다시 손으로 서식을 잡아야 합니다.
+   * ClipboardItem을 못 쓰는 환경에서는 글자만이라도 복사되게 물러납니다.
+   */
+  async function copyRich(html, plain) {
+    if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          }),
+        ]);
+        return;
+      } catch { /* 아래 방법으로 물러납니다 */ }
+    }
+    return copyText(plain);
   }
 
   document.getElementById("sendBtn").onclick = sendMessage;

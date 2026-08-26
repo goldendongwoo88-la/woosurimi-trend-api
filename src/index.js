@@ -16,6 +16,7 @@ const { recommendBgm, getTrackPath } = require("./bgmLibrary");
 const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
+const naverBlogExport = require("./naverBlogExport");
 const { getTools: getPromptTools, runTool: runPromptTool } = require("./promptStudio");
 const cardNewsGenerator = require("./cardNewsGenerator");
 const stockPhotoSearch = require("./stockPhotoSearch");
@@ -1070,6 +1071,47 @@ app.post("/api/prompt-studio/run", async (req, res) => {
     res.json({ reply });
   } catch (err) {
     res.status(400).json({ error: "run_failed", message: err.message });
+  }
+});
+
+// ── 네이버 블로그로 넘기기 ───────────────────────────────────
+//
+// ⚠️ 네이버는 2020년에 블로그 글쓰기 오픈API를 종료했습니다. 외부에서 글을 자동
+// 발행할 공식 방법이 없습니다. 아이디·비밀번호로 브라우저를 조종하는 방법도
+// 있지만, 계정을 통째로 맡기는 셈이라 쓰지 않습니다.
+//
+// 대신 붙여넣기 한 번으로 끝나게 만듭니다. 대화에서 발행할 글만 뽑아 스마트에디터가
+// 알아먹는 서식으로 바꿔주면, 사용자는 글쓰기 창에서 Ctrl+V만 누르면 됩니다.
+app.post("/api/naver-blog/prepare", async (req, res) => {
+  const { conversation, text, hint, blogId } = req.body || {};
+
+  // 대화 배열로 와도 되고, 이미 합쳐진 글로 와도 됩니다.
+  let raw = "";
+  if (Array.isArray(conversation)) {
+    raw = conversation
+      .filter((m) => m && m.content)
+      .map((m) => `[${m.role === "user" ? "입력" : "생성"}]\n${m.content}`)
+      .join("\n\n");
+  } else {
+    raw = String(text || "");
+  }
+
+  if (!raw.trim()) {
+    return res.status(400).json({ error: "empty", message: "정리할 글이 없습니다." });
+  }
+
+  try {
+    const post = await naverBlogExport.preparePost(raw, { hint });
+    res.json({
+      post,
+      html: naverBlogExport.toHtml(post),
+      plain: naverBlogExport.toPlain(post),
+      tagLine: naverBlogExport.toTagLine(post),
+      stats: naverBlogExport.stats(post),
+      writeUrl: naverBlogExport.writeUrl(blogId),
+    });
+  } catch (err) {
+    res.status(400).json({ error: "prepare_failed", message: err.message });
   }
 });
 
