@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "우수리미 포스팅",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "description": "글 다 쓰고 누르면 홈판용 제목·본문으로 보완해 줍니다. 글자수·표현검사·키워드도 그 자리에서. 발행은 직접 하십니다.",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "clipboardWrite"
+    "clipboardWrite",
+    "clipboardRead"
   ],
   "host_permissions": [
     "https://blog.naver.com/*",
@@ -40,6 +41,8 @@
       "js": [
         "content/naver-editor.js",
         "content/format-tools.js",
+        "content/draft-parser.js",
+        "content/draft-insert.js",
         "content/editor-tools.js"
       ],
       "css": [

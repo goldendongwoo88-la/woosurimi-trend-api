@@ -12,6 +12,12 @@ const rules = require("../src/homefeedRules");
 const INVIS = /[\s​-‍⁠﻿]/g;
 const vis = (s) => String(s || "").replace(INVIS, "").length;
 
+// ⚠️ 큰 스킬 다섯은 안 부릅니다 (사장님 명령). 여기 있는 둘은 작은 축입니다.
+//   fashion-review  8,766 토큰
+//   celeb-beauty    9,894 토큰
+// 한 번에 약 100원씩, 둘이면 약 200원입니다.
+const SKIP = require("../src/promptStudio").SKIP_IN_TOOLING;
+
 const CASES = [
   {
     skill: "fashion-review",
@@ -64,12 +70,28 @@ const ok = (c, l, e = "") => { console.log(`    ${c ? "✓" : "✗"} ${l}${e ? "
 
 (async () => {
   for (const c of CASES) {
+    if (SKIP.has(c.skill)) { console.log(`
+(${c.skill}은 부르지 않습니다 — 사장님 명령)`); continue; }
     console.log(`\n━━ ${c.skill} ━━`);
     console.log(`  주제: ${c.topic}`);
     let out;
     const t = Date.now();
     try {
-      out = await runTool(c.skill, [{ role: "user", content: `주제: ${c.topic}\n\n이 주제로 블로그 원고를 써주세요.` }]);
+      // ⚠️ 그냥 "원고 써주세요"라고 하면 스킬이 **1단계 제목 45개**부터 냅니다.
+      // 설계대로 도는 것인데, 그걸 재면 "소제목 0개"로 나와서 실패로 보입니다.
+      // 제 시험이 잘못 물어본 것이었습니다. 본문을 달라고 정확히 말합니다.
+      out = await runTool(c.skill, [
+        { role: "user", content: `주제: ${c.topic}` },
+        { role: "assistant", content: "알겠습니다. 어느 단계를 진행할까요?" },
+        {
+          role: "user",
+          content:
+            "단계를 건너뛰고 **본문만** 바로 써주세요.\n" +
+            "제목 목록·팩트체크·이미지 프롬프트는 내지 마세요.\n" +
+            "제목 한 줄(# 로 시작)과 본문만 주세요.\n" +
+            "소제목은 ■ 로, 사진 자리는 [사진: 무엇] 으로 표시해 주세요.",
+        },
+      ]);
     } catch (e) {
       ok(false, "원고를 받았다", e.message);
       continue;

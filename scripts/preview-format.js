@@ -18,6 +18,8 @@ const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
 const fmtJs = fs.readFileSync(path.join(ROOT, "extension", "content", "format-tools.js"), "utf8");
+const parseJs = fs.readFileSync(path.join(ROOT, "extension", "content", "draft-parser.js"), "utf8");
+const insertJs = fs.readFileSync(path.join(ROOT, "extension", "content", "draft-insert.js"), "utf8");
 
 const PARAS = [
   ["p", "요즘 환절기 지나가면서 샤워하고 나면 피부가 당기는 느낌이 심해졌는데, 씻는 것과 보습을 따로 챙기는 게 귀찮아서 째피 핑크라인(소프트 리셋 + 글로우 업)을 2주 정도 써보게 됐습니다."],
@@ -67,7 +69,9 @@ button.run{padding:8px 16px;border-radius:7px;border:1px solid #0b8f4d;backgroun
   </div>
   <span style="font-size:12px;color:#8a8f9a">← 진짜 편집기와 같은 드롭다운</span>
   <span style="flex:1"></span>
-  <button class="run" id="run">시험 시작</button>
+  <button class="run" id="runPaste" style="background:#1a4ba0;border-color:#1a4ba0">원고 붙이기 시험</button>
+  <button class="run" id="run">서식 시험</button>
+  <button class="dd-btn" id="saveBtn" style="margin-left:8px">저장</button>
 </div>
 
 <div class="se-main-container" id="editor" contenteditable="true">
@@ -101,6 +105,25 @@ for (const b of dd.querySelectorAll("[data-style]")) {
   });
 }
 
+// ── 진짜 편집기처럼: 엔터를 치면 제대로 된 문단을 만듭니다 ──
+// ⚠️ 이걸 안 해두면 제 코드를 공정하게 시험할 수 없습니다.
+// 맨 contenteditable은 엔터를 쳐도 <div>나 <br>만 생기는데,
+// 스마트에디터는 .se-component > p.se-text-paragraph > span 을 만듭니다.
+// 그 차이 때문에 "안 된다"고 나오면 제 코드가 아니라 시험대가 틀린 겁니다.
+new MutationObserver(() => {
+  const ed = document.getElementById("editor");
+  for (const node of [...ed.children]) {
+    if (node.classList && node.classList.contains("se-component")) continue;
+    // 엉뚱하게 생긴 덩어리를 제대로 된 문단으로 바꿔줍니다
+    const txt = node.textContent || "";
+    const comp = document.createElement("div");
+    comp.className = "se-component se-text";
+    comp.innerHTML = '<p class="se-text-paragraph"><span class="se-ff-nanumgothic se-fs16"></span></p>';
+    comp.querySelector("span").textContent = txt;
+    node.replaceWith(comp);
+  }
+}).observe(document.getElementById("editor"), { childList: true });
+
 // ── 진짜 편집기처럼: span이 사라지면 문단을 비웁니다 ──
 new MutationObserver(() => {
   for (const p of document.querySelectorAll(".se-text-paragraph")) {
@@ -114,6 +137,8 @@ new MutationObserver(() => {
 </script>
 
 <script>${fmtJs}</script>
+<script>${parseJs}</script>
+<script>${insertJs}</script>
 
 <script>
 const log = document.getElementById("log");
@@ -122,6 +147,91 @@ const say = (c, l, e = "") => {
   log.insertAdjacentHTML("beforeend",
     '<div class="row"><span class="' + (c ? "ok" : "no") + '">' + (c ? "\\u2713" : "\\u2717") + '</span> ' + l + (e ? ' <code>' + e + '</code>' : '') + '</div>');
   c ? pass++ : fail++;
+};
+
+// 가짜 저장 버튼 — 누르면 숫자가 올라갑니다 (네이버가 하는 것과 같게)
+let saveCount = 0;
+document.getElementById("saveBtn").addEventListener("click", () => {
+  saveCount++;
+  document.getElementById("saveBtn").textContent = "저장 " + saveCount;
+});
+
+document.getElementById("runPaste").onclick = async () => {
+  log.innerHTML = "";
+  const P = window.__wsDraft, I = window.__wsInsert;
+  say(!!P && !!I, "원고 도구가 올라왔다");
+  if (!P || !I) return;
+
+  // 편집기를 비웁니다 (새 글에서 시작하는 상황)
+  document.getElementById("editor").innerHTML =
+    '<div class="se-component se-text"><p class="se-text-paragraph"><span class="se-ff-nanumgothic se-fs16"></span></p></div>';
+  await new Promise(r => setTimeout(r, 300));
+  say(I.isEmpty().empty, "편집기가 비어 있다고 알아본다");
+
+  const RAW = [
+    "### 4단계: 본문 작성",
+    "",
+    "# 당김이 없어졌어요 - 째피 핑크라인 바디워시 2주 솔직 후기",
+    "",
+    "요즘 환절기 지나가면서 샤워하고 나면 피부가 당기는 느낌이 심해졌습니다.",
+    "",
+    "[사진 1: 째피 핑크라인 패키지]",
+    "",
+    "■ 패키지 첫인상",
+    "",
+    "핑크색 바디에 노란 펌프, 레트로한 번개 로고까지.",
+    "",
+    "■ 2주 써본 결과",
+    "",
+    "가격은 두 개 세트로 **29,800원**이었고 용량은 각각 **300ml**입니다.",
+    "",
+    "> 다른 바디워시와 달리 씻고 난 뒤 10분이 지나도 당김이 없었어요.",
+    "",
+    "저는 **재구매 의사 있습니다**.",
+    "",
+    "### 5단계: 팩트체크",
+    "- 가격 확인 필요"
+  ].join(String.fromCharCode(10));
+
+  const draft = P.parse(RAW);
+  say(draft.stats.subheads === 2, "소제목 2개를 찾았다", draft.stats.subheads + "개");
+  say(draft.stats.quotes === 1, "인용구 1개", draft.stats.quotes + "개");
+  say(draft.stats.photos === 1, "사진 자리 1곳", draft.stats.photos + "곳");
+  say(draft.stats.marks === 3, "굵게 3개", draft.stats.marks + "개");
+
+  const r = await I.insert(draft, () => {});
+  say(r.ok, "넣기가 끝났다", r.ok ? (r.done.length + "군데") : r.why);
+  if (!r.ok) return;
+
+  const body = document.getElementById("editor").innerText;
+  say(body.includes("환절기"), "본문이 들어갔다");
+  say(!body.includes("5단계"), "팩트체크는 안 들어갔다");
+  say(!body.includes("**"), "** 표시가 글자로 안 남았다");
+  say(body.includes("[사진: 째피 핑크라인 패키지]"), "사진 자리가 글자로 남았다");
+
+  const titleP = document.querySelector(".se-documentTitle .se-text-paragraph") || document.getElementById("t");
+  say(titleP && titleP.innerText.includes("당김이 없어졌어요"), "제목이 들어갔다",
+    titleP ? titleP.innerText.slice(0, 34) : "");
+
+  const secs = document.querySelectorAll(".se-component.se-sectionTitle").length;
+  const quos = document.querySelectorAll(".se-component.se-quotation").length;
+  say(secs === 2, "소제목 스타일 2개가 실제로 걸렸다", secs + "개");
+  say(quos === 1, "인용구 스타일 1개가 걸렸다", quos + "개");
+  say(/<b[\s>]|font-weight/i.test(document.getElementById("editor").innerHTML), "굵게가 HTML에 들어갔다");
+
+  // 임시저장
+  const sv = await I.saveDraft();
+  say(sv.ok, "저장 버튼을 찾아 눌렀다", sv.ok ? sv.label : sv.why);
+  say(saveCount === 1, "저장이 한 번 눌렸다", saveCount + "번");
+
+  // 글이 있을 때는 막아야 합니다
+  const st = I.isEmpty();
+  say(!st.empty, "이제 편집기가 비어있지 않다고 본다", st.chars + "자");
+  const r2 = await I.insert(draft, () => {});
+  say(!r2.ok && r2.needsConfirm, "글이 있으면 덮어쓰지 않고 멈춘다", r2.why ? r2.why.slice(0, 40) : "");
+
+  log.insertAdjacentHTML("beforeend",
+    '<div class="row" style="margin-top:10px"><b>통과 ' + pass + ' · 실패 ' + fail + '</b></div>');
 };
 
 document.getElementById("run").onclick = async () => {

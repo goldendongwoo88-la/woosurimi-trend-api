@@ -184,6 +184,7 @@
     <div class="ws-dock-acts">
       <button data-act="hometitle" class="ws-dock-btn primary" title="제목을 홈판용으로 고칩니다">홈판 제목</button>
       <button data-act="homebody" class="ws-dock-btn primary" title="본문을 소제목 6개로 나눕니다">홈판 본문</button>
+      <button data-act="paste" class="ws-dock-btn primary" title="클로드에서 복사한 원고를 통째로 넣습니다">원고 붙이기</button>
       <button data-act="format" class="ws-dock-btn primary" title="소제목·인용구·강조를 자동으로 넣습니다">자동 서식</button>
       <button data-act="topic" class="ws-dock-btn" title="이 글이 이 블로그 주제에 맞는지">주제</button>
       <button data-act="audit" class="ws-dock-btn" title="문제가 될 만한 표현 찾기">표현 검사</button>
@@ -1483,6 +1484,149 @@
     }
   }
 
+  // ── 클로드 원고 붙이기 ────────────────────────────────
+  //
+  // ⚠️ 왜 만들었나
+  // 사장님은 Claude Pro Max 구독을 쓰십니다. claude.ai나 Claude Code에서 원고를 쓰면
+  // **API 값이 0원**입니다. 우수리미 사이트에서 뽑으면 한 편에 740원씩 나갑니다.
+  // 그런데 클로드에서 쓰면 편집기로 옮기는 게 손일이었습니다.
+  // 그 손일을 없애면 공짜로 쓰면서 손도 안 갑니다.
+  //
+  // ⚠️ 이 기능은 AI를 안 부릅니다. 값이 0원입니다.
+  async function pasteDraft() {
+    const P = window.__wsDraft;
+    const I = window.__wsInsert;
+    if (!P || !I) {
+      return showPanel(`<h4>원고 붙이기</h4><div class="ws-row bad">
+        도구를 못 불러왔습니다. 확장을 다시 설치해 보세요.</div>`);
+    }
+
+    // ⚠️ 클립보드는 사용자가 누른 직후에만 읽을 수 있습니다. 버튼 누른 흐름에서 바로 읽습니다.
+    let raw = "";
+    try {
+      raw = await navigator.clipboard.readText();
+    } catch {
+      return showPanel(`<h4>원고 붙이기</h4>
+        <div class="ws-row warn">클립보드를 못 읽었습니다.</div>
+        <p class="ws-note">클로드에서 원고를 <b>복사(Ctrl+C)</b>하신 뒤 다시 눌러주세요.
+        브라우저가 처음 한 번은 물어볼 수 있습니다.</p>`);
+    }
+    if (!raw || raw.trim().length < 50) {
+      return showPanel(`<h4>원고 붙이기</h4>
+        <div class="ws-row warn">복사된 글이 없거나 너무 짧습니다.</div>
+        <p class="ws-note">클로드에서 원고 전체를 복사한 뒤 눌러주세요.</p>`);
+    }
+
+    const draft = P.parse(raw);
+    const s = draft.stats;
+    const state = I.isEmpty();
+
+    showPanel(`
+      <h4>원고를 이렇게 넣겠습니다</h4>
+      <div class="ws-stats">
+        <span>본문 <b>${s.chars.toLocaleString()}</b>자</span>
+        <span>문단 <b>${s.paras}</b></span>
+        <span>소제목 <b class="ws-up">${s.subheads}</b></span>
+        <span>인용구 <b class="ws-up">${s.quotes}</b></span>
+        <span>사진자리 <b class="ws-up">${s.photos}</b></span>
+        <span>굵게 <b>${s.marks}</b></span>
+      </div>
+
+      <div class="ws-sec">
+        <div class="ws-sec-h">제목</div>
+        <div style="font-size:13.5px;font-weight:600">${esc(draft.title) || '<span class="ws-dim">(못 찾았습니다)</span>'}</div>
+      </div>
+
+      ${!state.empty ? `
+      <div class="ws-sec warn-sec">
+        <div class="ws-sec-h">잠깐 — 본문에 이미 글이 있습니다
+          <span class="ws-sec-tag check">확인 필요</span></div>
+        <p class="ws-sec-p">지금 <b>${state.chars.toLocaleString()}자</b>${state.media ? `, 사진·링크 ${state.media}개` : ""}가 들어 있습니다.
+          <b>덮어쓰면 되돌릴 수 없습니다.</b> 새 글에서 하시는 걸 권합니다.</p>
+      </div>` : ""}
+
+      <div class="ws-sec">
+        <div class="ws-sec-h">문단 길이 확인
+          <span class="ws-sec-tag ${s.over45 <= 10 ? "ok" : "check"}">${s.over45}%</span></div>
+        <p class="ws-sec-p">45자 넘는 문단이 <b>${s.over45}%</b>입니다.
+          잘 되는 블로그는 1~5%입니다. 중앙 ${s.paraMedian}자.</p>
+      </div>
+
+      <button class="ws-apply" id="ws-pd-go" style="margin:10px 0 4px;font-size:13px;padding:8px 14px"
+        ${state.empty ? "" : 'disabled title="본문을 비우신 뒤에 눌러주세요"'}>
+        ${state.empty ? "넣기" : "본문이 비어야 넣을 수 있습니다"}
+      </button>
+      <p class="ws-dim" style="margin:2px 0 0">
+        제목은 자동으로 넣습니다. 본문은 편집기가 안 받으면 <b>복사해 드리고 Ctrl+V</b>를 부탁드립니다 —
+        억지로 밀어넣다 글이 뭉개지는 것보다 그게 확실합니다.
+      </p>
+      <label style="display:block;margin-top:8px;font-size:12px;color:#5a5f6b">
+        <input type="checkbox" id="ws-pd-save" checked style="width:auto"> 다 넣고 <b>임시저장</b>까지
+      </label>
+      <div id="ws-pd-out"></div>
+    `);
+
+    const go = panel.querySelector("#ws-pd-go");
+    if (go && !go.disabled) go.addEventListener("click", async () => {
+      go.disabled = true;
+      const out = panel.querySelector("#ws-pd-out");
+      const say = (m) => { go.textContent = m; out.innerHTML = `<div class="ws-row">${esc(m)}</div>`; };
+
+      const r = await I.insert(draft, say);
+      if (!r.ok) {
+        // ⚠️ 본문 자동 넣기는 접었습니다(draft-insert.js 설명 참고).
+        // 대신 깨끗하게 다듬어 클립보드에 담아드리고, Ctrl+V 한 번 하시게 합니다.
+        // 편집기가 붙여넣기를 스스로 처리하면 문단이 정확히 나뉩니다.
+        out.innerHTML = r.copied ? `
+          <div class="ws-sec">
+            <div class="ws-sec-h">이제 두 단계만 하시면 됩니다
+              <span class="ws-sec-tag auto">복사해 뒀습니다</span></div>
+            <p class="ws-sec-p">
+              <b>1.</b> 본문 칸을 클릭하고 <b>Ctrl+V</b><br>
+              <b>2.</b> 아래 <b>자동 서식</b> 버튼<br>
+              그러면 소제목·인용구·굵게가 들어가고 임시저장까지 합니다.
+            </p>
+            <button class="ws-apply" id="ws-pd-fmt">붙여넣었어요 — 서식 넣기</button>
+          </div>
+          ${r.done.length ? `<div class="ws-row good">${r.done.map(esc).join(" · ")}는 넣었습니다.</div>` : ""}
+        ` : `<div class="ws-row bad">${esc(r.why)}</div>`;
+        go.textContent = "다시";
+        go.disabled = false;
+        const fb = out.querySelector("#ws-pd-fmt");
+        if (fb) fb.addEventListener("click", () => runFormat());
+        return;
+      }
+
+      let saved = null;
+      if (panel.querySelector("#ws-pd-save").checked) {
+        say("임시저장 중…");
+        saved = await I.saveDraft();
+      }
+
+      go.textContent = `${r.done.length}군데 넣었습니다`;
+      scheduleCount();
+      out.innerHTML = `
+        <div class="ws-row ${r.failed.length ? "warn" : "good"}">
+          <b>${r.done.length}군데 넣었습니다.</b>${r.failed.length ? ` ${r.failed.length}군데는 못 넣었습니다.` : ""}
+        </div>
+        ${saved ? `<div class="ws-row ${saved.ok ? "good" : "warn"}">
+          ${saved.ok ? "임시저장했습니다." : esc(saved.why)}</div>` : ""}
+        ${r.photoSlots ? `<div class="ws-sec">
+          <div class="ws-sec-h">사진 ${r.photoSlots}곳 <span class="ws-sec-tag check">직접 넣으세요</span></div>
+          <p class="ws-sec-p">본문에 <b>[사진: 무엇]</b> 이라고 적어뒀습니다.
+            어떤 사진인지는 사장님만 아시니 제가 대신 못 넣습니다.
+            그 자리를 눌러 사진으로 바꿔주세요.</p>
+        </div>` : ""}
+        ${r.failed.length ? `<div class="ws-sec warn-sec">
+          <div class="ws-sec-h">못 넣은 것</div>
+          <p class="ws-sec-p">이건 직접 하셔야 합니다. 되는 척하지 않겠습니다.</p>
+          <div style="font-size:12px;line-height:1.8">
+            ${r.failed.map((f) => `· ${esc(f.what)}<br><span style="opacity:.7">&nbsp;&nbsp;${esc(f.why)}</span>`).join("<br>")}
+          </div>
+        </div>` : ""}`;
+    });
+  }
+
   // ── 자동 서식 (소제목·인용구·강조) ─────────────────────
   //
   // ⚠️ 이 기능은 **사장님 글에 직접 손을 댑니다.** 그래서 두 가지를 지킵니다.
@@ -1812,100 +1956,10 @@
   // 그냥 시간으로 기다립니다. 300ms면 에디터가 정리하기에 충분합니다.
   const settleEditor = () => new Promise((r) => setTimeout(r, 300));
 
-  /**
-   * 편집기 칸의 글자를 바꿉니다. **span을 살려두면서.**
-   *
-   * ⚠️ 이걸 알아내는 데 세 번 실패했습니다. 브라우저에서 직접 재보고 알았습니다.
-   *
-   * 스마트에디터의 칸은 이렇게 생겼습니다:
-   *   <p class="se-text-paragraph"><span class="se-ff-... se-fs32">글자</span></p>
-   * 에디터는 저 span을 기준으로 문서를 관리합니다. span이 없어지면 구조가 깨졌다고
-   * 보고 자기 모델로 되돌리는데, 그 과정에서 **글이 빈칸이 됩니다.**
-   *
-   * 실제로 재본 것:
-   *   el.textContent = 새글                        → span 사라짐 ✗
-   *   문단 전체 선택 + execCommand("insertText")    → span 사라짐 ✗   ← 이것도 안 됩니다
-   *   span 안쪽만 선택 + execCommand("insertText")  → span 사라짐 ✗   ← 이것도요
-   *
-   * 왜냐면 브라우저는 **span이 빈 순간 그 span을 치워버립니다.**
-   * 글자를 전부 선택해서 바꾸면 반드시 한 번은 비게 됩니다.
-   *
-   * 그래서 **한 번도 안 비게** 합니다:
-   *   1) 끝에 커서를 두고 새 글자를 **붙입니다**  → "원래글새글" (span 유지)
-   *   2) 앞쪽 원래 글자만 골라서 지웁니다          → "새글"     (span 유지)
-   * 둘 다 execCommand라 에디터가 자기 명령으로 인식하고 모델도 같이 갱신합니다.
-   *
-   * 이게 막히면 텍스트 노드의 값만 직접 바꿉니다 — 구조는 안 건드리는 방식입니다.
-   */
-  function setEditableText(el, want) {
-    const value = String(want);
-    try {
-      // 글자를 담고 있는 그릇 — 보통 span, 없으면 칸 자체.
-      const host = el.querySelector("span") || el;
-      const before = host.textContent || "";
-      const sel = window.getSelection();
-
-      if (before.length) {
-        // 1) 끝에 붙이기
-        el.focus();
-        const r1 = document.createRange();
-        r1.selectNodeContents(host);
-        r1.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(r1);
-        if (!document.execCommand("insertText", false, value)) throw new Error("insert 실패");
-
-        // 2) 앞쪽 옛 글자만 지우기
-        // ⚠️ 붙이면서 텍스트 노드가 쪼개질 수 있습니다. 글자 수로 자리를 찾습니다.
-        const spot = charOffset(host, before.length);
-        if (!spot) throw new Error("지울 자리를 못 찾음");
-        const r2 = document.createRange();
-        r2.setStart(host.firstChild && host.firstChild.nodeType === 3 ? host.firstChild : spot.node, 0);
-        r2.setEnd(spot.node, spot.offset);
-        sel.removeAllRanges();
-        sel.addRange(r2);
-        document.execCommand("delete");
-      } else {
-        el.focus();
-        const r = document.createRange();
-        r.selectNodeContents(host);
-        sel.removeAllRanges();
-        sel.addRange(r);
-        document.execCommand("insertText", false, value);
-      }
-
-      if ((el.innerText || "").replace(/​/g, "").trim() === value.trim()) return true;
-    } catch {}
-
-    // 물러서기 — 텍스트 노드 값만 바꿉니다. 구조를 안 건드리니 span이 삽니다.
-    try {
-      const host = el.querySelector("span") || el;
-      const tn = [...host.childNodes].find((n) => n.nodeType === 3);
-      if (tn) {
-        tn.nodeValue = value;
-      } else {
-        host.appendChild(document.createTextNode(value));
-      }
-      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
-      return (el.innerText || "").replace(/​/g, "").trim() === value.trim();
-    } catch {
-      return false;
-    }
-  }
-
-  /** 그릇 안에서 n번째 글자가 어느 텍스트 노드의 몇 번째인지 찾습니다. */
-  function charOffset(host, n) {
-    let left = n;
-    const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
-    let node;
-    let last = null;
-    while ((node = walk.nextNode())) {
-      last = node;
-      if (left <= node.length) return { node, offset: left };
-      left -= node.length;
-    }
-    return last ? { node: last, offset: last.length } : null;
-  }
+  // ⚠️ setEditableText / charOffset은 format-tools.js로 옮겼습니다.
+  // 원고 붙이기(draft-insert.js)도 같은 함수가 필요한데 여기 있으면 못 씁니다.
+  // 실제로 그것 때문에 원고 넣기가 통째로 실패했습니다 — F.setEditableText is not a function.
+  const setEditableText = (el, want) => window.__wsFormat.setEditableText(el, want);
 
   async function replaceParagraph(el, want, { expect } = {}) {
     const originalHtml = el.innerHTML;
@@ -1954,6 +2008,7 @@
       if (!act) return;
       if (act === "hometitle") homeTitle();
       else if (act === "homebody") homeBody();
+      else if (act === "paste") pasteDraft();
       else if (act === "format") runFormat();
       else if (act === "topic") checkTopic();
       else if (act === "font") applyFont();

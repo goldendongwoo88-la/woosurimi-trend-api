@@ -783,6 +783,57 @@ module.exports = function attachSaas(app) {
     });
   });
 
+  // ── 내 블로그 글 목록 ───────────────────────────────────
+  //
+  // ⚠️ "함께 보면 좋은 글" 링크를 붙이려면 내가 뭘 썼는지 알아야 합니다.
+  // AI를 안 씁니다. 네이버에서 목록만 받아옵니다. 값이 0원입니다.
+  //
+  // ⚠️ 지금 쓰는 글과 **주제가 가까운 것**을 위로 올립니다.
+  // 아무 글이나 붙이면 읽는 사람이 안 누릅니다. 링크는 개수가 아니라 관련성입니다.
+  app.post("/api/my-posts", async (req, res) => {
+    const { blogId, title, exclude } = req.body || {};
+    const id = naverData.parseBlogId(blogId);
+    if (!id) return res.status(400).json({ error: "블로그 아이디를 확인해 주세요." });
+
+    try {
+      const r = await naverData.fetchPostList(id, { countPerPage: 30 });
+      const posts = (r.posts || r.items || r || [])
+        .map((p) => ({
+          logNo: String(p.logNo || p.no || ""),
+          title: String(p.title || "").replace(/<[^>]+>/g, "").trim(),
+          url: `https://blog.naver.com/${id}/${p.logNo || p.no}`,
+          at: p.addDate || p.date || null,
+        }))
+        .filter((p) => p.logNo && p.title);
+
+      // 지금 쓰는 글은 뺍니다
+      const skip = new Set(String(exclude || "").split(",").map((x) => x.trim()).filter(Boolean));
+      const rest = posts.filter((p) => !skip.has(p.logNo));
+
+      // 낱말이 겹치는 만큼 점수를 줍니다. 간단하지만 아무 글이나 붙이는 것보단 훨씬 낫습니다.
+      const words = String(title || "")
+        .replace(/[""''"'.,!?…\-~\[\]()]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length >= 2);
+      for (const p of rest) {
+        p.score = words.filter((w) => p.title.includes(w)).length;
+      }
+      rest.sort((a, b) => b.score - a.score);
+
+      res.json({
+        ok: true,
+        blogId: id,
+        total: posts.length,
+        // 겹치는 게 있는 것만 "관련"으로 봅니다. 없으면 최신 글을 줍니다.
+        related: rest.filter((p) => p.score > 0).slice(0, 6),
+        recent: rest.slice(0, 6),
+        note: "제목에 겹치는 낱말이 많은 순입니다. AI를 안 써서 값이 안 나갑니다.",
+      });
+    } catch (e) {
+      res.status(502).json({ error: "글 목록을 못 받았습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
   // ── 줄바꿈 ─────────────────────────────────────────────
   //
   // ⚠️ AI를 안 씁니다. 그래서 사용량도 안 세고 크레딧도 안 깎습니다.

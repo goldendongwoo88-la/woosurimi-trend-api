@@ -238,6 +238,101 @@
     return { ok: true, why: "" };
   }
 
+  /**
+   * 편집기 칸의 글자를 바꿉니다. **span을 살려두면서.**
+   *
+   * ⚠️ 이걸 알아내는 데 세 번 실패했습니다. 브라우저에서 직접 재보고 알았습니다.
+   *
+   * 스마트에디터의 칸은 이렇게 생겼습니다:
+   *   <p class="se-text-paragraph"><span class="se-ff-... se-fs32">글자</span></p>
+   * 에디터는 저 span을 기준으로 문서를 관리합니다. span이 없어지면 구조가 깨졌다고
+   * 보고 자기 모델로 되돌리는데, 그 과정에서 **글이 빈칸이 됩니다.**
+   *
+   * 실제로 재본 것:
+   *   el.textContent = 새글                        → span 사라짐 ✗
+   *   문단 전체 선택 + execCommand("insertText")    → span 사라짐 ✗   ← 이것도 안 됩니다
+   *   span 안쪽만 선택 + execCommand("insertText")  → span 사라짐 ✗   ← 이것도요
+   *
+   * 왜냐면 브라우저는 **span이 빈 순간 그 span을 치워버립니다.**
+   * 글자를 전부 선택해서 바꾸면 반드시 한 번은 비게 됩니다.
+   *
+   * 그래서 **한 번도 안 비게** 합니다:
+   *   1) 끝에 커서를 두고 새 글자를 **붙입니다**  → "원래글새글" (span 유지)
+   *   2) 앞쪽 원래 글자만 골라서 지웁니다          → "새글"     (span 유지)
+   * 둘 다 execCommand라 에디터가 자기 명령으로 인식하고 모델도 같이 갱신합니다.
+   *
+   * 이게 막히면 텍스트 노드의 값만 직접 바꿉니다 — 구조는 안 건드리는 방식입니다.
+   */
+  function setEditableText(el, want) {
+    const value = String(want);
+    try {
+      // 글자를 담고 있는 그릇 — 보통 span, 없으면 칸 자체.
+      const host = el.querySelector("span") || el;
+      const before = host.textContent || "";
+      const sel = window.getSelection();
+
+      if (before.length) {
+        // 1) 끝에 붙이기
+        el.focus();
+        const r1 = document.createRange();
+        r1.selectNodeContents(host);
+        r1.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r1);
+        if (!document.execCommand("insertText", false, value)) throw new Error("insert 실패");
+
+        // 2) 앞쪽 옛 글자만 지우기
+        // ⚠️ 붙이면서 텍스트 노드가 쪼개질 수 있습니다. 글자 수로 자리를 찾습니다.
+        const spot = charOffset(host, before.length);
+        if (!spot) throw new Error("지울 자리를 못 찾음");
+        const r2 = document.createRange();
+        r2.setStart(host.firstChild && host.firstChild.nodeType === 3 ? host.firstChild : spot.node, 0);
+        r2.setEnd(spot.node, spot.offset);
+        sel.removeAllRanges();
+        sel.addRange(r2);
+        document.execCommand("delete");
+      } else {
+        el.focus();
+        const r = document.createRange();
+        r.selectNodeContents(host);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        document.execCommand("insertText", false, value);
+      }
+
+      if ((el.innerText || "").replace(/​/g, "").trim() === value.trim()) return true;
+    } catch {}
+
+    // 물러서기 — 텍스트 노드 값만 바꿉니다. 구조를 안 건드리니 span이 삽니다.
+    try {
+      const host = el.querySelector("span") || el;
+      const tn = [...host.childNodes].find((n) => n.nodeType === 3);
+      if (tn) {
+        tn.nodeValue = value;
+      } else {
+        host.appendChild(document.createTextNode(value));
+      }
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+      return (el.innerText || "").replace(/​/g, "").trim() === value.trim();
+    } catch {
+      return false;
+    }
+  }
+
+  /** 그릇 안에서 n번째 글자가 어느 텍스트 노드의 몇 번째인지 찾습니다. */
+  function charOffset(host, n) {
+    let left = n;
+    const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    let node;
+    let last = null;
+    while ((node = walk.nextNode())) {
+      last = node;
+      if (left <= node.length) return { node, offset: left };
+      left -= node.length;
+    }
+    return last ? { node: last, offset: last.length } : null;
+  }
+
   // 다른 파일에서 쓸 수 있게 내놓습니다.
-  window.__wsFormat = { setParagraphStyle, applyMark, selectPhrase, findStyleDropdown, settle, norm };
+  window.__wsFormat = { setParagraphStyle, applyMark, selectPhrase, findStyleDropdown, settle, norm, setEditableText, charOffset };
 })();
