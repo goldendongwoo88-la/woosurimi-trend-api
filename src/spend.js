@@ -44,17 +44,36 @@ function load() {
 }
 
 let timer = null;
+
+function writeNow() {
+  timer = null;
+  try {
+    fs.mkdirSync(DIR, { recursive: true });
+    fs.writeFileSync(FILE, JSON.stringify(today));
+  } catch {}
+}
+
+/**
+ * 2초 모아서 씁니다 — 부를 때마다 디스크를 두드리면 낭비입니다.
+ *
+ * ⚠️ 그런데 **미뤄둔 걸 못 쓰고 끝나는 경우**가 있습니다.
+ * unref() 때문에 이 타이머는 프로그램을 붙잡아 두지 않습니다.
+ * 그래서 짧게 돌다 끝나는 프로그램(시험 스크립트, 배치)은 마지막 기록을 잃습니다.
+ *
+ * 실제로 겪었습니다 — 시험에서 3번 불러 66원을 썼는데
+ * 기록에는 **2번 61원**만 남았습니다. 마지막 한 번이 통째로 사라졌습니다.
+ *
+ * 돈을 세는 장부가 **적게 세는 것**이 제일 나쁩니다.
+ * 많이 나갔는데 안 나간 줄 알게 되니까요. 끝날 때 반드시 씁니다.
+ */
 function save() {
   if (timer) return;
-  timer = setTimeout(() => {
-    timer = null;
-    try {
-      fs.mkdirSync(DIR, { recursive: true });
-      fs.writeFileSync(FILE, JSON.stringify(today));
-    } catch {}
-  }, 2000);
+  timer = setTimeout(writeNow, 2000);
   if (timer.unref) timer.unref();
 }
+
+// 끝날 때 미뤄둔 게 있으면 마저 씁니다. exit 안에서는 동기 쓰기만 됩니다.
+process.on("exit", () => { if (timer) { clearTimeout(timer); writeNow(); } });
 
 load();
 
