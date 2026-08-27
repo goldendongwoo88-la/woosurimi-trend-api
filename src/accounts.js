@@ -147,8 +147,52 @@ function signup({ email, password, name, blogId }) {
   return { ok: true, user: publicUser(store.users[e]) };
 }
 
+/**
+ * 주인 계정은 파일이 아니라 **환경변수로** 살립니다.
+ *
+ * ⚠️ 왜 이게 필요한가 — 실제로 사장님이 로그인을 못 하는 일이 생겼습니다.
+ * 무료 서버는 재배포할 때마다 디스크가 비워집니다. 제가 코드를 고쳐 올릴 때마다
+ * accounts.json이 지워지고, 가입해둔 계정이 통째로 사라집니다.
+ * 사장님은 방금 만든 아이디로 로그인했는데 "비밀번호가 맞지 않습니다"를 봤습니다.
+ * 틀린 게 아니라 계정 자체가 없었던 겁니다.
+ *
+ * OWNER_EMAIL + OWNER_PASSWORD가 맞으면, 기록이 없어도 그 자리에서 다시 만듭니다.
+ * 환경변수는 재배포해도 남으므로 사장님은 두 번 다시 가입할 필요가 없습니다.
+ *
+ * ⚠️ 이건 주인 계정만 해결합니다. **손님 계정은 여전히 재배포 때 날아갑니다.**
+ * 돈을 받기 시작하면 그때는 진짜 저장소(디스크나 DB)를 붙여야 합니다.
+ * 지금 손님이 없어서 미뤄둔 것이지, 해결된 게 아닙니다.
+ */
+function ensureOwner(email, password) {
+  const e = normEmail(email);
+  if (!isOwner(e)) return null;
+  const want = process.env.OWNER_PASSWORD;
+  if (!want || String(password) !== want) return null;
+
+  if (!store.users[e]) {
+    store.users[e] = {
+      email: e,
+      name: (process.env.OWNER_NAME || e.split("@")[0]).slice(0, 40),
+      password: hashPassword(want),
+      blogId: process.env.OWNER_BLOG_ID || null,
+      plan: "biz",
+      planUntil: null,
+      createdAt: new Date().toISOString(),
+      points: 0,
+      streak: 0,
+      lastSeenDate: null,
+      licenses: [],
+    };
+    save();
+    console.log(`[accounts] 주인 계정을 환경변수로 복구했습니다: ${e}`);
+  }
+  return store.users[e];
+}
+
 function login({ email, password, ip }) {
   if (tooManyAttempts(ip)) return { ok: false, why: "시도가 너무 많습니다. 10분 뒤에 다시 해주세요." };
+  // 주인 계정이 사라졌으면 먼저 되살립니다.
+  ensureOwner(email, password);
   const u = store.users[normEmail(email)];
   // 아이디가 없는 경우와 비밀번호가 틀린 경우를 같은 문구로 답합니다.
   // 다르게 답하면 어떤 이메일이 가입돼 있는지 알려주는 셈이 됩니다.
