@@ -118,6 +118,19 @@ function accountsOf(email) {
   const spend = require("../src/spend");
   const rules = require("../src/homefeedRules");
   const brandKit = require("../src/brandKit");
+  const power = require("../src/blogPower");
+
+  // 내 블로그 힘 — 제목을 지을 때 "위에 누가 있나"를 알려주려고 한 번만 잽니다.
+  let myBlogId = "", myVisitors = null;
+  try {
+    const kit0 = accountsOf(process.env.OWNER_EMAIL);
+    myBlogId = (kit0 && kit0.blogId) || process.env.OWNER_BLOG_ID || "";
+    if (myBlogId) {
+      myVisitors = await power.dailyVisitors(myBlogId);
+      if (myVisitors) console.log(`내 블로그 ${myBlogId} — 일 방문자 ${myVisitors.toLocaleString()}명
+`);
+    }
+  } catch {}
 
   /**
    * 브랜드 설정을 가져옵니다.
@@ -154,6 +167,31 @@ function accountsOf(email) {
 
     // 이 주제의 실측 기준. 분량 지시를 구조로 만들 때 씁니다.
     const g = rules.BODY.byTopic[j.topic];
+
+    /**
+     * 이 키워드, 지금 위에 누가 있나 — 제목을 지을 때 씁니다.
+     *
+     * ⚠️ AI를 안 씁니다. 공개 검색을 읽습니다. 값이 0원입니다.
+     * ⚠️ **"몇 위에 오른다"고는 안 알려줍니다.** 그건 예언이고 우리는 못 합니다.
+     * 사장님 실제 글로 맞춰보니 3개 중 1개가 크게 어긋났습니다.
+     * 알려주는 건 "위에 있는 블로그가 나보다 크냐 작냐"까지입니다.
+     */
+    let wallNote = "";
+    if (myBlogId) {
+      try {
+        const wall = await power.wallHeight(j.guide.keyword, { topN: 5, myBlogId });
+        const jd = power.judge(myVisitors, wall);
+        if (wall.ok && wall.median) {
+          wallNote =
+            `[이 키워드 상황] "${j.guide.keyword}" 로 검색하면 지금 위에 있는 블로그들의 ` +
+            `일 방문자가 중앙값 ${wall.median.toLocaleString()}명입니다. 내 블로그는 ${(myVisitors || 0).toLocaleString()}명입니다 (${jd.verdict}).` +
+            (wall.alreadyMine && wall.alreadyMine.length
+              ? `
+⚠️ 이 키워드로는 이미 내 글이 ${wall.alreadyMine[0]}위에 있습니다. 같은 각도로 또 쓰면 내 글끼리 밀어냅니다. **다른 각도**로 잡아주세요.`
+              : "");
+        }
+      } catch {}
+    }
     // 목표 글자수 ÷ 문단 길이 = 필요한 문단 수. 숫자를 손으로 적으면 반드시 틀립니다.
     const totalParas = Math.round(g.chars.mid / (g.paraLen.mid || 16));
     const perSection = Math.max(4, Math.round(totalParas / Math.max(1, g.subheads.mid)));
@@ -167,6 +205,8 @@ function accountsOf(email) {
       "",
       rules.bodyBlock(j.topic),
       "",
+      wallNote,
+      wallNote ? "" : null,
       // ⚠️ 브랜드 설정(말투·페르소나·안 쓰는 말·해시태그·맺음말)을 여기 끼웁니다.
       // 안 채우셨으면 빈 글자라 아무 일도 안 일어납니다. 채우실수록 글이 사장님답게 나옵니다.
       brandBlock,
