@@ -24,10 +24,12 @@ const OUT = "C:\\Users\\Admin\\Desktop\\포스팅 자료\\원고";
   const beauty = suggest("beauty", hot, 3).items;
   const fashion = suggest("fashion", hot, 3).items;
 
+  // 갈래 하나만 다시 뽑을 수도 있습니다: node scripts/mate-drafts.js fashion
+  const only = process.argv[2];
   const JOBS = [
-    { skill: "celeb-beauty", area: "뷰티(골든)", pick: beauty[1] || beauty[0] },
-    { skill: "celeb-fashion", area: "패션(차수리미)", pick: fashion[1] || fashion[0] },
-  ];
+    { key: "beauty", skill: "celeb-beauty", area: "뷰티(골든)", pick: beauty[1] || beauty[0] },
+    { key: "fashion", skill: "celeb-fashion", area: "패션(차수리미)", pick: fashion[1] || fashion[0] },
+  ].filter((j) => !only || j.key === only);
 
   const day = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
   const dir = path.join(OUT, `${day}-메이트`);

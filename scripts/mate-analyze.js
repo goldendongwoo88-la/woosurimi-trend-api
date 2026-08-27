@@ -58,6 +58,11 @@ try {
   const g = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "gossip-blogs.json"), "utf8"));
   BLOGS["가십 벤치마킹"] = Object.values(g.found).map((x) => x.id);
 } catch {}
+// 6·7월 뷰티 메이트 — 전체 명단은 비공개라, 본인 인증글(선정 후기)로 확인한 곳들.
+try {
+  const m67 = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "mate67-blogs.json"), "utf8"));
+  BLOGS["뷰티 메이트 6·7월"] = m67.ids;
+} catch {}
 
 (async () => {
   const rows = [];   // {group, blogId, title, date}
