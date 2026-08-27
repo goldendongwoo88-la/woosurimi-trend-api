@@ -97,51 +97,40 @@
   }
 
   // ── 화면 ──────────────────────────────────────────────
-  //
-  // ⚠️ 가로 막대를 화면 오른쪽 위에 뒀다가 왼쪽 세로 막대로 바꿨습니다.
-  // 네이버 글쓰기 화면의 오른쪽에는 이미 다른 확장(늑대플)과 네이버 자체 버튼이
-  // 세로로 줄지어 있습니다. 거기에 가로로 593px짜리를 얹으면 겹칩니다.
-  // 왼쪽은 비어 있어서 아무것과도 부딪히지 않습니다.
-  //
-  // 글자는 아이콘 아래 작게만 답니다. 아이콘만 있으면 뭔지 몰라서 안 누릅니다.
-  // 오른쪽 — 기능 버튼 세로 막대
+  /**
+   * 화면 아래쪽 가로 막대.
+   *
+   * ⚠️ 자리를 세 번 옮겼습니다. 그 이유를 남겨둡니다.
+   *   1) 오른쪽 위 가로 — 네이버 에디터 도구줄을 가렸습니다. 사장님이 "엄청 불편"하다고.
+   *   2) 오른쪽 세로 — 안 가리지만 글 쓰는 손과 멀었습니다.
+   *   3) 아래 가로  — 지금. 네이버 글감 바 바로 위입니다.
+   *
+   * 위쪽은 절대 안 됩니다. 네이버가 도구를 거기 두기 때문에 무엇을 올려도 가립니다.
+   * 아래는 글감 바 하나만 피하면 되고, 눈이 본문에서 조금만 내려오면 닿습니다.
+   */
   const bar = HOST.createElement("div");
-  bar.id = "ws-tools-rail";
+  bar.id = "ws-tools-dock";
   bar.innerHTML = `
-    <div class="ws-rail-head" title="우수리미 포스팅">우수<br>리미</div>
-
-    <div class="ws-rail-acts">
-      <button data-act="hometitle" class="ws-rail-btn primary" title="제목을 홈판용으로 고칩니다">
-        <i>제목</i><span>홈판</span></button>
-      <button data-act="homebody" class="ws-rail-btn primary" title="본문을 소제목 6개로 나눕니다">
-        <i>본문</i><span>홈판</span></button>
-      <button data-act="topic" class="ws-rail-btn" title="이 글이 이 블로그 주제에 맞는지"><i>주제</i></button>
-      <button data-act="audit" class="ws-rail-btn" title="문제가 될 만한 표현 찾기"><i>검사</i></button>
-      <button data-act="keyword" class="ws-rail-btn" title="지금 누가 상위에 있는지"><i>키워드</i></button>
-      <button data-act="font" class="ws-rail-btn" title="글꼴·크기를 본문 전체에 한 번에"><i>폰트</i></button>
-      <button data-act="image" class="ws-rail-btn" title="사진 너비를 한 번에 맞춥니다"><i>사진</i></button>
-      <button data-act="table" class="ws-rail-btn" title="표 넣기"><i>표</i></button>
-      <button data-act="word" class="ws-rail-btn" title="워드로 내려받기"><i>워드</i></button>
+    <div class="ws-dock-counts">
+      <span class="ws-dock-num" title="공백 제외 글자 수"><b id="ws-c-nospace">0</b>자</span>
+      <span class="ws-dock-sub">
+        <span>공백포함 <b id="ws-c-all">0</b></span>
+        <span>사진 <b id="ws-c-img">0</b></span>
+        <span>영상 <b id="ws-c-vid">0</b></span>
+        <span>링크 <b id="ws-c-link">0</b></span>
+      </span>
     </div>
-
-    <button data-act="toggle" class="ws-rail-min" title="접기">▶</button>
-  `;
-
-  // 왼쪽 아래 — 글자수 상자.
-  // ⚠️ 세는 것과 누르는 것을 갈라둡니다. 글자수는 타자 치는 내내 봐야 하는데
-  // 버튼 막대 안에 섞여 있으면 눈이 두 번 움직입니다. 늑대플도 이렇게 나눠뒀습니다.
-  const meter = HOST.createElement("div");
-  meter.id = "ws-tools-meter";
-  meter.innerHTML = `
-    <div class="ws-m-main">
-      <span class="ws-m-label">공백제외</span>
-      <b id="ws-c-nospace">0</b><span class="ws-m-unit">자</span>
-    </div>
-    <div class="ws-m-sub">
-      <span>공백포함 <b id="ws-c-all">0</b></span>
-      <span>사진 <b id="ws-c-img">0</b></span>
-      <span>영상 <b id="ws-c-vid">0</b></span>
-      <span>링크 <b id="ws-c-link">0</b></span>
+    <div class="ws-dock-acts">
+      <button data-act="hometitle" class="ws-dock-btn primary" title="제목을 홈판용으로 고칩니다">홈판 제목</button>
+      <button data-act="homebody" class="ws-dock-btn primary" title="본문을 소제목 6개로 나눕니다">홈판 본문</button>
+      <button data-act="topic" class="ws-dock-btn" title="이 글이 이 블로그 주제에 맞는지">주제</button>
+      <button data-act="audit" class="ws-dock-btn" title="문제가 될 만한 표현 찾기">표현 검사</button>
+      <button data-act="keyword" class="ws-dock-btn" title="지금 누가 상위에 있는지">키워드</button>
+      <button data-act="font" class="ws-dock-btn" title="글꼴·크기를 본문 전체에 한 번에">폰트</button>
+      <button data-act="image" class="ws-dock-btn" title="사진 너비를 한 번에 맞춥니다">사진</button>
+      <button data-act="table" class="ws-dock-btn" title="표 넣기">표</button>
+      <button data-act="word" class="ws-dock-btn" title="워드로 내려받기">워드</button>
+      <button data-act="toggle" class="ws-dock-min" title="접기">▾</button>
     </div>
   `;
 
@@ -663,9 +652,8 @@
   // ── 시작 ──────────────────────────────────────────────
   function start() {
     if (!isWritePage()) return;
-    if (HOST.getElementById("ws-tools-rail")) return;
+    if (HOST.getElementById("ws-tools-dock")) return;
     HOST.body.appendChild(bar);
-    HOST.body.appendChild(meter);
     HOST.body.appendChild(panel);
 
     bar.addEventListener("click", (e) => {
@@ -681,7 +669,7 @@
       else if (act === "table") insertTable();
       else if (act === "word") downloadWord();
       else if (act === "toggle") {
-        bar.classList.toggle("ws-rail-collapsed");
+        bar.classList.toggle("ws-dock-collapsed");
         panel.hidden = true;
       }
     });
@@ -697,7 +685,7 @@
   start();
   let tries = 0;
   const iv = setInterval(() => {
-    if (HOST.getElementById("ws-tools-rail") || ++tries > 20) return clearInterval(iv);
+    if (HOST.getElementById("ws-tools-dock") || ++tries > 20) return clearInterval(iv);
     start();
   }, 700);
 })();

@@ -123,7 +123,7 @@
   width: 340px; max-height: max(300px, 70vh); overflow-y: auto;
   background: #fff; border: 1px solid #e6e8ed; border-radius: 10px;
   box-shadow: 0 8px 28px rgba(20,22,28,.18); padding: 16px;
-  font-size: 13px; line-height: 1.6; color: #17181c;
+  font-size: 15px; line-height: 1.7; color: #17181c;
   font-family: -apple-system, "Malgun Gothic", sans-serif;
 }
 #ws-tools-panel h4 { margin: 0 0 10px; font-size: 14px; }
@@ -187,81 +187,76 @@
 #ws-tools-panel .ws-topics .ws-apply { margin-top: 0; font-size: 11.5px; padding: 4px 9px; }
 
 
-/* ── 글쓰기 창 도구 ───────────────────────────────────────
-   늑대플과 같은 배치입니다: 오른쪽에 기능 막대, 왼쪽 아래에 글자수 상자.
-   사장님이 그 배치에 익숙하시고, 실제로 손이 덜 움직입니다.
 
-   ⚠️ 네이버 CSS에 물들지 않도록 상속되는 값을 전부 직접 지정합니다.
-   font·color·line-height를 비워두면 페이지 스타일이 새어 들어옵니다. */
+/* ── 글쓰기 창 아래 도구 막대 ─────────────────────────────
+   ⚠️ 자리를 세 번 옮겼습니다.
+     1) 오른쪽 위 가로 — 네이버 에디터 도구줄을 가림. 사장님이 불편하다고 하심
+     2) 오른쪽 세로   — 안 가리지만 글 쓰는 손과 멂
+     3) 아래 가로     — 지금. 네이버 글감 바 바로 위
+   위쪽은 네이버가 도구를 두는 자리라 무엇을 올려도 가립니다.
 
-/* 오른쪽 기능 막대 */
-#ws-tools-rail {
-  position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
-  z-index: 2147483000;
-  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
-  width: 58px; padding: 8px 6px;
-  background: #fff; border: 1px solid #e6e8ed; border-radius: 15px;
-  box-shadow: 0 4px 20px rgba(20,22,28,.14);
-  font-family: -apple-system, "Malgun Gothic", sans-serif; color: #17181c;
-  /* ⚠️ 90vh만 쓰면 화면 높이를 0으로 보고하는 환경에서 막대가 통째로 사라집니다.
-     실제로 테스트 중에 innerHeight=0이 나와 높이가 17px로 무너졌습니다.
-     바닥값을 둬서 어떤 경우에도 최소한은 보이게 합니다. */
-  max-height: max(340px, 88vh); overflow-y: auto;
+   ⚠️ 네이버 CSS에 물들지 않도록 상속값을 전부 직접 지정합니다. */
+#ws-tools-dock {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  /* 네이버 글감 바가 아래에 있습니다. 그 위로 올라가도록 띄웁니다. */
+  /* 네이버 글감 바가 아래 가운데에 있습니다(높이 약 50px + 여백 12px).
+     그 위로 확실히 뜨도록 92px를 띄웁니다. 붙으면 눌러야 할 걸 잘못 누릅니다. */
+  bottom: 92px; z-index: 2147483000;
+  display: flex; align-items: center; gap: 18px;
+  /* ⚠️ 줄바꿈을 허용하면 화면이 좁을 때 세로로 쌓여서 '막대'가 아니게 됩니다.
+     한 줄을 유지하고, 모자라면 가로로 밀어서 봅니다. */
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  /* ⚠️ vw가 0으로 계산되는 환경이 있습니다(테스트 중 실제로 겪음).
+     그러면 max-width가 음수가 되어 막대가 세로로 접힙니다.
+     바닥값을 둬서 어떤 경우에도 가로로 펴지게 합니다. */
+  max-width: max(600px, calc(100vw - 40px));
+  padding: 14px 20px;
+  background: rgba(24, 26, 32, .97);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .3);
+  font-family: -apple-system, "Malgun Gothic", sans-serif;
+  color: #f3f4f6; line-height: 1.4;
 }
-#ws-tools-rail::-webkit-scrollbar { width: 0; }
 
-#ws-tools-rail .ws-rail-head {
-  font-size: 10px; font-weight: 800; line-height: 1.25; text-align: center;
-  color: #0b8f4d; padding: 2px 0 7px; border-bottom: 1px solid #eef0f4;
+#ws-tools-dock .ws-dock-counts {
+  display: flex; align-items: baseline; gap: 10px; white-space: nowrap; flex: none;
+  padding-right: 12px; border-right: 1px solid rgba(255,255,255,.14);
+}
+#ws-tools-dock .ws-dock-num b {
+  font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f3f4f6;
+}
+#ws-tools-dock .ws-dock-num { font-size: 15px; color: #b6bcc6; }
+#ws-tools-dock .ws-dock-sub { display: flex; gap: 14px; font-size: 14px; color: #b6bcc6; }
+#ws-tools-dock .ws-dock-sub b { color: #e5e7eb; font-variant-numeric: tabular-nums; }
+
+#ws-tools-dock .ws-dock-acts { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; }
+#ws-tools-dock .ws-dock-btn {
+  font-family: inherit; font-size: 16px; font-weight: 600; white-space: nowrap;
+  padding: 12px 18px; cursor: pointer; line-height: 1.3;
+  border: 1px solid rgba(255,255,255,.16); border-radius: 9px;
+  background: rgba(255,255,255,.07); color: #e5e7eb;
+}
+#ws-tools-dock .ws-dock-btn:hover { background: rgba(255,255,255,.15); }
+#ws-tools-dock .ws-dock-btn.primary { background: #0b8f4d; border-color: #0b8f4d; color: #fff; }
+#ws-tools-dock .ws-dock-btn.primary:hover { background: #0a7d44; }
+
+#ws-tools-dock .ws-dock-min {
+  font-family: inherit; font-size: 18px; padding: 10px 14px; cursor: pointer;
+  border: none; border-radius: 7px; background: none; color: #9ca3af;
+}
+#ws-tools-dock .ws-dock-min:hover { color: #e5e7eb; }
+
+/* 접으면 글자수만 남깁니다 — 타자 치는 내내 보는 숫자라 이것만은 남깁니다 */
+#ws-tools-dock.ws-dock-collapsed .ws-dock-sub,
+#ws-tools-dock.ws-dock-collapsed .ws-dock-btn { display: none; }
+#ws-tools-dock.ws-dock-collapsed .ws-dock-counts { border-right: none; padding-right: 0; }
+#ws-tools-dock.ws-dock-collapsed .ws-dock-min { transform: rotate(180deg); }
+
+/* 결과 창은 막대 위로 뜹니다 */
+#ws-tools-panel {
+  left: 50%; right: auto; transform: translateX(-50%);
+  top: auto; bottom: 180px;
 }
 
-#ws-tools-rail .ws-rail-acts { display: flex; flex-direction: column; gap: 4px; padding-top: 7px; }
-#ws-tools-rail .ws-rail-btn {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 1px; padding: 8px 2px; cursor: pointer;
-  border: 1px solid #e6e8ed; border-radius: 10px; background: #f7f8fa;
-  font-family: inherit; line-height: 1.2;
-}
-#ws-tools-rail .ws-rail-btn i { font-style: normal; font-size: 11.5px; font-weight: 700; color: #17181c; }
-#ws-tools-rail .ws-rail-btn span { font-size: 8.5px; color: #8b909c; }
-#ws-tools-rail .ws-rail-btn:hover { background: #eef0f4; border-color: #d6dae1; }
-#ws-tools-rail .ws-rail-btn.primary { background: #0b8f4d; border-color: #0b8f4d; }
-#ws-tools-rail .ws-rail-btn.primary i,
-#ws-tools-rail .ws-rail-btn.primary span { color: #fff; }
-#ws-tools-rail .ws-rail-btn.primary:hover { background: #0a7d44; }
-
-#ws-tools-rail .ws-rail-min {
-  margin-top: 5px; padding: 4px; cursor: pointer; font-family: inherit; font-size: 11px;
-  border: none; background: none; color: #8b909c;
-}
-#ws-tools-rail.ws-rail-collapsed { width: 30px; padding: 6px 3px; }
-#ws-tools-rail.ws-rail-collapsed .ws-rail-acts { display: none; }
-#ws-tools-rail.ws-rail-collapsed .ws-rail-head { border-bottom: none; font-size: 9px; }
-#ws-tools-rail.ws-rail-collapsed .ws-rail-min { transform: rotate(180deg); }
-
-/* 왼쪽 아래 글자수 상자 */
-#ws-tools-meter {
-  position: fixed; left: 16px; bottom: 16px; z-index: 2147482999;
-  background: rgba(28,30,36,.94); color: #f3f4f6; border-radius: 12px;
-  padding: 12px 16px; min-width: 128px;
-  box-shadow: 0 4px 18px rgba(0,0,0,.28);
-  font-family: -apple-system, "Malgun Gothic", sans-serif; line-height: 1.35;
-}
-#ws-tools-meter .ws-m-label { display: block; font-size: 10px; color: #9ca3af; }
-#ws-tools-meter .ws-m-main b {
-  font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f3f4f6;
-}
-#ws-tools-meter .ws-m-unit { font-size: 11px; color: #9ca3af; margin-left: 2px; }
-#ws-tools-meter .ws-m-sub {
-  display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px;
-  padding-top: 7px; border-top: 1px solid rgba(255,255,255,.12);
-  font-size: 10px; color: #9ca3af;
-}
-#ws-tools-meter .ws-m-sub b { color: #e5e7eb; font-variant-numeric: tabular-nums; }
-
-/* 결과 창은 오른쪽 막대 왼편에 붙습니다 */
-#ws-tools-panel { right: 84px; left: auto; top: 60px; }
-
-/* 너비·글꼴 고르는 버튼 줄 */
-#ws-tools-panel .ws-widths { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-#ws-tools-panel .ws-widths .ws-apply { margin-top: 0; font-size: 12px; padding: 5px 11px; }
+/* 가로 스크롤 막대는 숨깁니다 — 있으면 막대가 두꺼워 보입니다 */
+#ws-tools-dock::-webkit-scrollbar { height: 0; }
