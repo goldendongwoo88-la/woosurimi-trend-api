@@ -364,16 +364,49 @@
   }
 
   // ── 서버 호출 ─────────────────────────────────────────
-  async function server(pathname, body) {
+
+  /**
+   * 토큰이 없거나 낡았으면 **스스로 받아옵니다.**
+   *
+   * ⚠️ 왜 필요한가 — 사장님이 토큰을 계속 다시 넣고 계셨습니다.
+   * 확장을 새 폴더에 풀어 다시 로드하면 크롬이 **다른 확장으로 취급**해서
+   * chrome.storage 가 통째로 비워집니다. 오늘 버전을 네 번 보내드렸으니
+   * 네 번 지워진 겁니다. 사장님 잘못이 아니라 갱신 방식의 문제입니다.
+   *
+   * 배경 일꾼은 우리 도메인 권한이 있어서 로그인 쿠키를 실어 보낼 수 있습니다.
+   * 우수리미에 로그인만 돼 있으면 토큰을 조용히 받아 저장합니다.
+   * (설정 화면의 "토큰 자동으로 받기" 버튼과 같은 길입니다 — 이제 버튼을
+   * 안 눌러도 필요할 때 알아서 다녀옵니다.)
+   */
+  async function fetchTokenQuietly() {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "syncToken" }, (res) => {
+          // 응답이 없어도(배경 일꾼이 잠들었어도) 죽지 않고 그냥 없다고 합니다.
+          if (chrome.runtime.lastError || !res || !res.ok) return resolve(null);
+          const token = res.data && res.data.token;
+          if (!token) return resolve(null);
+          chrome.storage.sync.set({ wsToken: token }, () => resolve(token));
+        });
+      } catch { resolve(null); }
+    });
+  }
+
+  async function server(pathname, body, { retried = false } = {}) {
     // ⚠️ 저장소 키 이름을 다른 파일과 맞춰야 합니다.
     // 처음에 serverUrl로 읽었는데 설정 화면은 server로 저장합니다.
     // 그러면 사장님이 서버 주소를 바꿔도 반영이 안 되고, 왜 안 되는지도 알 수 없습니다.
     const { server: serverUrl, wsToken } = await chrome.storage.sync.get(["server", "wsToken"]);
     const base = (serverUrl || DEFAULT_SERVER).replace(/\/+$/, "");
+
+    // 토큰이 아예 없으면 부르기 전에 먼저 받아봅니다. 실패해도 일단 진행합니다 —
+    // 토큰 없이도 되는 기능(줄바꿈·맞춤법 등)까지 막으면 안 됩니다.
+    let token = wsToken;
+    if (!token && !retried) token = (await fetchTokenQuietly()) || "";
+
     const headers = { "content-type": "application/json" };
     // ⚠️ 도메인이 달라 쿠키가 안 실립니다. 토큰을 머리글에 넣습니다.
-    // 토큰은 확장 설정 화면에서 넣습니다. AI 기능에만 필요합니다.
-    if (wsToken) headers["x-ws-token"] = wsToken;
+    if (token) headers["x-ws-token"] = token;
     const res = await fetch(base + pathname, {
       method: "POST",
       headers,
@@ -381,8 +414,17 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      if (res.status === 401)
-        throw new Error("확장 설정에 이용권 토큰을 넣어야 합니다. 우수리미에 로그인해서 받으세요.");
+      if (res.status === 401) {
+        // 토큰이 낡았을 수도 있습니다. 한 번만 새로 받아서 다시 해봅니다.
+        if (!retried) {
+          const fresh = await fetchTokenQuietly();
+          if (fresh) return server(pathname, body, { retried: true });
+        }
+        throw new Error(
+          "이용권 확인이 안 됩니다. 우수리미 사이트에 한 번 로그인해 주세요 — " +
+          "로그인돼 있으면 토큰은 제가 알아서 받아옵니다."
+        );
+      }
       if (res.status === 402)
         throw new Error("이 기능은 유료 이용권이 필요합니다.");
       throw new Error(data.message || data.error || `서버 오류 ${res.status}`);
