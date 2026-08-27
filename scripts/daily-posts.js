@@ -22,6 +22,12 @@ const ONLY = (process.argv.find((a) => a.startsWith("--only=")) || "").slice(7);
 
 const line = (n = 62) => "─".repeat(n);
 
+/** 주인 계정의 브랜드 설정. 계정이 없으면 null — 그래도 글은 씁니다. */
+function accountsOf(email) {
+  if (!email) return null;
+  try { return require("../src/accounts").getBrandKit(email); } catch { return null; }
+}
+
 (async () => {
   const r = A.listJobs();
   if (!r.ok) {
@@ -111,6 +117,23 @@ const line = (n = 62) => "─".repeat(n);
   const studio = require("../src/promptStudio");
   const spend = require("../src/spend");
   const rules = require("../src/homefeedRules");
+  const brandKit = require("../src/brandKit");
+
+  /**
+   * 브랜드 설정을 가져옵니다.
+   *
+   * ⚠️ 이 도구는 명령창에서 도니까 로그인 쿠키가 없습니다.
+   * 그래서 주인 계정(OWNER_EMAIL)의 설정을 직접 읽습니다.
+   * 없으면 빈 값으로 갑니다 — 설정을 안 하셨다고 글을 못 쓰면 안 됩니다.
+   */
+  let brandBlock = "";
+  try {
+    const kit = accountsOf(process.env.OWNER_EMAIL);
+    if (kit) {
+      brandBlock = brandKit.promptBlock(kit);
+      if (brandBlock) console.log(`브랜드 설정을 반영합니다 (${brandKit.status(kit).percent}% 채우심)\n`);
+    }
+  } catch {}
 
   if (!claude.isConfigured()) {
     console.log("\n서버에 AI 열쇠(ANTHROPIC_API_KEY)가 없습니다.\n");
@@ -144,6 +167,10 @@ const line = (n = 62) => "─".repeat(n);
       "",
       rules.bodyBlock(j.topic),
       "",
+      // ⚠️ 브랜드 설정(말투·페르소나·안 쓰는 말·해시태그·맺음말)을 여기 끼웁니다.
+      // 안 채우셨으면 빈 글자라 아무 일도 안 일어납니다. 채우실수록 글이 사장님답게 나옵니다.
+      brandBlock,
+      brandBlock ? "" : null,
       "위 기준대로 **본문만** 써주세요. 제목 후보 목록은 필요 없습니다.",
       "소제목은 ■ 로, 사진 자리는 [사진: 무엇] 으로, 강조할 말은 **이렇게** 표시해 주세요.",
       "",

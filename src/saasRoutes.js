@@ -43,6 +43,13 @@ const thumbAutoUpload = multer({
   limits: { fileSize: 8 * 1024 * 1024, files: 12 },
 });
 
+// 로고 한 장 — 색만 뽑고 버립니다. 저장하지 않습니다.
+// ⚠️ 크게 잡을 이유가 없습니다. 32×32로 줄여서 색만 셀 거라서요.
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024, files: 1 },
+});
+
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
 function readCookie(req, name) {
@@ -781,6 +788,56 @@ module.exports = function attachSaas(app) {
       kinds: emphasis.KINDS,
       subheadSize: emphasis.SUBHEAD_SIZE,
     });
+  });
+
+  // ── 브랜드 설정 ────────────────────────────────────────
+  //
+  // ⚠️ 경쟁 서비스(adport.kr)의 "셋업 완성도 79% · 15/19 완료" 화면에서 가져온 생각입니다.
+  // 설정에서 막히는 진짜 이유는 **뭘 더 해야 하는지 모르는 것**입니다.
+  // 퍼센트와 목록이 그걸 없앱니다.
+  //
+  // ⚠️ AI를 안 씁니다. 값이 0원입니다.
+  const brandKit = require("./brandKit");
+
+  app.get("/api/brand", (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    // 블로그 주소는 계정에 이미 있습니다. getBrandKit이 같이 넣어줍니다.
+    res.json(brandKit.status(accounts.getBrandKit(req.user.email) || {}));
+  });
+
+  app.post("/api/brand", (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    const patch = req.body || {};
+
+    // ⚠️ 아는 열쇠만 받습니다. 아무 이름이나 받으면 계정 안에 쓰레기가 쌓이고,
+    // 나중에 plan 같은 중요한 값을 덮어쓰는 길이 열립니다.
+    const allowed = new Set(brandKit.ITEMS.map((i) => i.key));
+    const clean = {};
+    for (const [k, v] of Object.entries(patch)) {
+      if (!allowed.has(k) || k === "blogId") continue;
+      // 그림은 여기로 안 받습니다. 따로 올립니다.
+      if (typeof v === "string" && v.length > 2000) continue;
+      clean[k] = v;
+    }
+
+    const merged = accounts.setBrandKit(req.user.email, clean);
+    res.json(brandKit.status(merged || {}));
+  });
+
+  /**
+   * 로고에서 브랜드색을 뽑습니다.
+   *
+   * ⚠️ 저쪽은 "AI 팔레트 분석"이라고 합니다. AI가 필요 없습니다.
+   * 그림을 32×32로 줄이면 색이 뭉쳐집니다. 그걸 세면 끝입니다. 값이 0원입니다.
+   */
+  app.post("/api/brand/palette", logoUpload.single("logo"), async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "로그인이 필요합니다." });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ error: "로고 그림을 올려주세요." });
+    try {
+      res.json(await brandKit.paletteFromLogo(req.file.buffer));
+    } catch (e) {
+      res.status(400).json({ error: "그림을 못 읽었습니다. jpg·png 로 올려주세요." });
+    }
   });
 
   // ── 실측 기준값 ────────────────────────────────────────

@@ -380,7 +380,32 @@ function listUsers() {
   return Object.values(store.users).map(publicUser);
 }
 
+/**
+ * 브랜드 설정 읽기·쓰기.
+ *
+ * ⚠️ listUsers()로 꺼내 쓰면 안 됩니다. 그건 publicUser를 거쳐서
+ * **brandKit이 빠진 채로** 나옵니다. 그걸 모르고 쓰면 늘 빈 값이 나오는데,
+ * 저장은 되는 것처럼 보여서 원인을 찾기 어렵습니다. 실제로 그렇게 짤 뻔했습니다.
+ *
+ * ⚠️ 그렇다고 사용자 원본을 통째로 내주지도 않습니다.
+ * 비밀번호 해시가 같이 나갑니다. 필요한 것만 주고받습니다.
+ */
+function getBrandKit(email) {
+  const u = store.users[normEmail(email)];
+  if (!u) return null;
+  return { ...(u.brandKit || {}), blogId: u.blogId || null };
+}
+
+function setBrandKit(email, patch) {
+  const u = store.users[normEmail(email)];
+  if (!u) return null;
+  u.brandKit = { ...(u.brandKit || {}), ...patch };
+  save();
+  return { ...u.brandKit, blogId: u.blogId || null };
+}
+
 module.exports = {
+  getBrandKit, setBrandKit,
   COOKIE_NAME,
   COOKIE_DAYS,
   signup,
