@@ -131,7 +131,18 @@
       const t = (clone.innerText || "").replace(/​/g, "");
       if (t.trim()) parts.push(t);
     }
+    // ⚠️ 문단을 줄바꿈으로 이으면 그 줄바꿈도 글자로 세어집니다.
+    // 늑대플과 공백포함이 26자 차이 났는데, 문단이 26개라 줄바꿈 26개가 그대로 그 차이였습니다.
+    // 줄바꿈은 사장님이 친 글자가 아니니 세면 안 됩니다.
+    // 그래서 세는 쪽은 문단 배열을 그대로 쓰고(getBodyParts), 이어붙인 글은
+    // AI에 넘길 때만 씁니다. 그쪽은 문단 구분이 있어야 하니까요.
     return parts.join("\n").trim();
+  }
+
+  /** 세기 전용 — 줄바꿈을 넣지 않은 문단 배열. */
+  function getBodyParts() {
+    const joined = getBodyText();
+    return joined ? joined.split("\n") : [];
   }
 
   function countMedia() {
@@ -206,10 +217,11 @@
   }
 
   function updateCounts() {
-    const text = getBodyText();
+    // 문단을 이어붙인 글이 아니라 문단 하나씩 세야 줄바꿈이 안 섞입니다.
+    const parts = getBodyParts();
     const m = countMedia();
-    const all = text.length;
-    const nospace = text.replace(/\s/g, "").length;
+    const all = parts.reduce((n, p) => n + p.length, 0);
+    const nospace = parts.reduce((n, p) => n + p.replace(/\s/g, "").length, 0);
     setText("ws-c-all", all.toLocaleString());
     setText("ws-c-nospace", nospace.toLocaleString());
     setText("ws-c-img", m.images);
@@ -413,6 +425,19 @@
       return;
     }
 
+    /**
+     * ⚠️ 제목이 통째로 사라진 적이 있습니다. 원인은 제 코드였습니다.
+     *
+     * 전체 선택을 먼저 하고 넣는 방식이었는데, 넣기가 실패하면
+     * **선택된 글자만 지워지고 끝납니다.** 편집기가 붙여넣기를 안 받아주면
+     * 제목이 빈칸이 되고, 사장님은 되돌릴 방법도 없습니다.
+     *
+     * 그래서 원래 제목을 먼저 손에 쥐고 시작합니다.
+     * 시도해서 안 되면 **원래대로 되돌려놓고** 다음 방법으로 넘어갑니다.
+     * 다 실패해도 제목은 처음 그대로 남습니다. 최소한 잃지는 않습니다.
+     */
+    const original = getTitle();
+
     const selectAll = () => {
       el.focus();
       const range = document.createRange();
@@ -422,21 +447,30 @@
       sel.addRange(range);
     };
 
-    // ⚠️ 순서가 중요합니다. execCommand("insertText")가 contenteditable에서
-    // 제일 잘 먹습니다. 합성 붙여넣기는 브라우저가 막는 경우가 많아 뒤로 뺐습니다.
+    // 되돌리기 — 어떤 방법이 실패해 빈칸이 됐을 때 씁니다.
+    const restore = () => {
+      try {
+        if (getTitle() === original) return;
+        el.textContent = original;
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: original }));
+      } catch {}
+    };
+
+    // ⚠️ textContent를 맨 앞에 둡니다. 이건 **지우고 넣는 게 아니라 한 번에 바꾸는**
+    // 방식이라 중간에 실패해도 빈칸이 안 됩니다. 편집기가 안 받아줄 수는 있지만
+    // 그때는 원래 값이 그대로 남습니다. 안전한 것부터 시도합니다.
     const ways = [
+      () => {
+        el.focus();
+        el.textContent = want;
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: want }));
+      },
       () => { selectAll(); document.execCommand("insertText", false, want); },
       () => {
         selectAll();
         const dt = new DataTransfer();
         dt.setData("text/plain", want);
         el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-      },
-      // 마지막 수단 — DOM을 직접 씁니다. 편집기가 안 받아들일 수 있어서 맨 뒤입니다.
-      () => {
-        selectAll();
-        el.textContent = want;
-        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: want }));
       },
     ];
 
@@ -447,13 +481,17 @@
         scheduleCount();
         return;
       }
+      // 안 됐으면 다음 방법으로 넘어가기 전에 원래대로 돌려놓습니다.
+      restore();
     }
 
     // 여기까지 왔으면 정말 안 된 겁니다. 된 척하지 않습니다.
+    restore();
     navigator.clipboard.writeText(want).catch(() => {});
     showPanel(`<h4>홈판 제목</h4>
       <div class="ws-row warn">제목을 자동으로 바꾸지 못했습니다.
-        <b>복사해 뒀으니</b> 제목 칸을 클릭하고 전체 선택(Ctrl+A) 후 Ctrl+V를 눌러주세요.</div>
+        <b>원래 제목은 그대로 뒀습니다.</b> 새 제목을 복사해 뒀으니
+        제목 칸을 클릭하고 전체 선택(Ctrl+A) 후 Ctrl+V를 눌러주세요.</div>
       <div class="ws-preview"><pre>${esc(want)}</pre></div>`);
   }
 
