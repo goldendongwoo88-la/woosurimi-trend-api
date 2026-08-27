@@ -411,3 +411,19 @@
 #ws-tools-panel .ws-check .want { text-align: right; color: #8b909c; white-space: nowrap; font-variant-numeric: tabular-nums; }
 #ws-tools-panel .ws-check .mark { text-align: right; white-space: nowrap; width: 46px; font-size: 11.5px; color: #8a5c11; }
 #ws-tools-panel .ws-check tr:not(.off) .mark { color: #0b6b3c; }
+
+/* 끌어서 옮기기 — 패널이 본문을 가려서 넣었습니다 */
+/* ⚠️ 사장님이 "홈판 본문 화면이 본문을 가려서 포스팅하기 어렵다"고 하셨습니다.
+   오른쪽에 고정인데 글은 가운데에 있어서, 결과를 보며 고칠 수가 없었습니다. */
+#ws-tools-panel .ws-panel-grip {
+  margin: -16px -16px 10px; padding: 7px 40px 7px 14px;
+  background: #f4f6f8; border-bottom: 1px solid #e9ebef;
+  border-radius: 10px 10px 0 0;
+  font-size: 11.5px; color: #8b909c; letter-spacing: .2px;
+  cursor: grab; user-select: none;
+}
+#ws-tools-panel .ws-panel-grip:hover { background: #eceff3; color: #5c6470; }
+#ws-tools-panel.ws-dragging { opacity: .92; box-shadow: 0 14px 40px rgba(20,22,28,.28); }
+#ws-tools-panel.ws-dragging .ws-panel-grip { cursor: grabbing; }
+/* 끄는 동안 글자가 선택되면 파랗게 번집니다 */
+#ws-tools-panel.ws-dragging * { user-select: none; }

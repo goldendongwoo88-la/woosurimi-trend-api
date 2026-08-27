@@ -55,8 +55,11 @@ function cost({ sys, input, max, cached, outRatio = 0.6, images = 0 }) {
 }
 
 const BUTTONS = [
-  { name: "홈판 제목", file: "titleRewrite", input: 200,
-    what: "제목만 보냅니다. 본문은 안 보냅니다." },
+  // ⚠️ 처음에 "제목만 보낸다"고 적었는데 **틀렸습니다.**
+  // 코드를 열어보니 본문을 1,500자까지 같이 보냅니다 — 본문에 있는 사실로만
+  // 궁금증을 만들라고 시키려고요. 화면에도 "본문 1,248자를 읽고"라고 뜹니다.
+  { name: "홈판 제목", file: "titleRewrite", input: 1500,
+    what: "제목 + 본문 앞 1,500자를 보냅니다." },
   { name: "홈판 본문", file: "bodyRewrite", input: BODY_CHARS,
     what: "본문을 통째로 보내고 다시 받습니다. 제일 큽니다." },
   { name: "썸네일 (수동)", file: null, input: 0,

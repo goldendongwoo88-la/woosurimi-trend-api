@@ -184,6 +184,7 @@
     <div class="ws-dock-acts">
       <button data-act="hometitle" class="ws-dock-btn primary" title="제목을 홈판용으로 고칩니다">홈판 제목</button>
       <button data-act="homebody" class="ws-dock-btn primary" title="본문을 소제목 6개로 나눕니다">홈판 본문</button>
+      <button data-act="thumb" class="ws-dock-btn primary" title="홈판용 썸네일 만들기">썸네일</button>
       <button data-act="paste" class="ws-dock-btn primary" title="클로드에서 복사한 원고를 통째로 넣습니다">원고 붙이기</button>
       <button data-act="format" class="ws-dock-btn primary" title="소제목·인용구·강조를 자동으로 넣습니다">자동 서식</button>
       <button data-act="finish" class="ws-dock-btn primary" title="기준값과 견줘보고 임시저장까지">마무리</button>
@@ -195,7 +196,6 @@
       <button data-act="image" class="ws-dock-btn" title="사진 너비를 한 번에 맞춥니다">사진</button>
       <button data-act="linebreak" class="ws-dock-btn" title="긴 문단을 45자 이하로 자릅니다">줄바꿈</button>
       <button data-act="spell" class="ws-dock-btn" title="블로그에서 자주 틀리는 말 찾기">맞춤법</button>
-      <button data-act="thumb" class="ws-dock-btn" title="홈판용 썸네일 만들기">썸네일</button>
       <button data-act="table" class="ws-dock-btn" title="표 넣기">표</button>
       <button data-act="word" class="ws-dock-btn" title="워드로 내려받기">워드</button>
       <button data-act="toggle" class="ws-dock-min" title="접기">▾</button>
@@ -206,10 +206,78 @@
   panel.id = "ws-tools-panel";
   panel.hidden = true;
 
+  /**
+   * 패널을 마우스로 끌어 옮길 수 있게 합니다.
+   *
+   * ⚠️ 사장님이 "홈판 본문 화면이 본문을 가려서 포스팅하기 어렵다"고 하셨습니다.
+   * 실제로 그렇습니다 — 오른쪽에 고정돼 있는데 글은 가운데에 있습니다.
+   * 결과를 보면서 본문을 고쳐야 하는데 그 본문이 안 보입니다.
+   *
+   * ⚠️ 옮긴 자리를 **기억합니다.** 매번 옮기게 하면 그것도 일입니다.
+   *
+   * ⚠️ 화면 밖으로는 못 나가게 막습니다. 한 번 밖으로 나가면
+   * 다시 잡을 방법이 없어서 확장을 다시 깔아야 합니다.
+   */
+  const POS_KEY = "wsPanelPos";
+
+  function clampToScreen(x, y) {
+    const w = panel.offsetWidth || 340;
+    const h = panel.offsetHeight || 300;
+    // 머리 부분은 항상 보이게 둡니다. 아래로 다 넘어가면 못 잡습니다.
+    return {
+      x: Math.max(8, Math.min(x, window.innerWidth - Math.min(w, 120))),
+      y: Math.max(8, Math.min(y, window.innerHeight - 44)),
+    };
+  }
+
+  function placePanel(x, y) {
+    const p = clampToScreen(x, y);
+    panel.style.left = p.x + "px";
+    panel.style.top = p.y + "px";
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    panel.style.transform = "none";
+    return p;
+  }
+
+  function restorePos() {
+    try {
+      const raw = localStorage.getItem(POS_KEY);
+      if (!raw) return;
+      const { x, y } = JSON.parse(raw);
+      if (typeof x === "number" && typeof y === "number") placePanel(x, y);
+    } catch {}
+  }
+
+  function startDrag(e) {
+    // 버튼·입력칸을 누른 거면 옮기지 않습니다. 안 그러면 체크박스를 못 누릅니다.
+    if (e.target.closest("button, input, textarea, select, a, label")) return;
+    const r = panel.getBoundingClientRect();
+    const dx = e.clientX - r.left;
+    const dy = e.clientY - r.top;
+    panel.classList.add("ws-dragging");
+
+    const move = (ev) => placePanel(ev.clientX - dx, ev.clientY - dy);
+    const up = (ev) => {
+      const p = placePanel(ev.clientX - dx, ev.clientY - dy);
+      panel.classList.remove("ws-dragging");
+      document.removeEventListener("mousemove", move, true);
+      document.removeEventListener("mouseup", up, true);
+      try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch {}
+    };
+    document.addEventListener("mousemove", move, true);
+    document.addEventListener("mouseup", up, true);
+    e.preventDefault();
+  }
+
   function showPanel(html) {
-    panel.innerHTML = `<button class="ws-panel-close" title="닫기">✕</button>${html}`;
+    panel.innerHTML =
+      `<div class="ws-panel-grip" title="여기를 잡고 끌면 옮길 수 있습니다">⠿ 끌어서 옮기기</div>` +
+      `<button class="ws-panel-close" title="닫기">✕</button>${html}`;
     panel.hidden = false;
     panel.querySelector(".ws-panel-close").onclick = () => (panel.hidden = true);
+    panel.querySelector(".ws-panel-grip").onmousedown = startDrag;
+    restorePos();
   }
 
   // ── 숫자 갱신 ─────────────────────────────────────────
