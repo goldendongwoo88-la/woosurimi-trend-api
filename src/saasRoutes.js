@@ -783,6 +783,21 @@ module.exports = function attachSaas(app) {
     });
   });
 
+  // ── 실측 기준값 ────────────────────────────────────────
+  //
+  // ⚠️ 숫자는 homefeedRules 한 곳에만 둡니다. 확장 프로그램에 또 적어두면
+  // 언젠가 어긋나고, 어느 쪽이 맞는지 아무도 모르게 됩니다.
+  // AI를 안 씁니다. 값이 0원입니다.
+  app.get("/api/homefeed/rules", (req, res) => {
+    const r = require("./homefeedRules");
+    res.json({
+      evidence: r.EVIDENCE || null,
+      byTopic: (r.BODY && r.BODY.byTopic) || null,
+      universal: (r.BODY && r.BODY.universal) || null,
+      dontBother: (r.BODY && r.BODY.dontBother) || null,
+    });
+  });
+
   // ── 내 블로그 글 목록 ───────────────────────────────────
   //
   // ⚠️ "함께 보면 좋은 글" 링크를 붙이려면 내가 뭘 썼는지 알아야 합니다.

@@ -186,6 +186,7 @@
       <button data-act="homebody" class="ws-dock-btn primary" title="본문을 소제목 6개로 나눕니다">홈판 본문</button>
       <button data-act="paste" class="ws-dock-btn primary" title="클로드에서 복사한 원고를 통째로 넣습니다">원고 붙이기</button>
       <button data-act="format" class="ws-dock-btn primary" title="소제목·인용구·강조를 자동으로 넣습니다">자동 서식</button>
+      <button data-act="finish" class="ws-dock-btn primary" title="기준값과 견줘보고 임시저장까지">마무리</button>
       <button data-act="links" class="ws-dock-btn primary" title="내 블로그 글 중 관련 있는 것을 본문 끝에 붙입니다">함께보기</button>
       <button data-act="topic" class="ws-dock-btn" title="이 글이 이 블로그 주제에 맞는지">주제</button>
       <button data-act="audit" class="ws-dock-btn" title="문제가 될 만한 표현 찾기">표현 검사</button>
@@ -291,6 +292,19 @@
         throw new Error("이 기능은 유료 이용권이 필요합니다.");
       throw new Error(data.message || data.error || `서버 오류 ${res.status}`);
     }
+    return data;
+  }
+
+  /** 값이 안 나가는 조회용. 기준값처럼 안 바뀌는 것은 한 번만 받아 씁니다. */
+  let rulesCache = null;
+  async function serverGet(pathname) {
+    if (pathname === "/api/homefeed/rules" && rulesCache) return rulesCache;
+    const { server: serverUrl } = await chrome.storage.sync.get(["server"]);
+    const base = (serverUrl || DEFAULT_SERVER).replace(/\/+$/, "");
+    const res = await fetch(base + pathname);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `서버 오류 ${res.status}`);
+    if (pathname === "/api/homefeed/rules") rulesCache = data;
     return data;
   }
 
@@ -428,6 +442,207 @@
         msg("복사를 못 했습니다. 이 창을 한 번 누르시고 다시 해주세요.", "ws-warn");
       }
     };
+  }
+
+  // ── 마무리 점검 ───────────────────────────────────────
+  //
+  // ⚠️ AI를 안 부릅니다. 값이 0원입니다.
+  // 재는 건 세는 일입니다. 세는 걸 AI한테 시키면 값도 나가고 틀리기까지 합니다.
+  //
+  // ⚠️ 기준값을 여기 적어두지 않습니다. 서버(homefeedRules)에서 받아 씁니다.
+  // 양쪽에 적어두면 언젠가 어긋나고, 그때 어느 쪽이 맞는지 아무도 모릅니다.
+
+  /**
+   * 지금 글을 잽니다. 편집기 안을 **문서 순서대로** 훑습니다.
+   * 순서가 어긋나면 사진 사이 글자 수가 엉뚱하게 나옵니다.
+   */
+  function measurePost() {
+    const root = getEditorRoot();
+    if (!root) return null;
+
+    const SKIP = ".se-documentTitle, .se-placeholder";
+    const nodes = [...root.querySelectorAll(".se-text-paragraph, .se-image-resource, .se-oglink, .se-video")]
+      .filter((n) => !n.closest(SKIP));
+
+    // 본문 글자 크기의 중앙값을 먼저 구합니다. 소제목은 그보다 확실히 큽니다.
+    // ⚠️ "38px이면 소제목"이라고 못 박으면 안 됩니다. 사장님이 본문 크기를
+    // 19로 쓰시면 소제목이 30일 수도 있습니다. **상대적으로** 봐야 합니다.
+    const sizes = [];
+    for (const n of nodes) {
+      if (!n.classList.contains("se-text-paragraph")) continue;
+      const t = (n.innerText || "").trim();
+      if (!t) continue;
+      const px = parseFloat(getComputedStyle(n.querySelector("span") || n).fontSize) || 0;
+      if (px) sizes.push(px);
+    }
+    sizes.sort((a, b) => a - b);
+    const bodyPx = sizes.length ? sizes[Math.floor(sizes.length / 2)] : 16;
+
+    const paras = [];      // 글자 있는 문단만
+    const gaps = [];       // 사진과 사진 사이 글자 수
+    let images = 0, subheads = 0, run = 0, seenImage = false;
+
+    for (const n of nodes) {
+      if (n.classList.contains("se-text-paragraph")) {
+        const t = (n.innerText || "").replace(/[\s​]/g, "");
+        if (!t) continue;
+        const px = parseFloat(getComputedStyle(n.querySelector("span") || n).fontSize) || bodyPx;
+        // 본문보다 1.25배 넘게 크고 짧으면 소제목으로 봅니다.
+        if (px >= bodyPx * 1.25 && t.length <= 45) { subheads++; continue; }
+        paras.push(t.length);
+        run += t.length;
+      } else if (n.classList.contains("se-image-resource")) {
+        images++;
+        // 첫 사진 앞은 도입부라 간격으로 안 셉니다.
+        if (seenImage) gaps.push(run);
+        seenImage = true;
+        run = 0;
+      }
+    }
+
+    const chars = paras.reduce((a, b) => a + b, 0);
+    const mid = (arr) => {
+      if (!arr.length) return 0;
+      const s = [...arr].sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    };
+
+    // 굵게 — 서로 다른 덩이 개수를 셉니다.
+    const bold = root.querySelectorAll("b, strong").length;
+
+    return {
+      chars,
+      subheads,
+      images,
+      imgGap: mid(gaps),
+      paraLen: mid(paras),
+      over45: paras.length ? Math.round((paras.filter((n) => n > 45).length / paras.length) * 100) : 0,
+      boldPer1k: chars ? +((bold / chars) * 1000).toFixed(1) : 0,
+      paras: paras.length,
+    };
+  }
+
+  /** 내 글로 가는 링크카드 개수. 남의 글 링크는 안 셉니다 — 실측한 건 '내 글' 링크입니다. */
+  function countOwnLinks(myId) {
+    const root = getEditorRoot();
+    if (!root || !myId) return 0;
+    const id = String(myId).toLowerCase();
+    let n = 0;
+    for (const el of root.querySelectorAll(".se-oglink")) {
+      const a = el.querySelector("a[href]");
+      const href = (a && a.getAttribute("href")) || el.innerText || "";
+      if (href.toLowerCase().includes(`blog.naver.com/${id}`)) n++;
+    }
+    return n;
+  }
+
+  async function finishCheck() {
+    const body = getBodyText();
+    if (body.length < 100)
+      return showPanel(`<p>본문이 너무 짧습니다. 조금 더 쓰신 뒤에 눌러주세요.</p>`);
+
+    showPanel(`<p>재는 중…</p>`);
+    let R;
+    try {
+      R = await serverGet("/api/homefeed/rules");
+    } catch (e) {
+      return showPanel(`<p class="ws-err">기준값을 못 받았습니다. ${esc(e.message)}</p>`);
+    }
+
+    const m = measurePost();
+    if (!m) return showPanel(`<p class="ws-err">본문을 못 찾았습니다.</p>`);
+
+    const id = await myBlogId();
+    const own = countOwnLinks(id);
+    const spon = looksSponsored(body);
+
+    // 주제 고르기 — 제목과 본문으로 짐작하고, 틀리면 바꾸실 수 있게 둡니다.
+    const guess = /연예|방송|가십|드라마|아이돌|배우|가수|아이유|스포츠/.test(getTitle() + body.slice(0, 300))
+      ? "연예·방송" : "패션·뷰티";
+
+    const render = (topic) => {
+      const g = R.byTopic[topic];
+      const u = R.universal;
+
+      // 재본 값 vs 기준. 넘거나 모자라면 어느 쪽인지도 말합니다.
+      const rows = [
+        { k: "글자 수", got: m.chars, lo: g.chars.min, hi: g.chars.max, unit: "자" },
+        { k: "소제목", got: m.subheads, lo: g.subheads.min, hi: g.subheads.max, unit: "개" },
+        { k: "사진", got: m.images, lo: g.images.min, hi: g.images.max, unit: "장" },
+        { k: "사진 사이 글자", got: m.imgGap, lo: g.imgGap.min, hi: g.imgGap.max, unit: "자" },
+        { k: "문단 길이", got: m.paraLen, lo: 0, hi: u.paraLen.top + 4, unit: "자",
+          note: `잘 되는 쪽 ${u.paraLen.top}자 / 덜 되는 쪽 ${u.paraLen.bottom}자` },
+        { k: "45자 넘는 문단", got: m.over45, lo: 0, hi: Math.max(u.over45.top, g.over45.top) + 2, unit: "%" },
+        { k: "굵게 (1,000자당)", got: m.boldPer1k, lo: u.bold.top - 1.5, hi: 99, unit: "번",
+          note: `잘 되는 쪽 ${u.bold.top}번 / 덜 되는 쪽 ${u.bold.bottom}번` },
+      ];
+
+      const bad = rows.filter((r) => r.got < r.lo || r.got > r.hi);
+
+      // ⚠️ 4.1 - 1.5 는 2.5999999999999996 이 됩니다. 컴퓨터가 소수를 그렇게 셉니다.
+      // 화면에 그대로 나가면 사장님이 보시기에 그냥 고장난 것으로 보입니다.
+      const num = (n) => (Number.isInteger(n) ? n : Math.round(n * 10) / 10);
+
+      return `
+        <h4>마무리 점검</h4>
+        <p class="ws-dim">${esc(R.evidence ? R.evidence.method : "")}</p>
+        <div class="ws-btnrow">
+          ${["패션·뷰티", "연예·방송"].map((t) =>
+            `<button class="ws-dock-btn ${t === topic ? "primary" : ""}" data-topic="${t}">${t}</button>`).join("")}
+        </div>
+        <table class="ws-check">
+          ${rows.map((r) => {
+            const off = r.got < r.lo || r.got > r.hi;
+            const arrow = !off ? "✓" : r.got < r.lo ? "▲ 더" : "▼ 덜";
+            return `<tr class="${off ? "off" : ""}">
+              <td>${esc(r.k)}</td>
+              <td class="num"><b>${num(r.got)}</b>${esc(r.unit)}</td>
+              <td class="want">${r.hi === 99 ? `${num(r.lo)}${r.unit} 이상` : `${num(r.lo)}~${num(r.hi)}${r.unit}`}</td>
+              <td class="mark">${arrow}</td>
+            </tr>${r.note ? `<tr class="sub"><td colspan="4" class="ws-dim">${esc(r.note)}</td></tr>` : ""}`;
+          }).join("")}
+          <tr class="${spon ? "" : own < u.ownLinks.top ? "off" : ""}">
+            <td>내 글 링크</td>
+            <td class="num"><b>${own}</b>개</td>
+            <td class="want">${spon ? "협찬은 예외" : `${u.ownLinks.top}개`}</td>
+            <td class="mark">${spon ? "—" : own >= u.ownLinks.top ? "✓" : "▲ 더"}</td>
+          </tr>
+        </table>
+        ${spon
+          ? `<p class="ws-warn">협찬 글로 보입니다 ("${esc(spon)}"). 내 글 링크는 안 세었습니다.</p>`
+          : own < u.ownLinks.top
+            ? `<p class="ws-dim">→ <b>함께보기</b> 버튼으로 내 글 링크를 붙이실 수 있습니다.</p>` : ""}
+        ${R.dontBother ? `<p class="ws-dim">안 넣어도 되는 것: ${esc(Object.keys(R.dontBother).join(", "))} — 상위 블로그 중앙값이 0이었습니다.</p>` : ""}
+        <p class="${bad.length ? "ws-warn" : ""}">${
+          bad.length
+            ? `기준을 벗어난 것 <b>${bad.length}가지</b>: ${esc(bad.map((r) => r.k).join(", "))}`
+            : "✅ 모두 기준 안에 있습니다."
+        }</p>
+        <div class="ws-btnrow">
+          <button id="ws-save" class="ws-dock-btn primary">임시저장</button>
+        </div>
+        <p class="ws-dim" id="ws-save-msg">발행은 안 누릅니다. 임시저장만 합니다.</p>
+      `;
+    };
+
+    const wire = (topic) => {
+      showPanel(render(topic));
+      panel.querySelectorAll("[data-topic]").forEach((b) => (b.onclick = () => wire(b.dataset.topic)));
+      panel.querySelector("#ws-save").onclick = async (e) => {
+        const I = window.__wsInsert;
+        const msg = (t, cls = "ws-dim") => {
+          const el = panel.querySelector("#ws-save-msg");
+          if (el) { el.className = cls; el.textContent = t; }
+        };
+        if (!I || !I.saveDraft) return msg("저장 도구를 못 불러왔습니다.", "ws-err");
+        e.target.disabled = true;
+        msg("저장하는 중…");
+        const r = await I.saveDraft();
+        e.target.disabled = false;
+        msg(r.ok ? `✅ 임시저장을 눌렀습니다. (${r.label})` : r.why, r.ok ? "ws-dim" : "ws-warn");
+      };
+    };
+    wire(guess);
   }
 
   // ── 표현 검사 ─────────────────────────────────────────
@@ -2148,6 +2363,7 @@
       else if (act === "paste") pasteDraft();
       else if (act === "format") runFormat();
       else if (act === "links") relatedLinks();
+      else if (act === "finish") finishCheck();
       else if (act === "topic") checkTopic();
       else if (act === "font") applyFont();
       else if (act === "image") resizeImages();

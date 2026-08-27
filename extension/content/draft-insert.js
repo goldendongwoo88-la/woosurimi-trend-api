@@ -277,6 +277,12 @@
     const bad = /발행|게시|공개/;
     let btn = null;
     for (const el of document.querySelectorAll("button, [role='button'], a, span")) {
+      // ⚠️ **우리 버튼을 우리가 누르면 안 됩니다.**
+      // 마무리 패널에도 "임시저장"이라고 쓰인 버튼이 있습니다. 글자로 찾다 보니
+      // 그걸 먼저 집어서, 자기가 자기를 누르고 ok:true 를 돌려줬습니다.
+      // 네이버 저장은 한 번도 안 눌렸는데 "저장했습니다"라고 말했습니다.
+      // 흉내 편집기 시험에서 잡았습니다.
+      if (el.closest("#ws-tools-panel, #ws-tools-dock")) continue;
       const t = (el.innerText || el.textContent || "").trim();
       if (!/^저장$|^임시저장$|저장\s*\d*$/.test(t)) continue;
       if (bad.test(t)) continue;

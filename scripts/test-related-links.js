@@ -85,5 +85,21 @@ const m = src.match(/const SPONSOR = (\/.+\/);/);
 ok(!!m, "원본에서 규칙을 찾았다");
 if (m) ok(m[1] === SPONSOR.toString(), "시험이 쓰는 규칙 = 실제 코드의 규칙", m[1] === SPONSOR.toString() ? "" : `\n      실제: ${m[1]}\n      시험: ${SPONSOR}`);
 
+console.log("\n━━ 임시저장이 우리 버튼을 누르지 않는가 ━━");
+// ⚠️ 실제로 겪은 일입니다. 흉내 편집기에서 잡았습니다.
+//
+// saveDraft()는 "저장"이라는 **글자**로 버튼을 찾습니다. 네이버가 구조를 바꿔도
+// 글자는 안 바뀌니까요. 그런데 마무리 패널에도 "임시저장" 버튼을 넣었더니,
+// 그걸 먼저 집어서 **자기가 자기를 눌렀습니다.** 네이버 저장은 한 번도 안 눌렸는데
+// ok:true 를 돌려줬습니다. 사장님은 저장된 줄 아셨을 겁니다.
+//
+// ⚠️ 이건 **글자만 확인하는** 시험입니다. 진짜 동작은 브라우저에서 봐야 합니다.
+// 그래도 이 줄이 지워지는 건 막아줍니다.
+const di = fs.readFileSync(require("path").join(__dirname, "..", "extension", "content", "draft-insert.js"), "utf8");
+const saveFn = di.slice(di.indexOf("async function saveDraft"));
+ok(/#ws-tools-panel/.test(saveFn) && /#ws-tools-dock/.test(saveFn),
+   "saveDraft가 우리 화면 요소를 건너뛴다");
+ok(/발행\|게시\|공개/.test(saveFn), "발행·게시·공개는 절대 안 누른다");
+
 console.log(`\n통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);
