@@ -1913,6 +1913,42 @@
   // 그 손일을 없애면 공짜로 쓰면서 손도 안 갑니다.
   //
   // ⚠️ 이 기능은 AI를 안 부릅니다. 값이 0원입니다.
+  /**
+   * 원고를 붙여넣을 칸을 띄웁니다.
+   *
+   * ⚠️ 왜 필요한가 — 사장님이 "클립보드를 못 읽었습니다"를 보셨습니다.
+   * 그때 저는 "다시 눌러주세요"라고만 했는데, **다시 눌러도 안 됩니다.**
+   * 막힌 이유가 그대로니까요. 브라우저가 클립보드 읽기를 막는 경우가 여럿입니다:
+   *   · 창이 포커스를 잃었을 때 (다른 탭에서 복사하고 오면 자주 그렇습니다)
+   *   · 권한 물음을 한 번 거절했을 때
+   *   · 네이버 편집기가 iframe 안이라 권한이 안 넘어올 때
+   *
+   * 칸을 주고 Ctrl+V 하시게 하면 **권한이 아예 필요 없습니다.** 항상 됩니다.
+   * 발행큐에서 "서식 복사" 누르고 오시는 흐름도 이걸로 풀립니다.
+   */
+  function askPasteBox(why) {
+    showPanel(`
+      <h4>원고 붙이기</h4>
+      ${why ? `<div class="ws-row warn">${esc(why)}</div>` : ""}
+      <p class="ws-note">아래 칸을 누르고 <b>Ctrl+V</b> 하세요. 붙이시면 바로 읽습니다.</p>
+      <textarea id="ws-pd-box" placeholder="여기에 Ctrl+V"
+        style="width:100%;min-height:120px;padding:10px;border:1px solid #d7dae0;border-radius:8px;
+               font:inherit;font-size:13px;line-height:1.6;resize:vertical"></textarea>
+      <p class="ws-dim" style="margin:6px 0 0">클로드나 발행큐에서 원고를 복사한 뒤 여기에 붙이시면 됩니다.</p>
+    `);
+    const box = panel.querySelector("#ws-pd-box");
+    box.focus();
+    const take = () => {
+      // 붙여넣기 직후엔 값이 아직 안 들어와 있습니다. 다음 순간에 읽습니다.
+      setTimeout(() => {
+        const v = box.value || "";
+        if (v.trim().length >= 50) showDraft(v);
+      }, 60);
+    };
+    box.addEventListener("paste", take);
+    box.addEventListener("input", take);
+  }
+
   async function pasteDraft() {
     const P = window.__wsDraft;
     const I = window.__wsInsert;
@@ -1922,21 +1958,25 @@
     }
 
     // ⚠️ 클립보드는 사용자가 누른 직후에만 읽을 수 있습니다. 버튼 누른 흐름에서 바로 읽습니다.
+    // 되면 제일 편하고, 안 되면 칸을 드립니다. 되는 척하지 않습니다.
     let raw = "";
     try {
+      // 창이 뒤에 있으면 읽기가 막힙니다. 먼저 앞으로 부릅니다.
+      try { window.focus(); } catch {}
       raw = await navigator.clipboard.readText();
     } catch {
-      return showPanel(`<h4>원고 붙이기</h4>
-        <div class="ws-row warn">클립보드를 못 읽었습니다.</div>
-        <p class="ws-note">클로드에서 원고를 <b>복사(Ctrl+C)</b>하신 뒤 다시 눌러주세요.
-        브라우저가 처음 한 번은 물어볼 수 있습니다.</p>`);
+      return askPasteBox("클립보드를 못 읽었습니다. 브라우저가 막았습니다.");
     }
     if (!raw || raw.trim().length < 50) {
-      return showPanel(`<h4>원고 붙이기</h4>
-        <div class="ws-row warn">복사된 글이 없거나 너무 짧습니다.</div>
-        <p class="ws-note">클로드에서 원고 전체를 복사한 뒤 눌러주세요.</p>`);
+      return askPasteBox("복사된 글이 없거나 너무 짧습니다.");
     }
+    showDraft(raw);
+  }
 
+  /** 원고를 읽어 무엇을 넣을지 보여줍니다. 클립보드로 왔든 칸으로 왔든 여기로 모입니다. */
+  function showDraft(raw) {
+    const P = window.__wsDraft;
+    const I = window.__wsInsert;
     const draft = P.parse(raw);
     const s = draft.stats;
     const state = I.isEmpty();
