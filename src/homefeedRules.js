@@ -21,12 +21,30 @@
  * 클릭률을 올리자고 블로그를 태울 수는 없습니다.
  */
 
-/** 실측 값 — 화면에서 근거로 보여줄 때 씁니다. */
+/**
+ * 실측 값.
+ *
+ * ⚠️ 2026-08-27에 다시 쟀습니다. 그전 값은 **블로그 두 개**에서 나온 것이었습니다.
+ * 두 개로 정한 숫자를 "이렇게 쓰세요"라고 말씀드리고 있었습니다. 그건 근거가 아닙니다.
+ *
+ * 이번에는 패션·뷰티·연예 키워드 16개로 검색해서 블로그 117개를 모으고,
+ * 일 3,000명 이상인 27개의 글 162편을 열어서 쟀습니다.
+ * 그리고 **주제별로 갈라서** 봤습니다 — 연예 글과 패션 후기는 생김새가 아주 다릅니다.
+ * 섞어서 평균을 내면 둘 다 틀린 답이 나옵니다.
+ *
+ * ⚠️ 이것은 상관관계지 인과가 아닙니다.
+ * "소제목이 많아서 잘 되는" 건지 "잘 되는 사람이 소제목을 많이 쓰는" 건지
+ * 이 자료로는 못 가립니다. 네이버는 홈피드 기준을 공개하지 않습니다.
+ * 그래서 "이렇게 하면 뜬다"가 아니라 "잘 되는 사람들은 이렇게 쓴다"입니다.
+ */
 const EVIDENCE = {
   measuredAt: "2026-08-27",
-  winner: { blogId: "nidle_831", posts: 145, dailyVisitors: 74094 },
-  baseline: { blogId: "man_is_best", posts: 4588, dailyVisitors: 21018 },
-  sampleSize: 90,
+  method: "패션·뷰티·연예 키워드 16개 검색 → 블로그 117개 → 일 3,000명 이상 27개 → 글 162편",
+  blogs: 27,
+  posts: 162,
+  topBar: 10000,   // 일 1만 명을 위·아래 가르는 선으로 씀
+  // 참고용으로 남겨둡니다. 예전 값이 어디서 왔는지 알 수 있게.
+  oldMethod: { blogs: 2, note: "nidle_831 / man_is_best 두 개뿐이었습니다" },
 };
 
 /**
@@ -71,16 +89,96 @@ const DEVICES = {
   },
 };
 
-/** 본문 생김새 — 제목만큼 중요합니다. */
+/**
+ * 본문 생김새 — 주제마다 다릅니다.
+ *
+ * ⚠️ 예전에 "소제목 6개"라고 못박아 뒀습니다. 다시 재보니 틀렸습니다.
+ * 일 1만 명 넘는 블로그들의 소제목 개수가 **0개에서 12개까지** 흩어져 있습니다.
+ *   masung_xoxo  일 27,818명  소제목 0개
+ *   nuelfashion  일 41,181명  소제목 2개
+ *   suzin_y      일 47,247명  소제목 10개
+ * 개수는 갈리는 요인이 아닙니다. 갈리는 건 **문단 길이**와 **사진 간격**입니다.
+ */
 const BODY = {
-  subheads: { label: "소제목(인용구)", winner: 6, baseline: 1,
-    why: "홈판은 스크롤로 흘러가는 자리라 끊는 자리가 있어야 손가락이 멈춥니다. 소제목 6개는 여섯 번 붙잡는다는 뜻입니다." },
-  images: { label: "사진", winner: 19, baseline: 14,
-    why: "머문 시간을 늘립니다. 홈판은 체류시간을 봅니다." },
-  chars: { label: "본문 길이", winner: 1640, baseline: 1943,
-    why: "길이는 오히려 baseline이 깁니다. 길게 쓰는 것보다 나누는 게 중요합니다." },
-  purity: { label: "주제 순도", winner: 97, baseline: 58,
-    why: "협찬과 정보가 섞이면 네이버가 '이 블로그는 무슨 블로그인가'를 판단하기 어려워집니다." },
+  // 주제별 기준 — 이게 핵심입니다.
+  byTopic: {
+    "패션·뷰티": {
+      chars: { min: 970, mid: 1610, max: 1780,
+        why: "일 1만 이상 블로그 9곳의 25%~75% 구간입니다. 이보다 짧으면 정보가 없고, 길면 안 읽습니다." },
+      subheads: { min: 5, mid: 8, max: 10,
+        why: "후기는 단계가 있어서(첫인상→써봄→결과) 소제목이 그 단계를 나눕니다." },
+      images: { min: 15, mid: 15, max: 17, why: "" },
+      imgGap: { min: 71, mid: 99, max: 116,
+        why: "사진과 사진 사이 글자 수입니다. 100자쯤에 한 장씩 나오는 셈입니다." },
+      paraLen: { mid: 16, why: "문단 하나가 16자 안팎입니다." },
+      over45: { top: 1, bottom: 5, why: "45자 넘는 문단 비율. 위쪽은 1%, 아래쪽은 5%입니다." },
+    },
+    "연예·방송": {
+      chars: { min: 665, mid: 906, max: 1100,
+        why: "연예 글은 짧습니다. 사진이 이야기를 대신합니다." },
+      subheads: { min: 0, mid: 4, max: 10,
+        why: "아예 안 쓰는 블로그도 일 27,818명입니다. 억지로 넣을 필요 없습니다." },
+      images: { min: 10, mid: 13, max: 14, why: "" },
+      imgGap: { min: 56, mid: 69, max: 101,
+        why: "패션보다 촘촘합니다. 70자에 한 장씩입니다." },
+      paraLen: { mid: 13, why: "패션보다도 짧습니다." },
+      over45: { top: 0, bottom: 25, why: "위쪽은 45자 넘는 문단이 **한 개도 없습니다**. 아래쪽은 25%." },
+    },
+  },
+
+  /**
+   * 어느 주제에서나 같은 것 — 이게 진짜 갈리는 지점입니다.
+   */
+  universal: {
+    paraLen: { label: "문단 길이", top: 15, bottom: 22,
+      why: "제일 확실하게 갈립니다. 모바일에서 긴 문단은 벽으로 보입니다." },
+    over45: { label: "45자 넘는 문단", top: 1, bottom: 5,
+      why: "위쪽 블로그는 긴 문단을 거의 안 씁니다." },
+    imgGap: { label: "사진 사이 글자수", top: 70, bottom: 101,
+      why: "사진이 자주 나올수록 스크롤이 덜 지루합니다." },
+    bold: { label: "굵게 (1,000자당)", top: 4.1, bottom: 0.8,
+      why: "위쪽이 4배 넘게 씁니다." },
+    /**
+     * ⚠️ 여기서 제가 한 번 틀렸습니다. 남겨둡니다.
+     *
+     * 처음에 "사장님은 내 글 링크가 하나도 없다"고 말씀드렸습니다. 틀렸습니다.
+     * 글 4편의 중앙값만 보고 말한 건데, 실제로 열어보니 글 성격마다 달랐습니다.
+     *
+     *   연예 글(불량연애2)      링크카드 4개 — **전부 내 글**  ← 이미 잘 하고 계심
+     *   협찬 글(스노우피크)      링크카드 2개 — 전부 브랜드 사이트
+     *   협찬 글(투미)           링크카드 3개 — 전부 브랜드·인스타
+     *
+     * 중앙값을 내니 협찬 글이 끌어내려서 0으로 나왔습니다.
+     * 숫자 하나로 뭉치면 이런 일이 생깁니다. 성격이 다른 글은 갈라서 봐야 합니다.
+     */
+    ownLinks: { label: "내 글로 가는 링크카드", top: 2, bottom: 0,
+      why: "글 끝에 자기 다른 글 2~3개를 링크카드로 붙입니다. 다음 글로 넘어가게 하는 고리입니다.",
+      caveat:
+        "협찬 글은 브랜드 링크를 빼기 어렵습니다. 그럴 땐 브랜드 링크는 그대로 두고 " +
+        "**내 글 링크를 2개 더 얹으세요.** 바깥으로만 내보내면 독자가 블로그를 떠납니다." },
+  },
+
+  /**
+   * ⚠️ 잘 되는 블로그가 **안 하는** 것들.
+   * 이걸 몰라서 하지 말아야 할 걸 하라고 말씀드릴 뻔했습니다.
+   */
+  dontBother: {
+    표: { top: 0, bottom: 0, why: "27개 블로그 중 표를 쓰는 곳이 사실상 없습니다. 비교표는 넣지 마세요." },
+    목차: { top: 0, bottom: 0, why: "목차를 넣는 블로그가 하나도 없었습니다. 만들려다 멈췄습니다." },
+    밑줄: { top: 0, bottom: 0, why: "중앙값 0입니다. 굵게만 쓰세요." },
+    배경색: { top: 0, bottom: 0, why: "중앙값 0입니다." },
+    글자색: { top: 7, bottom: 87,
+      why: "**덜 되는 쪽이 훨씬 많이 씁니다.** 연예에서 위 7 · 아래 87. 색을 많이 쓰면 오히려 아마추어로 보입니다." },
+    스티커: { top: 0, bottom: 0, why: "" },
+    동영상: { top: 0, bottom: 0, why: "" },
+  },
+
+  // 예전 값 — 어디서 왔는지 남겨둡니다.
+  legacy: {
+    subheads: { winner: 6, note: "블로그 두 개로 정한 값입니다. 지금은 주제별 값을 쓰세요." },
+    purity: { label: "주제 순도", winner: 97, baseline: 58,
+      why: "협찬과 정보가 섞이면 네이버가 '이 블로그는 무슨 블로그인가'를 판단하기 어려워집니다." },
+  },
 };
 
 /**
@@ -234,8 +332,7 @@ function measure(title) {
 function promptBlock() {
   return (
     `[홈판 제목 규칙 — 실측 근거]\n` +
-    `일 방문 ${EVIDENCE.winner.dailyVisitors.toLocaleString()}명 블로그와 ` +
-    `${EVIDENCE.baseline.dailyVisitors.toLocaleString()}명 블로그의 제목을 각 ${EVIDENCE.sampleSize}편씩 세었습니다.\n` +
+    `${EVIDENCE.method}. 블로그 ${EVIDENCE.blogs}개, 글 ${EVIDENCE.posts}편.\n` +
     Object.values(DEVICES)
       .map((d) => `- ${d.label}: 잘 되는 쪽 ${d.winner}% / 덜 되는 쪽 ${d.baseline}%. ${d.why}\n  예) ${d.example}`)
       .join("\n") +
@@ -244,6 +341,43 @@ function promptBlock() {
     `\n\n가장 중요한 것: 궁금증은 반드시 **본문에 실제로 있는 사실**로 만드세요.\n` +
     `본문을 모르면 원래 제목에 이미 담긴 사실 안에서만 다듬으세요.\n` +
     `제목 길이는 35~45자가 적당합니다. (잘 되는 쪽 평균 41자)`
+  );
+}
+
+/**
+ * 본문 생김새 지침 — 주제에 맞는 숫자를 프롬프트에 넣습니다.
+ *
+ * ⚠️ 예전에는 모든 스킬에 같은 값("소제목 6개")을 넣었습니다.
+ * 다시 재보니 패션 후기와 연예 글은 생김새가 아주 다릅니다.
+ * 같은 숫자를 주면 한쪽은 반드시 틀립니다.
+ */
+function bodyBlock(topic) {
+  const t = /연예|방송|가십|드라마|아이돌|스포츠|celeb|broadcast/i.test(String(topic || ""))
+    ? "연예·방송"
+    : "패션·뷰티";
+  const g = BODY.byTopic[t];
+  const u = BODY.universal;
+
+  return (
+    `[본문 생김새 — ${t} 기준, 실측]\n` +
+    `${EVIDENCE.method}\n\n` +
+    `- 글자 수: ${g.chars.min}~${g.chars.max}자 (중앙 ${g.chars.mid}자). ${g.chars.why}\n` +
+    `- 소제목: ${g.subheads.min}~${g.subheads.max}개 (중앙 ${g.subheads.mid}개). ${g.subheads.why}\n` +
+    `- 사진 자리: ${g.images.min}~${g.images.max}곳\n` +
+    `- 사진 사이 글자 수: ${g.imgGap.min}~${g.imgGap.max}자 (중앙 ${g.imgGap.mid}자). ${g.imgGap.why}\n` +
+    `  → 사진 자리를 ${g.imgGap.mid}자쯤마다 [사진: 무엇] 으로 표시하세요.\n\n` +
+    `[제일 확실하게 갈리는 것]\n` +
+    `- 문단 길이: 잘 되는 쪽 ${u.paraLen.top}자 / 덜 되는 쪽 ${u.paraLen.bottom}자. ${u.paraLen.why}\n` +
+    `- 45자 넘는 문단: 잘 되는 쪽 ${u.over45.top}% / 덜 되는 쪽 ${u.over45.bottom}%. ` +
+    `**한 문단을 45자 넘게 쓰지 마세요.**\n` +
+    `- 굵게: 1,000자당 ${u.bold.top}번쯤. ${u.bold.why}\n` +
+    `- 글 끝에 내 다른 글 ${u.ownLinks.top}~3개를 링크카드로. ${u.ownLinks.why}\n` +
+    `  ${u.ownLinks.caveat}\n\n` +
+    `[잘 되는 블로그가 안 하는 것 — 하지 마세요]\n` +
+    Object.entries(BODY.dontBother)
+      .filter(([, v]) => v.why)
+      .map(([k, v]) => `- ${k}: ${v.why}`)
+      .join("\n")
   );
 }
 
@@ -272,6 +406,7 @@ function placementBlock(title = "", body = "", skillId = null) {
 }
 
 module.exports = {
+  bodyBlock,
   EVIDENCE, DEVICES, BODY, AVOID, PLACEMENT, SKILL_PLACEMENT,
   measure, promptBlock, placementFor, placementBlock,
 };

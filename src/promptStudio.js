@@ -44,24 +44,24 @@ const rules = require("./homefeedRules");
 function homefeedPatch(skillId) {
   const r = rules;
   return (
-    `\n\n---\n\n## 홈판 실측 보정 (${r.EVIDENCE.measuredAt} 측정)\n\n` +
-    `아래는 실제 블로그를 직접 세어 얻은 값이다. 위 지침의 숫자와 다르면 **아래를 우선한다.**\n` +
-    `근거: 일 방문 ${r.EVIDENCE.winner.dailyVisitors.toLocaleString()}명 블로그(글 ${r.EVIDENCE.winner.posts}편)와 ` +
-    `${r.EVIDENCE.baseline.dailyVisitors.toLocaleString()}명 블로그(글 ${r.EVIDENCE.baseline.posts.toLocaleString()}편)의 ` +
-    `제목 각 ${r.EVIDENCE.sampleSize}편, 본문 각 6편.\n\n` +
+    `
 
-    `### 소제목은 5~6개로 나눈다 (가장 중요)\n` +
-    `잘 되는 쪽 ${r.BODY.subheads.winner}개, 덜 되는 쪽 ${r.BODY.subheads.baseline}개.\n` +
-    `${r.BODY.subheads.why}\n` +
-    `네이버 스마트에디터에는 제목 서식이 없으므로 **인용구**를 소제목으로 쓴다.\n` +
-    `원고에는 소제목을 [소제목] 표시로 명확히 구분해 6개를 배치한다.\n\n` +
+---
 
-    `### 사진은 ${r.BODY.images.winner}장 안팎\n` +
-    `${r.BODY.images.why} 잘 되는 쪽 ${r.BODY.images.winner}장, 덜 되는 쪽 ${r.BODY.images.baseline}장.\n\n` +
+## 홈판 실측 보정 (${r.EVIDENCE.measuredAt} 측정)
 
-    `### 길이보다 나누기\n` +
-    `${r.BODY.chars.why} (잘 되는 쪽 ${r.BODY.chars.winner.toLocaleString()}자 / 덜 되는 쪽 ${r.BODY.chars.baseline.toLocaleString()}자)\n` +
-    `분량을 늘리려고 같은 말을 반복하지 말 것. 모르면 ✏️로 남길 것.\n\n` +
+` +
+    `아래는 실제 블로그를 직접 세어 얻은 값이다. 위 지침의 숫자와 다르면 **아래를 우선한다.**
+` +
+    `근거: ${r.EVIDENCE.method}.
+
+` +
+
+    // ⚠️ 여기가 통째로 바뀌었습니다.
+    // 예전에는 "소제목 5~6개"를 모든 스킬에 똑같이 넣었습니다.
+    // 블로그 두 개로 정한 값이었고, 27개를 다시 재보니 주제마다 다릅니다.
+    // bodyBlock이 스킬 주제에 맞는 숫자를 내줍니다.
+    r.bodyBlock(skillId) + `\n\n` +
 
     `### 제목 장치 — 실제 사용률\n` +
     Object.values(r.DEVICES)
