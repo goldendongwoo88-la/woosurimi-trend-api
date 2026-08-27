@@ -16,6 +16,7 @@ const { recommendBgm, getTrackPath } = require("./bgmLibrary");
 const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
+const claudeClient = require("./claudeClient");
 const naverBlogExport = require("./naverBlogExport");
 const postAudit = require("./postAudit");
 const keywordInsight = require("./keywordInsight");
@@ -732,8 +733,31 @@ async function warmBlogTopicsCache() {
 // 이 서버에 Claude API 키(ANTHROPIC_API_KEY)가 설정되어 있는지 알려줍니다. 키가 없어도
 // /api/blog/draft 자체는 실패하지 않고, 실제 문장 대신 "빈칸만 채우면 되는 글쓰기 틀"로
 // 자동 대체됩니다.
-app.get("/api/blog/writer-status", (req, res) => {
-  res.json(getWriterStatus());
+/**
+ * AI가 정말 쓸 수 있는 상태인지.
+ *
+ * ⚠️ 예전에는 **열쇠가 있는지만** 봤습니다. 그래서 크레딧이 0인데도
+ * `ready: true`라고 답했습니다. 손님한테 "준비됨"이라고 해놓고 누르면 실패하는
+ * 상태였습니다. 실제로 크레딧이 떨어졌을 때 그렇게 나왔습니다.
+ *
+ * 이제 아주 짧게 한 번 두드려 봅니다. 값이 거의 안 나갑니다(max_tokens 1).
+ * 결과는 2분 동안 재사용합니다 — 화면을 열 때마다 두드리면 그것도 낭비입니다.
+ */
+let creditCache = { at: 0, r: null };
+app.get("/api/blog/writer-status", async (req, res) => {
+  const base = getWriterStatus();
+  if (!base.ready) return res.json(base);
+
+  if (!creditCache.r || Date.now() - creditCache.at > 120000 || req.query.fresh) {
+    creditCache = { at: Date.now(), r: await claudeClient.checkCredit() };
+  }
+  const c = creditCache.r;
+  res.json({
+    ...base,
+    ready: !!c.ok,
+    // 왜 안 되는지 사람 말로. 손님이 보고 뭘 해야 할지 알 수 있게.
+    ...(c.ok ? {} : { reason: c.why, checkedAt: creditCache.at }),
+  });
 });
 
 // --- 인스타그램(Meta) 계정 연동 ---

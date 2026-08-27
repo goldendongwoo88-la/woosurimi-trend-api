@@ -31,6 +31,50 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 45000) {
 }
 
 /**
+ * API 오류를 사람이 읽을 수 있는 말로 바꿉니다.
+ *
+ * ⚠️ 예전에는 이렇게 던졌습니다:
+ *   Claude API 오류(400): {"type":"error","error":{"type":"invalid_request_error",
+ *   "message":"Your credit balance is too low to access the Anthropic API..."}}
+ * 이게 그대로 손님 화면에 떴습니다. 영어 JSON 덩어리를 보고 뭘 어쩌라는 건지
+ * 알 수가 없습니다. 무엇보다 **무엇을 해야 풀리는지**가 안 보입니다.
+ *
+ * 실제로 크레딧이 떨어져서 이 오류가 났습니다. 그때 알았습니다.
+ */
+function explain(status, raw) {
+  let msg = "";
+  try { msg = (JSON.parse(raw).error || {}).message || ""; } catch { msg = String(raw || ""); }
+
+  if (/credit balance is too low|insufficient.*credit/i.test(msg)) {
+    return "AI 크레딧이 떨어졌습니다. 사장님이 Anthropic 계정에서 충전하셔야 다시 됩니다. (콘솔 → Plans & Billing)";
+  }
+  if (status === 401 || /authentication|invalid x-api-key/i.test(msg)) {
+    return "AI 열쇠(API 키)가 맞지 않습니다. 서버의 ANTHROPIC_API_KEY를 확인해 주세요.";
+  }
+  if (status === 429 || /rate.?limit/i.test(msg)) {
+    return "AI가 지금 몰려 있습니다. 30초쯤 뒤에 다시 해주세요.";
+  }
+  if (status === 529 || /overloaded/i.test(msg)) {
+    return "AI 쪽이 잠깐 붐빕니다. 조금 뒤에 다시 해주세요.";
+  }
+  if (/max_tokens|too long|context.*length/i.test(msg)) {
+    return "글이 너무 깁니다. 조금 줄여서 다시 해주세요.";
+  }
+  return `AI를 못 불렀습니다 (${status}). ${msg.slice(0, 160)}`;
+}
+
+/** 크레딧이 남아 있는지 실제로 두드려 봅니다. 아주 짧게 물어서 값이 거의 안 나갑니다. */
+async function checkCredit(timeoutMs = 12000) {
+  if (!process.env.ANTHROPIC_API_KEY) return { ok: false, why: "서버에 AI 열쇠가 없습니다." };
+  try {
+    await callClaude({ messages: [{ role: "user", content: "." }], maxTokens: 1, timeoutMs });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, why: e.message };
+  }
+}
+
+/**
  * messages: [{ role: "user" | "assistant", content: "..." }]
  * system: (선택) 시스템 프롬프트
  * 반환: 어시스턴트가 만든 텍스트(string)
@@ -58,7 +102,7 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`Claude API 오류(${res.status}): ${errText.slice(0, 300)}`);
+    throw new Error(explain(res.status, errText));
   }
   const data = await res.json();
   return (data.content || []).map((b) => b.text || "").join("\n");
@@ -74,4 +118,4 @@ function extractJson(text) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-module.exports = { callClaude, isConfigured, getModel, extractJson };
+module.exports = { callClaude, isConfigured, getModel, extractJson, explain, checkCredit };
