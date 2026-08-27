@@ -806,11 +806,13 @@ module.exports = function attachSaas(app) {
 
   app.post("/api/report/client", async (req, res) => {
     if (!isOwnerReq(req)) return res.status(403).json({ error: "주인 계정만 보고서를 만들 수 있습니다." });
-    const { blogId, storeName, note, posts, demo } = req.body || {};
+    const { blogId, storeName, note, posts, demo, placeKeywords, placeId, placePath } = req.body || {};
     try {
       const data = demo ? clientReport.demoData() : await clientReport.collect(blogId, {
         posts: Math.max(3, Math.min(10, Number(posts) || 6)),
         storeName, note,
+        // 플레이스 순위 — "역삼동 칼국수,역삼역 점심" 처럼 쉼표로 최대 6개
+        placeKeywords, placeId, placePath,
       });
       const id = clientReport.create(data, { owner: req.user.email });
       res.json({ ok: true, id, url: `/cr/${id}`, measured: !demo });

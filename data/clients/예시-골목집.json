@@ -1,0 +1,15 @@
+{
+  "_설명": "가상 예시 파일입니다. 파일럿 매장이 정해지면 이 파일을 복사해 이름을 바꾸고 채우세요.",
+  "storeName": "골목집 칼국수",
+  "placeId": "",
+  "path": "restaurant",
+  "keywords": ["역삼동 칼국수", "역삼역 점심", "강남 칼국수"],
+  "blogId": "",
+  "_참고": {
+    "placeId": "네이버 지도에서 가게 열었을 때 주소창의 숫자. 비워두면 상호로 찾습니다 (동명 가게가 있으면 placeId가 정확합니다).",
+    "path": "restaurant(음식점)·cafe(카페)·hairshop(미용실)·place(모름). 음식점이면 그대로 두세요.",
+    "keywords": "업주와 상의해 3~6개. '동네+메뉴' 조합이 기본입니다.",
+    "blogId": "매장 블로그를 만들면 blog.naver.com/ 뒤 아이디. 보고서에 방문자·글 순위가 같이 나옵니다.",
+    "확인": "node scripts/place-rank.js --store data/clients/이파일.json"
+  }
+}

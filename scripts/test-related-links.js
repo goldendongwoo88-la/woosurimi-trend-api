@@ -118,5 +118,32 @@ console.log("\n━━ 세는 용도와 붙이는 용도가 갈라져 있는가 �
      "셀 때는 안내 문단을 뺀다 (기본값)");
 }
 
+console.log("\n━━ 진짜 Ctrl+V 통로가 안전한가 ━━");
+// ⚠️ 디버거 통로는 브라우저가 직접 키를 누르는 힘입니다. 두 가지만 지키면 안전합니다.
+//   1) 보내는 키가 **붙여넣기(V) 하나뿐**이다 — 발행 버튼을 누를 힘으로 쓰지 않는다.
+//   2) 클립보드에 **담긴 것을 확인한 뒤에만** 키를 보낸다 — 순서가 뒤집히면
+//      엉뚱한 옛 클립보드 내용이 사장님 글에 붙습니다.
+{
+  const bg = fs.readFileSync(require("path").join(__dirname, "..", "extension", "background.js"), "utf8");
+  const pp = bg.slice(bg.indexOf("async function pressPaste"), bg.indexOf("chrome.runtime.onMessage"));
+  ok(/KeyV/.test(pp), "보내는 키가 V다");
+  ok(!/Enter|Return|Tab|click|Mouse/.test(pp), "엔터·클릭 같은 다른 신호는 없다");
+  ok(/debugger\.detach/.test(pp), "쓰고 나서 바로 떨어진다 (detach)");
+
+  const pb2 = di.slice(di.indexOf("async function pasteBody"), di.indexOf("async function insert"));
+  const wAt = pb2.indexOf("clipboard.writeText");
+  const kAt = pb2.indexOf("pressPaste");
+  ok(wAt >= 0 && kAt > wAt, "클립보드에 담은 뒤에만 키를 보낸다");
+  ok(/clipOk/.test(pb2) && /if \(clipOk\)/.test(pb2), "담기 실패면 키를 안 보낸다");
+
+  const ab = di.slice(di.indexOf("async function appendBlock"), di.indexOf("async function saveDraft"));
+  const wAt2 = ab.indexOf("clipboard.writeText");
+  const kAt2 = ab.indexOf("pressPaste");
+  ok(wAt2 >= 0 && kAt2 > wAt2, "함께보기도 담은 뒤에만 키를 보낸다");
+
+  const mf = JSON.parse(fs.readFileSync(require("path").join(__dirname, "..", "extension", "manifest.json"), "utf8"));
+  ok(mf.permissions.includes("debugger"), "manifest에 debugger 권한이 있다");
+}
+
 console.log(`\n통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);

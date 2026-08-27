@@ -295,8 +295,12 @@
   }
 
   function showPanel(html) {
+    // ⚠️ 버전을 화면에 박습니다. "고쳤는데 그대로예요"의 절반은 크롬이 옛 파일로
+    // 돌고 있던 것이었습니다. 캡처 한 장으로 어느 판인지 알 수 있어야 합니다.
+    let ver = "";
+    try { ver = chrome.runtime.getManifest().version; } catch {}
     panel.innerHTML =
-      `<div class="ws-panel-grip" title="여기를 잡고 끌면 옮길 수 있습니다">⠿ 끌어서 옮기기</div>` +
+      `<div class="ws-panel-grip" title="여기를 잡고 끌면 옮길 수 있습니다">⠿ 끌어서 옮기기${ver ? `<span style="float:right;opacity:.55;font-weight:400">v${ver}</span>` : ""}</div>` +
       `<button class="ws-panel-close" title="닫기">✕</button>${html}`;
     panel.hidden = false;
     panel.querySelector(".ws-panel-close").onclick = () => (panel.hidden = true);

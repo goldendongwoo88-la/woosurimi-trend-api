@@ -26,6 +26,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const { fetchVisitors, fetchPostList, searchBlogRanking, parseBlogId } = require("./naverBlogData");
+const { trackStore } = require("./placeRank");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const FILE = path.join(DATA_DIR, "client-reports.json");
@@ -62,9 +63,21 @@ function tailQuery(title) {
  * ⚠️ 네이버를 글 수 × 1번씩 두드립니다. 사이를 안 두면 막혀서 전부
  * "확인 못 함"이 됩니다. 700ms 간격 — 글 6편이면 10초쯤 걸립니다.
  */
-async function collect(blogId, { posts = 6, storeName = "", note = "" } = {}) {
+async function collect(blogId, { posts = 6, storeName = "", note = "", placeKeywords = [], placeId = "", placePath = "restaurant" } = {}) {
   const id = parseBlogId(blogId);
   if (!id) throw new Error("블로그 아이디를 확인해 주세요.");
+
+  // 0) 플레이스 순위 — 업주가 제일 먼저 보는 숫자라 맨 먼저 잽니다.
+  //    2026년 로직이 저장·예약·재방문 중심으로 바뀌어서, 블로그 순위보다
+  //    이 표가 보고서의 1면입니다. 키워드가 없으면 이 절은 통째로 빠집니다.
+  let place = null;
+  const kws = (Array.isArray(placeKeywords) ? placeKeywords : String(placeKeywords || "").split(","))
+    .map((s) => String(s).trim()).filter(Boolean).slice(0, 6);
+  if (kws.length) {
+    try {
+      place = await trackStore({ name: storeName, placeId, keywords: kws, path: placePath });
+    } catch {}   // 플레이스가 막혀도 블로그 보고서는 나가야 합니다
+  }
 
   // 1) 방문자 — 비공개면 비공개라고 씁니다. 지어내지 않습니다.
   let visitors = null;
@@ -105,6 +118,7 @@ async function collect(blogId, { posts = 6, storeName = "", note = "" } = {}) {
     measuredAt: new Date().toISOString(),
     visitors,
     posts: rows,
+    place,
     demo: false,
   };
 }
@@ -129,6 +143,15 @@ function demoData() {
       { title: "주차 안내 — 가게 뒤 공영주차장 30분 무료", url: "#", date: "2026-08-20", rank: 7, query: "공영주차장 30분 무료" },
       { title: "단체 예약 받는 방법을 정리했습니다", url: "#", date: "2026-08-18", rank: null, query: "단체 예약 받는 방법" },
     ],
+    place: {
+      name: "골목집 칼국수 (가상 예시)",
+      rows: [
+        { keyword: "역삼동 칼국수", rank: 4, total: 128, sampled: 50, visitorReviews: 214, blogReviews: 89, saveCountRaw: "1,000+" },
+        { keyword: "역삼역 점심", rank: 11, total: 342, sampled: 50, visitorReviews: 214, blogReviews: 89, saveCountRaw: "1,000+" },
+        { keyword: "강남 칼국수", rank: null, total: 861, sampled: 50, visitorReviews: null, blogReviews: null, saveCountRaw: null },
+      ],
+      measuredAt: new Date().toISOString(),
+    },
     demo: true,
   };
 }
@@ -172,19 +195,38 @@ function chart(visitors) {
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="일별 방문자">${bars}</svg>`;
 }
 
+/** 플레이스 순위 절 — 업주가 제일 먼저 보는 표라 방문자보다 위에 둡니다. */
+function placeSection(place) {
+  if (!place || !Array.isArray(place.rows) || !place.rows.length) return "";
+  const rows = place.rows.map((r) => `
+  <div class="post">
+    ${r.rank != null ? `<span class="rank">${r.rank}위</span>` : `<span class="norank">50위 밖</span>`}
+    <span style="font-weight:600;font-size:14px">"${esc(r.keyword)}"</span>
+    <div class="meta">${r.total ? `이 검색어로 나오는 가게 ${Number(r.total).toLocaleString()}곳 중` : ""}${r.rank != null && r.visitorReviews != null ? ` · 방문리뷰 ${r.visitorReviews.toLocaleString()} · 블로그리뷰 ${(r.blogReviews ?? 0).toLocaleString()}${r.saveCountRaw ? ` · 저장 ${esc(r.saveCountRaw)}` : ""}` : ""}${r.error ? ` · 확인 실패(${esc(r.error)})` : ""}</div>
+  </div>`).join("");
+  return `
+<section>
+  <h2>지도(플레이스) 검색 순위</h2>
+  ${rows}
+  <p class="dim" style="margin-top:10px">PC 지도 검색, 위치 미지정, 광고 제외 기준입니다. 가게 근처에서 검색하는
+  손님에게는 거리 때문에 순서가 다르게 보일 수 있습니다. 순위는 보고서를 만든 시각의 실제 검색값입니다.</p>
+</section>`;
+}
+
 function render(item) {
   const d = item.data;
   const dt = new Date(item.createdAt);
   const when = `${dt.getFullYear()}. ${dt.getMonth() + 1}. ${dt.getDate()}.`;
   const exposed = d.posts.filter((p) => p.rank != null);
   const sum = d.visitors ? d.visitors.reduce((n, v) => n + v.count, 0) : null;
+  const bestPlace = d.place && d.place.rows ? d.place.rows.filter((r) => r.rank != null).sort((a, b) => a.rank - b.rank)[0] : null;
 
   return `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${esc(d.storeName || d.blogId)} 블로그 성과 보고서</title>
 <meta property="og:title" content="${esc(d.storeName || d.blogId)} — 블로그 성과 보고서">
-<meta property="og:description" content="발행 ${d.posts.length}편 · 검색 노출 ${exposed.length}편${sum != null ? ` · 최근 2주 방문 ${sum.toLocaleString()}명` : ""}">
+<meta property="og:description" content="${bestPlace ? `지도 검색 "${esc(bestPlace.keyword)}" ${bestPlace.rank}위 · ` : ""}발행 ${d.posts.length}편 · 검색 노출 ${exposed.length}편${sum != null ? ` · 최근 2주 방문 ${sum.toLocaleString()}명` : ""}">
 <style>
 :root{--ink:#26302a;--dim:#7c837d;--line:#e4e7e2;--green:#2f6b4f;--bg:#f6f7f5}
 *{box-sizing:border-box;margin:0}
@@ -224,6 +266,8 @@ ${d.demo ? `<div class="demo">⚠️ 가상 예시 보고서입니다 — 실제
   <div class="card"><b>${exposed.length}</b><span>검색 노출 확인</span></div>
   <div class="card"><b>${sum != null ? sum.toLocaleString() : "비공개"}</b><span>최근 2주 방문</span></div>
 </div>
+
+${placeSection(d.place)}
 
 <section>
   <h2>일별 방문자</h2>

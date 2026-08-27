@@ -106,12 +106,48 @@ async function fetchTokenFromSession() {
   return { token: data.token };
 }
 
+/**
+ * 진짜 Ctrl+V — 원고 자동 붙이기의 마지막 조각.
+ *
+ * ⚠️ 왜 이 길인가: 네이버 편집기는 확장이 흉내 낸 붙여넣기(합성 이벤트)를
+ * 무시합니다. 실측으로 확인한 사실입니다. 그래서 지금까지는 "복사해 뒀으니
+ * Ctrl+V 해주세요"가 한계였습니다. 디버거 통로로 보내는 키는 **브라우저가
+ * 직접 누르는 키**라 편집기가 사람 입력과 구별하지 못합니다.
+ *
+ * ⚠️ 붙는 동안 화면 위에 "…디버깅을 시작했습니다" 노란 띠가 잠깐 떴다
+ * 사라집니다. 크롬이 붙이는 안내라 못 없앱니다 — 고장이 아닙니다.
+ *
+ * ⚠️ 이 통로로는 **붙여넣기 키 하나만** 보냅니다. 발행·게시·공개를 누르는
+ * 데 쓰지 않습니다 — 그건 원칙이고, 코드에도 그 키만 있습니다.
+ */
+async function pressPaste(tabId) {
+  const target = { tabId };
+  await chrome.debugger.attach(target, "1.3");
+  try {
+    const key = { modifiers: 2, key: "v", code: "KeyV", windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86 };
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyDown", ...key });
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyUp", ...key });
+  } finally {
+    // 띠를 바로 걷습니다. 실패해도(이미 떨어졌어도) 상관없습니다.
+    try { await chrome.debugger.detach(target); } catch {}
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || !msg.type) return;
 
   if (msg.type === "openOptions") {
     chrome.runtime.openOptionsPage();
     return;
+  }
+
+  if (msg.type === "pressPaste") {
+    const tabId = _sender && _sender.tab && _sender.tab.id;
+    if (!tabId) { sendResponse({ ok: false, message: "탭을 못 찾았습니다." }); return; }
+    pressPaste(tabId)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, message: err.message }));
+    return true;
   }
 
   if (msg.type === "syncToken") {

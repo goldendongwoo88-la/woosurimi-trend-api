@@ -159,8 +159,27 @@
     const root = editorRoot();
     if (!root) return { ok: false, why: "본문을 찾지 못했습니다." };
 
-    const paras = bodyParagraphs({ includeGuide: true });
-    const first = paras[0];
+    let paras = bodyParagraphs({ includeGuide: true });
+    let first = paras[0];
+
+    /**
+     * ⚠️ 문단이 하나도 없으면 — 새 문서에서 편집기가 본문 칸을 아직 안 만든
+     * 경우가 있습니다(안내 문구는 겉그림일 뿐 진짜 문단이 아닐 때).
+     * 본문 자리를 한 번 눌러주면 편집기가 문단을 만듭니다. 그걸 대신 눌러봅니다.
+     */
+    if (!first) {
+      try {
+        const area = root.querySelector(".se-component.se-text") ||
+                     root.querySelector(".se-components-wrap") || root;
+        for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+          area.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+        }
+        await settle(400);
+        paras = bodyParagraphs({ includeGuide: true });
+        first = paras[0];
+      } catch {}
+    }
+
     if (!first) {
       // ⚠️ 자리를 못 찾아도 빈손으로 끝내지 않습니다. 예전엔 여기서 그냥
       // 오류만 띄웠는데, 그러면 복사조차 안 돼서 사장님이 할 게 없었습니다.
@@ -170,7 +189,15 @@
           new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
         ]);
       } catch {}
-      return { ok: false, copied: true, why: "붙일 자리를 못 찾았습니다. 다듬은 글은 복사해 뒀으니 본문 칸을 누르고 Ctrl+V 해주세요." };
+      // ⚠️ 진단 꼬리표 — 원격에서 화면만 보고도 원인을 좁힐 수 있게, 무엇이
+      // 보였는지 숫자로 남깁니다. (전체 문단 수 / 제목 쪽 문단 수)
+      const all = document.querySelectorAll(".se-text-paragraph").length;
+      const inTitle = document.querySelectorAll(".se-documentTitle .se-text-paragraph").length;
+      return {
+        ok: false, copied: true,
+        why: "붙일 자리를 못 찾았습니다. 다듬은 글은 복사해 뒀으니 본문 칸을 한 번 누르고 Ctrl+V 해주세요." +
+             ` (진단: 문단 ${all}개, 제목 쪽 ${inTitle}개)`,
+      };
     }
 
     const check = () => {
@@ -204,22 +231,47 @@
       if (check()) return { ok: true, how: "paste" };
     } catch {}
 
-    // ── 2) 안 되면 손으로 하시게 합니다 ──
-    // ⚠️ 되는 척하지 않습니다. 깨끗하게 다듬은 글을 복사해 드리고 그렇게 말합니다.
+    // ── 2) 진짜 Ctrl+V ──
+    // 흉내(1번)는 진짜 편집기가 무시합니다. 그래서 배경 작업자에게 부탁해
+    // **브라우저가 직접 누르는 붙여넣기 키**를 보냅니다. 편집기는 사람 입력과
+    // 구별하지 못합니다. 순서가 중요합니다:
+    //   클립보드에 글을 담고 → 담긴 게 확인됐을 때만 → 키를 보냅니다.
+    // 담기 전에 키부터 보내면 **엉뚱한 옛 클립보드 내용**이 붙습니다.
     //
     // ⚠️ 클립보드 쓰기는 **창이 포커스를 잃으면 영영 안 끝납니다.**
     // 다른 창을 보고 계시면 화면이 "넣는 중…"에서 멈춰버립니다. 3초만 기다립니다.
+    let clipOk = false;
     try {
       await Promise.race([
         navigator.clipboard.writeText(text),
         new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
       ]);
+      clipOk = true;
     } catch {}
+
+    if (clipOk) {
+      try {
+        // 흉내 시도(1번)가 고른 선택 영역이 그대로 살아 있습니다 — 덮어쓰기면
+        // 본문 전체가 선택된 상태라, 진짜 붙여넣기가 그 위를 정확히 덮습니다.
+        const resp = await new Promise((res) => {
+          try { chrome.runtime.sendMessage({ type: "pressPaste" }, res); } catch { res(null); }
+        });
+        if (resp && resp.ok) {
+          await settle(700);
+          if (check()) return { ok: true, how: "키보드" };
+        }
+      } catch {}
+    }
+
+    // ── 3) 그래도 안 되면 손으로 하시게 합니다 ──
+    // ⚠️ 되는 척하지 않습니다. 이미 복사돼 있으니 Ctrl+V 한 번이면 됩니다.
     return {
       ok: false,
-      copied: true,
-      why: "편집기가 본문을 안 받았습니다. 다듬은 글을 복사해 뒀으니 본문 칸에 Ctrl+V 해주세요. " +
-           "붙여넣으신 뒤 '자동 서식'을 누르시면 소제목·인용구·강조가 들어갑니다.",
+      copied: clipOk,
+      why: clipOk
+        ? "자동으로 못 붙였습니다. 다듬은 글은 복사돼 있으니 본문 칸에 Ctrl+V 해주세요. " +
+          "붙여넣으신 뒤 '자동 서식'을 누르시면 소제목·인용구·강조가 들어갑니다."
+        : "클립보드가 막혀서 복사도 못 했습니다. 창을 이 화면에 둔 채로 다시 눌러주세요.",
     };
   }
 
@@ -396,17 +448,37 @@
       if (norm(root.innerText || "").includes(mark)) return { ok: true, how: "paste" };
     } catch {}
 
-    // ⚠️ 안 되면 되는 척하지 않습니다. 복사해 드리고 그렇게 말합니다.
+    // 흉내가 안 먹히면 진짜 붙여넣기 키를 보냅니다 (pasteBody 2번과 같은 통로).
+    // 커서는 위에서 이미 **본문 맨 끝**에 세워져 있습니다.
+    let clipOk = false;
     try {
       await Promise.race([
-        navigator.clipboard.writeText(text),
+        navigator.clipboard.writeText("\n" + text),
         new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
       ]);
+      clipOk = true;
     } catch {}
+    if (clipOk) {
+      try {
+        const resp = await new Promise((res) => {
+          try { chrome.runtime.sendMessage({ type: "pressPaste" }, res); } catch { res(null); }
+        });
+        if (resp && resp.ok) {
+          await settle(700);
+          if (norm(root.innerText || "").includes(mark)) return { ok: true, how: "키보드" };
+        }
+      } catch {}
+      // 안내용 클립보드는 줄바꿈 없이 다시 담아둡니다 — 손으로 붙일 때 깔끔하게.
+      try { await navigator.clipboard.writeText(text); } catch {}
+    }
+
+    // ⚠️ 그래도 안 되면 되는 척하지 않습니다. 복사해 드리고 그렇게 말합니다.
     return {
       ok: false,
-      copied: true,
-      why: "편집기가 안 받았습니다. 복사해 뒀으니 본문 맨 끝을 누르고 Ctrl+V 해주세요.",
+      copied: clipOk,
+      why: clipOk
+        ? "자동으로 못 붙였습니다. 복사해 뒀으니 본문 맨 끝을 누르고 Ctrl+V 해주세요."
+        : "클립보드가 막혔습니다. 창을 이 화면에 둔 채로 다시 눌러주세요.",
     };
   }
 
