@@ -74,22 +74,51 @@ const item = () => png(svg(900, 900,
 
   if (!isConfigured()) { console.log(`\n  통과 ${pass} · 실패 ${fail}`); return; }
 
-  // ── 한 장 모드 ──
-  console.log("\n── 한 장 고르기 ──");
-  const single = await T.run(photos, {
+  /**
+   * ── AI가 한 장이냐 두 장이냐를 스스로 정하는가 ──
+   *
+   * ⚠️ 예전 시험은 "제목에 전후 비교가 없으면 반드시 한 장"을 확인했습니다.
+   * 그건 틀린 기대였습니다. 사장님이 짚어주셨습니다 —
+   * 제목이 전후 비교가 아니어도 사진 두 장을 붙이면 더 눌릴 때가 있습니다.
+   *
+   * 그래서 이제 **모드를 지정하지 않고** 확인합니다.
+   * 무엇을 골랐든 좋습니다. 대신 **고른 사진이 인물인지**,
+   * **왜 그렇게 정했는지 말하는지**를 봅니다. 그게 진짜 확인할 것입니다.
+   */
+  console.log("\n── AI가 스스로 정하는가 (제목에 전후 비교 낱말 없음) ──");
+  const auto = await T.run(photos, {
     title: '"착해진 아이라인" 카리나 메이크업 핵심은 이것',
     body: "이번 무대에서 카리나의 아이라인이 훨씬 얇아졌습니다. 언더라인에 펄을 살짝 올려 눈이 더 커 보였어요. 세미매트 피부와 누드 립을 더하니 힘 뺀 듯 정돈된 무드가 살아났습니다.",
   });
-  fs.writeFileSync(path.join(OUT, "결과-한장.jpg"), single.jpeg);
-  console.log(`    고른 사진: ${single.plan.pick}번 (${LABEL[single.plan.pick]})`);
-  console.log(`    문구: "${single.plan.text}"${single.plan.sub ? " · " + single.plan.sub : ""}`);
-  console.log(`    이유: ${single.plan.why}`);
-  ok(single.plan.mode === "single", "한 장 모드로 만듦");
-  ok([2, 4].includes(single.plan.pick), "얼굴 사진을 골랐다 (글자캡처·제품이 아님)", `${single.plan.pick}번`);
-  ok(!single.plan.invented.length, "본문에 없는 말을 안 지어냄",
-    single.plan.invented.join(", ") || "없음");
-  const vis = single.plan.text.replace(/\s/g, "").length;
+  fs.writeFileSync(path.join(OUT, "결과-AI가정함.jpg"), auto.jpeg);
+  const used = auto.plan.mode === "beforeAfter" ? [auto.plan.before, auto.plan.after] : [auto.plan.pick];
+  console.log(`    제목만 봤을 때: ${auto.ba.yes ? "전후 비교" : "한 장"}`);
+  console.log(`    AI 판단: ${auto.plan.mode === "beforeAfter" ? "두 장" : "한 장"} — ${used.map((i) => `${i}번(${LABEL[i]})`).join(" / ")}`);
+  console.log(`    문구: "${auto.plan.text}"${auto.plan.sub ? " · " + auto.plan.sub : ""}`);
+  if (auto.plan.mode === "beforeAfter") console.log(`    딱지: "${auto.plan.leftLabel}" / "${auto.plan.rightLabel}"`);
+  console.log(`    이유: ${auto.plan.why}`);
+  if (auto.plan.overrode) console.log(`    ⚑ ${auto.plan.overrode}`);
+
+  ok(!auto.ba.yes, "제목에는 전후 비교 낱말이 없다");
+  ok(["single", "beforeAfter"].includes(auto.plan.mode), "AI가 스스로 정했다", auto.plan.mode);
+  ok(used.every((i) => [1, 2, 4].includes(i)),
+    "고른 게 전부 인물 사진이다 (글자캡처·제품이 아님)", used.map((i) => `${i}번`).join(","));
+  ok(!!auto.plan.why && auto.plan.why.length > 15, "왜 그렇게 정했는지 말한다");
+  ok(!auto.plan.invented.length, "본문에 없는 말을 안 지어냄",
+    auto.plan.invented.join(", ") || "없음");
+  const vis = auto.plan.text.replace(/\s/g, "").length;
   ok(vis > 0 && vis <= 12, "문구가 12자 이하", vis + "자");
+
+  // ── 사장님이 직접 정하면 그대로 따르는가 ──
+  console.log("\n── 사장님이 '한 장'으로 정했을 때 ──");
+  const forcedOne = await T.run(photos, {
+    title: '"착해진 아이라인" 카리나 메이크업 핵심은 이것',
+    body: "아이라인이 얇아졌습니다.",
+    force: "single",
+  });
+  console.log(`    결과: ${forcedOne.plan.mode} · ${forcedOne.plan.pick}번(${LABEL[forcedOne.plan.pick]})`);
+  ok(forcedOne.plan.mode === "single", "사장님이 정하면 그대로 따른다", forcedOne.plan.mode);
+  ok(!forcedOne.plan.overrode, "사장님이 정했을 땐 '뒤집었다'는 말을 안 한다");
 
   // ── 비포/애프터 모드 ──
   console.log("\n── 비포 / 애프터 고르기 ──");

@@ -199,7 +199,21 @@ async function choose({ photos, title = "", body = "", mode }) {
   if (!isConfigured()) throw new Error("서버에 ANTHROPIC_API_KEY가 없어서 자동 고르기를 못 씁니다.");
   if (!photos.length) throw new Error("고를 사진이 없습니다.");
 
-  const wantBA = mode === "beforeAfter";
+  /**
+   * ⚠️ 처음엔 **제목만 보고** 한 장이냐 두 장이냐를 정했습니다.
+   * 제목에 '비포', '전후' 같은 말이 있으면 두 장, 없으면 한 장.
+   * 사장님이 짚어주셨습니다 — 제목이 전후 비교가 아니어도 두 장을 붙이면
+   * 더 눌릴 사진들이 있습니다. 낱말 몇 개로 정할 일이 아닙니다.
+   *
+   * 이제 **AI가 사진을 보고 정합니다.** 제목은 참고로만 넘깁니다.
+   * force가 오면 사장님이 직접 정하신 것이라 그대로 따릅니다.
+   */
+  const hint = mode === "beforeAfter"
+    ? "제목이 전후 비교로 보입니다. 다만 사진을 보고 아니라고 판단하면 한 장으로 하세요."
+    : mode === "single"
+      ? "제목만으로는 전후 비교가 아닙니다. 다만 두 장을 붙이는 게 확실히 낫다면 그렇게 하세요."
+      : "";
+  const forced = mode === "forceSingle" ? "single" : mode === "forcePair" ? "pair" : null;
 
   const content = [];
   for (const p of photos) {
@@ -210,37 +224,42 @@ async function choose({ photos, title = "", body = "", mode }) {
     });
   }
 
-  const ask = wantBA
-    ? `이 글은 **전후 비교** 글입니다.
-위 사진들 중에서 '비포'로 쓸 한 장과 '애프터'로 쓸 한 장을 고르세요.
-같은 사람 또는 같은 대상이어야 하고, 둘을 나란히 놓았을 때 **달라진 게 보여야** 합니다.
-달라진 게 안 보이는 짝이면 mode를 "single"로 바꾸고 pick 한 장만 고르세요.
-억지로 짝을 만들지 마세요.
+  const ask = `위 사진들을 보고 **한 장으로 만들지, 두 장을 붙일지 당신이 정하세요.**
+${forced ? `
+사장님이 이미 "${forced === "pair" ? "두 장" : "한 장"}"으로 정하셨습니다. 그대로 하세요.
+` : ""}
+${hint ? `참고: ${hint}
+` : ""}
+**두 장을 붙이면 좋은 경우** (제목이 전후 비교가 아니어도 됩니다):
+- 같은 사람/대상인데 눈에 띄게 달라 보이는 두 장 (화장 전후, 착용 전후, 시간차)
+- 나란히 놓으면 "무슨 차이지?"라는 궁금증이 생기는 두 장
+- 한 장만으로는 밋밋한데, 둘을 붙이면 이야기가 생기는 경우
+두 장을 붙이면 각 사진이 반쪽 크기가 됩니다. 그래도 나은 경우에만 그렇게 하세요.
+
+**한 장이 나은 경우**:
+- 얼굴이 크고 표정이 살아 있어서 그 자체로 눈이 멈추는 사진
+- 짝지을 만한 두 번째 사진이 없거나, 붙여도 차이가 안 보이는 경우
+- 억지로 짝을 만들지 마세요. 그건 오히려 나쁩니다.
+
+인물 사진이 있으면 인물을 우선합니다. 인물이 하나도 없으면 그 사실을 why에 적으세요.
+
+**딱지(label)**: 두 장을 붙일 때 왼쪽/오른쪽에 붙는 짧은 말입니다.
+- 화장·시술 전후면 "BEFORE" / "AFTER"
+- 그 밖에는 내용에 맞게 정하세요 ("평소" / "무대", "작년" / "올해", "민낯" / "풀메")
+- 붙일 말이 마땅치 않으면 빈 문자열로 두세요. 억지 딱지는 안 붙이는 게 낫습니다.
 
 아래 형식으로만 답하세요:
 {
   "photos": [{"i": 0, "kind": "인물-얼굴|인물-전신|제품|배경|글자캡처|기타", "score": 0-10, "note": "한 줄"}],
-  "mode": "beforeAfter",
-  "before": 사진번호,
-  "after": 사진번호,
+  "mode": "single" 또는 "beforeAfter",
+  "pick": 사진번호,          // mode가 single일 때만
+  "before": 사진번호,        // mode가 beforeAfter일 때만 (왼쪽)
+  "after": 사진번호,         // mode가 beforeAfter일 때만 (오른쪽)
+  "leftLabel": "왼쪽 딱지",   // 없으면 ""
+  "rightLabel": "오른쪽 딱지", // 없으면 ""
   "text": "큰 글씨 (8자 안팎)",
   "sub": "작은 글씨 (선택, 없으면 빈 문자열)",
-  "leftLabel": "왼쪽 딱지 (기본 BEFORE)",
-  "rightLabel": "오른쪽 딱지 (기본 AFTER)",
-  "why": "왜 이 두 장인지 한두 문장"
-}`
-    : `위 사진들 중에서 **홈피드에서 제일 눈에 걸릴 한 장**을 고르세요.
-인물 사진이 있으면 인물을 우선합니다. 인물 사진이 하나도 없으면 그 사실을
-why에 적고, 그중 제일 나은 것을 고르세요.
-
-아래 형식으로만 답하세요:
-{
-  "photos": [{"i": 0, "kind": "인물-얼굴|인물-전신|제품|배경|글자캡처|기타", "score": 0-10, "note": "한 줄"}],
-  "mode": "single",
-  "pick": 사진번호,
-  "text": "큰 글씨 (8자 안팎)",
-  "sub": "작은 글씨 (선택, 없으면 빈 문자열)",
-  "why": "왜 이 사진인지 한두 문장"
+  "why": "왜 이렇게 정했는지 한두 문장. 한 장/두 장을 고른 이유를 꼭 넣으세요."
 }`;
 
   content.push({
@@ -330,8 +349,10 @@ function validate(plan, { count, title, body }) {
     after,
     text,
     sub,
-    leftLabel: String(plan.leftLabel || "BEFORE").slice(0, 12),
-    rightLabel: String(plan.rightLabel || "AFTER").slice(0, 12),
+    // ⚠️ 예전엔 비면 무조건 BEFORE/AFTER를 넣었습니다. 그런데 전후 비교가
+    // 아닌 두 장에 그 딱지가 붙으면 거짓말이 됩니다. 비면 비운 채로 둡니다.
+    leftLabel: String(plan.leftLabel || "").slice(0, 12),
+    rightLabel: String(plan.rightLabel || "").slice(0, 12),
     why: String(plan.why || "").slice(0, 400),
     photos: (plan.photos || []).filter((p) => inRange(p.i)),
     invented: [...new Set(invented)],
@@ -355,7 +376,11 @@ async function run(buffers, { title = "", body = "", size = "square", theme = "b
   if (!photos.length) throw new Error("읽을 수 있는 사진이 없습니다. JPG나 PNG로 올려주세요.");
 
   const ba = looksBeforeAfter(title, body);
-  const mode = force || (ba.yes ? "beforeAfter" : "single");
+  // ⚠️ 제목은 이제 **참고**입니다. 정하는 건 AI가 사진을 보고 합니다.
+  // force가 오면 사장님이 직접 고르신 것이라 그대로 따릅니다.
+  const mode = force === "single" ? "forceSingle"
+    : force === "beforeAfter" ? "forcePair"
+    : (ba.yes ? "beforeAfter" : "single");
 
   const rawPlan = await choose({ photos, title, body, mode });
   const plan = validate(rawPlan, { count: list.length, title, body });
@@ -371,7 +396,10 @@ async function run(buffers, { title = "", body = "", size = "square", theme = "b
       sub: plan.sub,
       size,
       theme,
-      labels: { left: plan.leftLabel, right: plan.rightLabel },
+      // 딱지가 둘 다 비면 안 그립니다. 전후 비교가 아닌 두 장에는 딱지가 없는 게 낫습니다.
+      labels: (plan.leftLabel || plan.rightLabel)
+        ? { left: plan.leftLabel || " ", right: plan.rightLabel || " " }
+        : null,
     });
   } else {
     jpeg = await thumbnail.single({
@@ -390,6 +418,13 @@ async function run(buffers, { title = "", body = "", size = "square", theme = "b
     plan.warn.push(`사진이 ${buffers.length}장이라 앞에서 ${MAX_PHOTOS}장만 봤습니다.`);
   }
 
+  // 제목만 봤을 때의 판단과 AI 판단이 다르면 그것도 알려드립니다.
+  const titleSaid = ba.yes ? "beforeAfter" : "single";
+  if (!force && plan.mode !== titleSaid) {
+    plan.overrode = titleSaid === "single"
+      ? "제목은 전후 비교가 아닌데, 사진을 보니 두 장을 붙이는 게 낫다고 판단했습니다."
+      : "제목은 전후 비교인데, 사진으로는 차이가 안 보여서 한 장으로 만들었습니다.";
+  }
   return { plan, jpeg, ba, considered: list.length };
 }
 

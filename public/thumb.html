@@ -221,6 +221,8 @@ document.querySelector(".tabs").onclick = (e) => {
 
 // ── 자동 ─────────────────────────────────────────────────
 let autoFiles = [];
+// 사장님이 '이렇게 말고 저렇게'라고 하시면 그 뜻을 담아 다시 부릅니다.
+let forceMode = null;
 
 // 제목만 보고 전후 비교인지 미리 알려드립니다. AI를 안 쓰니 공짜입니다.
 let modeTimer;
@@ -240,9 +242,12 @@ $("#aTitle").oninput = () => {
         body: JSON.stringify({ title }),
       }).then((x) => x.json());
       if (mine !== modeSeq) return;   // 이미 더 새로운 요청이 있습니다. 버립니다.
+      // ⚠️ 제목은 이제 **참고**입니다. 한 장이냐 두 장이냐는 AI가 사진을 보고 정합니다.
+      // 예전엔 여기서 "비포/애프터로 만듭니다"라고 단정했는데, 제목에 낱말이
+      // 없어도 두 장이 나은 사진들이 있습니다.
       $("#modeHint").innerHTML = r.yes
-        ? `<b style="color:var(--brand)">비포 / 애프터</b>로 만듭니다. ${escH(r.why)}`
-        : `<b>한 장</b>으로 만듭니다. ${escH(r.why)}`;
+        ? `제목이 <b style="color:var(--brand)">전후 비교</b>로 보입니다. 사진을 보고 AI가 마지막으로 정합니다.`
+        : `제목만으로는 전후 비교가 아닙니다. <b>사진이 확연히 다르면 AI가 두 장을 붙일 수도</b> 있습니다.`;
     } catch { if (mine === modeSeq) $("#modeHint").textContent = ""; }
   }, 350);
 };
@@ -271,6 +276,7 @@ $("#aGo").onclick = async () => {
   fd.append("body", $("#aBody").value.trim());
   fd.append("theme", theme);
   fd.append("size", size);
+  if (forceMode) fd.append("force", forceMode);
 
   try {
     const res = await fetch("/api/thumb/auto", { method: "POST", body: fd });
@@ -298,7 +304,16 @@ $("#aGo").onclick = async () => {
         ).join("<br>")}</dd>
         <dt>문구</dt><dd><b>${escH(p.text) || "<span class='muted'>없음</span>"}</b>${p.sub ? " · " + escH(p.sub) : ""}</dd>
         <dt>왜 이걸로</dt><dd>${escH(p.why)}</dd>
+        ${p.overrode ? `<dt>판단</dt><dd style="color:var(--brand)">${escH(p.overrode)}</dd>` : ""}
       </dl>
+
+      <div style="height:12px"></div>
+      <label>다르게 만들어 보시겠어요?</label>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="chip" data-force="${p.mode === "beforeAfter" ? "single" : "beforeAfter"}">
+          ${p.mode === "beforeAfter" ? "한 장으로 다시" : "두 장 붙여서 다시"}
+        </button>
+      </div>
 
       ${p.warn.length ? `<div style="height:14px"></div>
         ${p.warn.map((w) => `<div class="msg warn" style="margin-bottom:8px">${escH(w)}</div>`).join("")}` : ""}
@@ -325,6 +340,12 @@ $("#aGo").onclick = async () => {
       </details>
     </div>`;
 
+    const forceBtn = $("#aOut").querySelector("[data-force]");
+    if (forceBtn) forceBtn.onclick = () => {
+      forceMode = forceBtn.dataset.force;
+      $("#aGo").click();
+    };
+
     const chips = $("#altChips");
     if (chips) chips.onclick = (e) => {
       const c = e.target.closest(".chip"); if (!c) return;
@@ -342,6 +363,7 @@ $("#aGo").onclick = async () => {
     $("#aOut").innerHTML = `<div class="card"><div class="msg bad">서버에 닿지 못했습니다. 잠시 뒤에 다시 해주세요.</div></div>`;
   } finally {
     btn.disabled = false; btn.textContent = "AI가 골라주기";
+    forceMode = null;   // 한 번만 적용합니다. 안 그러면 계속 그 모드로 굳습니다.
   }
 };
 
