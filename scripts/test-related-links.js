@@ -101,5 +101,22 @@ ok(/#ws-tools-panel/.test(saveFn) && /#ws-tools-dock/.test(saveFn),
    "saveDraft가 우리 화면 요소를 건너뛴다");
 ok(/발행\|게시\|공개/.test(saveFn), "발행·게시·공개는 절대 안 누른다");
 
+console.log("\n━━ 세는 용도와 붙이는 용도가 갈라져 있는가 ━━");
+// ⚠️ 1.25.0 사고의 재발 방지. 안내 문구 문단을 글자 수에서 빼는 건 맞지만,
+// 빈 편집기에선 그게 유일한 진짜 문단이라 붙일 자리까지 없애면
+// "본문 문단을 찾지 못했습니다"가 됩니다. 제목만 들어가고 본문이 안 들어갑니다.
+{
+  ok(/function bodyParagraphs\(\{ includeGuide = false \}/.test(di),
+     "bodyParagraphs 에 includeGuide 스위치가 있다");
+  const pb = di.slice(di.indexOf("async function pasteBody"), di.indexOf("async function insert"));
+  ok(/bodyParagraphs\(\{ includeGuide: true \}\)/.test(pb),
+     "붙일 자리는 안내 문단 포함으로 찾는다");
+  ok(/copied: true/.test(pb),
+     "자리를 못 찾아도 복사는 해준다 — 빈손으로 안 끝낸다");
+  const ie = di.slice(di.indexOf("function isEmpty"), di.indexOf("async function pasteBody"));
+  ok(/bodyParagraphs\(\)/.test(ie) && !/includeGuide: true/.test(ie),
+     "셀 때는 안내 문단을 뺀다 (기본값)");
+}
+
 console.log(`\n통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);

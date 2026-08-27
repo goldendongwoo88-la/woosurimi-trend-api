@@ -70,12 +70,26 @@
     return false;
   }
 
-  function bodyParagraphs() {
+  /**
+   * ⚠️ "세는 용도"와 "붙일 자리 찾는 용도"를 **갈라야 합니다.** 실제로 사고가 났습니다.
+   *
+   * 1.25.0 에서 글감 안내 문구("나를 돌아보는 회고… #모두의회고")를 글자 수에서
+   * 뺐습니다. 그건 맞습니다. 그런데 빈 편집기에서는 **그 문구가 붙은 문단이
+   * 유일한 진짜 문단**입니다. 붙여넣기가 그 문단을 잡고 시작해야 하는데
+   * 걸러버리니 "본문 문단을 찾지 못했습니다"가 떴습니다.
+   * 제목은 들어가고 본문만 안 들어가는 — 사장님이 보신 그 증상입니다.
+   *
+   * 그래서:
+   *   셀 때(includeGuide=false, 기본) — 안내 문구 문단을 뺍니다. 글이 아니니까.
+   *   붙일 때(includeGuide=true)     — 포함합니다. 커서를 세울 진짜 문단이니까.
+   */
+  function bodyParagraphs({ includeGuide = false } = {}) {
     const root = editorRoot();
     if (!root) return [];
     const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
     return [...root.querySelectorAll(".se-text-paragraph")].filter(
-      (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") && !isPlaceholder(n)
+      (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") &&
+             (includeGuide || !isPlaceholder(n))
     );
   }
 
@@ -145,9 +159,19 @@
     const root = editorRoot();
     if (!root) return { ok: false, why: "본문을 찾지 못했습니다." };
 
-    const paras = bodyParagraphs();
+    const paras = bodyParagraphs({ includeGuide: true });
     const first = paras[0];
-    if (!first) return { ok: false, why: "본문 문단을 찾지 못했습니다." };
+    if (!first) {
+      // ⚠️ 자리를 못 찾아도 빈손으로 끝내지 않습니다. 예전엔 여기서 그냥
+      // 오류만 띄웠는데, 그러면 복사조차 안 돼서 사장님이 할 게 없었습니다.
+      try {
+        await Promise.race([
+          navigator.clipboard.writeText(text),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
+        ]);
+      } catch {}
+      return { ok: false, copied: true, why: "붙일 자리를 못 찾았습니다. 다듬은 글은 복사해 뒀으니 본문 칸을 누르고 Ctrl+V 해주세요." };
+    }
 
     const check = () => {
       const now = norm(root.innerText || "");
@@ -223,7 +247,7 @@
      * 먹히는 방식입니다(제목 넣기가 이걸로 돕니다).
      */
     if (!state.empty && force) {
-      const all = bodyParagraphs();
+      const all = bodyParagraphs({ includeGuide: true });
       if (all.length) {
         try {
           all[0].focus();
@@ -346,7 +370,7 @@
     const root = editorRoot();
     if (!root) return { ok: false, why: "본문을 찾지 못했습니다." };
 
-    const paras = bodyParagraphs();
+    const paras = bodyParagraphs({ includeGuide: true });
     const last = paras[paras.length - 1];
     if (!last) return { ok: false, why: "본문 문단을 찾지 못했습니다." };
 
