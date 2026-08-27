@@ -399,7 +399,16 @@ function findTool(id) {
  * messages: [{ role: "user"|"assistant", content: "..." }] — 첫 메시지는 사용자의 입력,
  *           이후 메시지가 있으면 그 챗봇 카드 안에서 이어지는 대화(멀티턴)입니다.
  */
-async function runTool(toolId, messages) {
+/**
+ * @param {object} [opts]
+ * @param {number} [opts.maxTokens] 길게 받아야 할 때만 올립니다.
+ *
+ * ⚠️ 기본 2,200을 함부로 올리면 안 됩니다. **모든 손님의 값이 같이 오릅니다.**
+ * 화면에서 쓰는 7단계는 한 단계에 2,200이면 충분합니다.
+ * 자동화 도구만 한 번에 본문 전체(1,370~2,100자)를 받아야 해서 더 필요합니다.
+ * 그래서 기본값은 그대로 두고, 부르는 쪽에서 필요할 때만 올립니다.
+ */
+async function runTool(toolId, messages, opts = {}) {
   const tool = findTool(toolId);
   if (!tool) throw new Error(`등록되지 않은 프롬프트입니다: "${toolId}"`);
   if (!Array.isArray(messages) || !messages.length) throw new Error("입력 내용이 비어 있습니다.");
@@ -440,7 +449,7 @@ async function runTool(toolId, messages) {
   return claudeClient.callClaude({
     system: tool.system,
     messages,
-    maxTokens: 2200,
+    maxTokens: Math.min(Number(opts.maxTokens) || 2200, 8000),
     temperature: 0.85,
     timeoutMs: 150000,
     // ⚠️ 스킬은 사람이 7단계를 천천히 밟습니다. 제목 45개를 읽고 고르는 데만
