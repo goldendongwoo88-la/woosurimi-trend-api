@@ -99,13 +99,28 @@ async function inspect(keyword, { relatedLimit = 12 } = {}) {
   const total = pc + mo;
 
   // ── 문서 수 ──
-  let docCount = null, todayCount = null, searchError = null;
+  let docCount = null, todayCount = null, todayApprox = false, searchError = null;
   if (hasSearchKeys()) {
     try {
-      [docCount, todayCount] = await Promise.all([
+      /**
+       * ⚠️ getTodayPostCount 는 **숫자가 아니라 { count, approximate } 를 돌려줍니다.**
+       * 그걸 모르고 숫자처럼 썼습니다. 두 가지가 틀어졌습니다:
+       *
+       *   1) 화면에 "오늘 글 [object Object]건" 이 떴습니다. 눈에 바로 보이는 고장입니다.
+       *   2) **열기 판정이 언제나 틀렸습니다.** {count:80} >= 50 은 거짓입니다.
+       *      객체는 숫자와 못 견줍니다. 그래서 오늘 80개가 올라온 뜨거운 키워드도
+       *      "조용함 — 경쟁이 덜합니다"로 나왔습니다. 정반대로 말한 겁니다.
+       *
+       * 2번이 훨씬 나쁩니다. 화면이 깨진 건 바로 알지만, 이건 그럴듯하게 틀립니다.
+       * (opportunityFinder 는 처음부터 .count 로 제대로 꺼내 쓰고 있었습니다)
+       */
+      const [docs, today] = await Promise.all([
         getBlogPostCount(kw),
         getTodayPostCount(kw).catch(() => null),
       ]);
+      docCount = docs;
+      todayCount = today && typeof today === "object" ? today.count : today;
+      todayApprox = !!(today && today.approximate);
     } catch (e) {
       searchError = e.message;
     }
@@ -149,6 +164,8 @@ async function inspect(keyword, { relatedLimit = 12 } = {}) {
     competition: self ? (COMP_LABEL[self.compIdx] || self.compIdx || null) : null,
     docs: docCount,
     todayDocs: todayCount,
+    // 100개를 다 채웠으면 실제로는 더 많다는 뜻입니다. 숨기면 사장님이 적은 줄 압니다.
+    todayDocsApprox: todayApprox,
     score: score != null ? Math.round(score * 100) / 100 : null,
     ...(grade || {}),
     heat: heatOf(todayCount),

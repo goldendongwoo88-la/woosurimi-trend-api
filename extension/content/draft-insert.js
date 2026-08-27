@@ -28,22 +28,74 @@
            document.querySelector("#se-editor") || null;
   }
 
+  /**
+   * 네이버가 띄우는 **안내 문구**를 걸러냅니다. 사장님이 쓰신 글이 아닙니다.
+   *
+   * ⚠️ 실제로 사고가 났습니다. 빈 편집기인데 이렇게 나왔습니다:
+   *     "본문에 이미 글이 있습니다 — 지금 27자가 들어 있습니다"
+   *
+   * 그 27자는 네이버가 띄운 글감 제안이었습니다:
+   *     "나를 돌아보는 회고, 뜻밖의 발견을 기다립니다. #모두의회고"  ← 공백 빼고 정확히 27자
+   *
+   * `.se-placeholder` 만 걸러내고 있었는데, 네이버는 자리마다 다른 이름을 씁니다.
+   * 그래서 **placeholder 라는 말이 들어간 것은 전부** 걸러냅니다.
+   * 클래스 이름이 또 바뀌어도 버틸 확률이 높습니다.
+   */
+  const PLACEHOLDER =
+    ".se-placeholder, [class*='placeholder'], [class*='Placeholder'], " +
+    "[data-placeholder], [aria-hidden='true'], .se-drop-guide, .se-guide";
+
+  function isPlaceholder(el) {
+    if (!el) return false;
+    if (el.closest(PLACEHOLDER)) return true;
+    // 네이버가 클래스 대신 속성으로 표시하는 경우도 있습니다.
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      if (n.getAttribute && n.getAttribute("contenteditable") === "false") return true;
+    }
+    return false;
+  }
+
   function bodyParagraphs() {
     const root = editorRoot();
     if (!root) return [];
     const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
     return [...root.querySelectorAll(".se-text-paragraph")].filter(
-      (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") && !n.closest(".se-placeholder")
+      (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") && !isPlaceholder(n)
     );
   }
 
-  /** 편집기가 비어 있는가 — 넣기 전에 반드시 봅니다. */
+  /**
+   * 편집기가 비어 있는가 — 넣기 전에 반드시 봅니다.
+   *
+   * ⚠️ 여기서 잘못 세면 **사장님이 아무것도 못 하십니다.** 넣기 버튼이 잠기는데
+   * 정작 지울 글이 없으니까요. 그래서 무엇을 세었는지 같이 돌려줍니다 —
+   * 화면에서 "이게 글인가요?" 하고 보여드릴 수 있게요.
+   */
   function isEmpty() {
     const paras = bodyParagraphs();
-    const chars = paras.reduce((n, p) => n + norm(p.innerText || "").length, 0);
+    /**
+     * ⚠️ 세는 것과 보여주는 것을 **갈라야 합니다.**
+     *
+     * 처음엔 공백을 지운 글자(norm)를 화면에도 그대로 썼습니다. 그랬더니
+     *   "나를돌아보는회고,뜻밖의발견을기다립니다.#모두의회고"
+     * 이렇게 나왔습니다. 사장님이 보시면 화면이 고장난 줄 아십니다.
+     *
+     * 셀 때는 공백을 빼는 게 맞습니다(공백만 있는 문단을 글로 세면 안 되니까요).
+     * 보여줄 때는 **원래 글자 그대로** 보여드립니다.
+     */
+    const rows = paras
+      .map((p) => ({ raw: (p.innerText || "").trim(), norm: norm(p.innerText || "") }))
+      .filter((r) => r.norm);
+    const chars = rows.reduce((n, r) => n + r.norm.length, 0);
     const root = editorRoot();
     const media = root ? root.querySelectorAll(".se-image-resource, .se-oglink, .se-video").length : 0;
-    return { empty: chars < 20 && media === 0, chars, media };
+    return {
+      empty: chars < 20 && media === 0,
+      chars,
+      media,
+      // 무엇을 글이라고 봤는지. 안내 문구를 또 잘못 세면 이걸로 바로 압니다.
+      sample: rows.slice(0, 3).map((r) => r.raw.slice(0, 40)),
+    };
   }
 
   /**
@@ -122,12 +174,14 @@
    * @param {{title, blocks}} draft  draft-parser가 뜯어낸 것
    * @param {(msg:string)=>void} say 진행 상황 알림
    */
-  async function insert(draft, say = () => {}) {
+  async function insert(draft, say = () => {}, { force = false } = {}) {
     const F = window.__wsFormat;
     if (!F) return { ok: false, why: "서식 도구를 못 불러왔습니다. 확장을 다시 설치해 보세요." };
 
+    // ⚠️ force 는 **사장님이 화면에서 직접 "그래도 넣기"를 누르셨을 때만** 옵니다.
+    // 제 판정이 틀릴 수 있어서 둔 탈출구입니다. 코드가 스스로 켜면 안 됩니다.
     const state = isEmpty();
-    if (!state.empty) {
+    if (!state.empty && !force) {
       return {
         ok: false,
         needsConfirm: true,

@@ -1999,10 +1999,18 @@
 
       ${!state.empty ? `
       <div class="ws-sec warn-sec">
-        <div class="ws-sec-h">잠깐 — 본문에 이미 글이 있습니다
+        <div class="ws-sec-h">잠깐 — 본문에 글이 있어 보입니다
           <span class="ws-sec-tag check">확인 필요</span></div>
-        <p class="ws-sec-p">지금 <b>${state.chars.toLocaleString()}자</b>${state.media ? `, 사진·링크 ${state.media}개` : ""}가 들어 있습니다.
-          <b>덮어쓰면 되돌릴 수 없습니다.</b> 새 글에서 하시는 걸 권합니다.</p>
+        <p class="ws-sec-p">지금 <b>${state.chars.toLocaleString()}자</b>${state.media ? `, 사진·링크 ${state.media}개` : ""}로 셌습니다.
+          <b>덮어쓰면 되돌릴 수 없습니다.</b></p>
+        ${state.sample && state.sample.length ? `
+        <p class="ws-sec-p" style="margin-top:6px">제가 글이라고 본 것:</p>
+        <ul style="margin:4px 0 0 16px;padding:0;font-size:12.5px;color:#5a5f6b">
+          ${state.sample.map((t) => `<li>${esc(t)}${t.length >= 40 ? "…" : ""}</li>`).join("")}
+        </ul>
+        <p class="ws-sec-p" style="margin-top:6px">
+          ⚠️ 이게 <b>사장님이 쓰신 글이 아니라 네이버가 띄운 안내 문구</b>라면
+          아래 <b>그래도 넣기</b>를 눌러주세요. 제가 잘못 센 것입니다.</p>` : ""}
       </div>` : ""}
 
       <div class="ws-sec">
@@ -2012,10 +2020,10 @@
           잘 되는 블로그는 1~5%입니다. 중앙 ${s.paraMedian}자.</p>
       </div>
 
-      <button class="ws-apply" id="ws-pd-go" style="margin:10px 0 4px;font-size:13px;padding:8px 14px"
-        ${state.empty ? "" : 'disabled title="본문을 비우신 뒤에 눌러주세요"'}>
-        ${state.empty ? "넣기" : "본문이 비어야 넣을 수 있습니다"}
-      </button>
+      <button class="ws-apply" id="ws-pd-go" style="margin:10px 0 4px;font-size:13px;padding:8px 14px">넣기</button>
+      ${!state.empty ? `
+      <button class="ws-dock-btn" id="ws-pd-force"
+        style="margin:10px 0 4px 6px;font-size:12.5px;padding:8px 12px">그래도 넣기</button>` : ""}
       <p class="ws-dim" style="margin:2px 0 0">
         제목은 자동으로 넣습니다. 본문은 편집기가 안 받으면 <b>복사해 드리고 Ctrl+V</b>를 부탁드립니다 —
         억지로 밀어넣다 글이 뭉개지는 것보다 그게 확실합니다.
@@ -2027,12 +2035,22 @@
     `);
 
     const go = panel.querySelector("#ws-pd-go");
-    if (go && !go.disabled) go.addEventListener("click", async () => {
-      go.disabled = true;
-      const out = panel.querySelector("#ws-pd-out");
-      const say = (m) => { go.textContent = m; out.innerHTML = `<div class="ws-row">${esc(m)}</div>`; };
+    const forceBtn = panel.querySelector("#ws-pd-force");
 
-      const r = await I.insert(draft, say);
+    /**
+     * @param force 사장님이 "그래도 넣기"를 직접 누르셨는가.
+     *
+     * ⚠️ 제 판정이 틀릴 수 있어서 둔 길입니다. 실제로 네이버 안내 문구를
+     * 사장님 글로 잘못 세서 넣기를 막은 적이 있습니다(27자 사건).
+     * 그때 사장님은 지울 글도 없는데 아무것도 못 하셨습니다.
+     */
+    const run = (btn, force) => async () => {
+      if (go) go.disabled = true;
+      if (forceBtn) forceBtn.disabled = true;
+      const out = panel.querySelector("#ws-pd-out");
+      const say = (m) => { btn.textContent = m; out.innerHTML = `<div class="ws-row">${esc(m)}</div>`; };
+
+      const r = await I.insert(draft, say, { force });
       if (!r.ok) {
         // ⚠️ 본문 자동 넣기는 접었습니다(draft-insert.js 설명 참고).
         // 대신 깨끗하게 다듬어 클립보드에 담아드리고, Ctrl+V 한 번 하시게 합니다.
@@ -2084,7 +2102,11 @@
             ${r.failed.map((f) => `· ${esc(f.what)}<br><span style="opacity:.7">&nbsp;&nbsp;${esc(f.why)}</span>`).join("<br>")}
           </div>
         </div>` : ""}`;
-    });
+    };
+
+    // 두 버튼이 같은 일을 합니다. 다른 건 force 하나뿐입니다.
+    if (go) go.addEventListener("click", run(go, false));
+    if (forceBtn) forceBtn.addEventListener("click", run(forceBtn, true));
   }
 
   // ── 자동 서식 (소제목·인용구·강조) ─────────────────────
