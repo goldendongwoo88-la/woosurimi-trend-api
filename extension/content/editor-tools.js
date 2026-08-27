@@ -349,45 +349,93 @@
   }
 
   /** 고른 제목을 제목 칸에 넣습니다. */
+  /**
+   * 고른 제목을 제목 칸에 넣습니다.
+   *
+   * ⚠️ 여기서 크게 한 번 틀렸습니다. 원래는 이랬습니다:
+   *
+   *     ok = el.dispatchEvent(new ClipboardEvent("paste", ...));
+   *     if (!ok) { ...실패 처리... }
+   *     panel.hidden = true;   // ok면 성공으로 간주
+   *
+   * `dispatchEvent`는 **이벤트가 취소되지 않았으면 true**를 돌려줍니다.
+   * 아무도 그 이벤트를 처리하지 않아도 true입니다. 게다가 브라우저는 보안상
+   * 사람이 만들지 않은 붙여넣기 이벤트의 clipboardData를 대체로 무시합니다.
+   * 그래서 **아무 일도 안 일어났는데 성공이라고 창을 닫고** 있었습니다.
+   * 사장님이 "이걸로 바꾸기를 눌러도 제목이 안 바뀐다"고 하신 게 이것입니다.
+   *
+   * 고친 원칙: **바꾼 뒤에 다시 읽어서 확인한다.**
+   * 넣는 방법을 여러 개 시도하되, 매번 제목을 되읽어 실제로 바뀌었는지 봅니다.
+   * 다 실패하면 성공한 척하지 않고 복사해 드리고 그렇게 말합니다.
+   */
   function applyTitle(text) {
-    const el =
+    const findTitleEl = () =>
       document.querySelector(".se-documentTitle .se-text-paragraph") ||
       document.querySelector(".se-documentTitle [contenteditable='true']") ||
       document.querySelector("#subject");
+
+    const el = findTitleEl();
     if (!el) {
       navigator.clipboard.writeText(text).catch(() => {});
       return showPanel(`<h4>홈판 제목</h4><div class="ws-row warn">
         제목 칸을 찾지 못했습니다. 복사해 뒀으니 직접 붙여넣어 주세요.</div>`);
     }
-    // 옛 에디터는 input이라 value를, 새 에디터는 contenteditable이라 붙여넣기를 씁니다.
+
+    const want = String(text).trim();
+    // 실제로 바뀌었는지 확인하는 유일한 방법 — 다시 읽어보기.
+    const changed = () => getTitle().replace(/\s+/g, "") === want.replace(/\s+/g, "");
+
+    // 옛 에디터는 그냥 input입니다. 이건 확실히 먹습니다.
     if ("value" in el && el.tagName === "INPUT") {
-      el.value = text;
+      el.value = want;
       el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
       panel.hidden = true;
       return;
     }
-    el.focus();
-    // 기존 제목을 모두 선택한 뒤 갈아끼웁니다.
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
 
-    let ok = false;
-    try {
-      const dt = new DataTransfer();
-      dt.setData("text/plain", text);
-      ok = el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-    } catch {}
-    if (!ok) { try { ok = document.execCommand("insertText", false, text); } catch {} }
-    if (!ok) {
-      navigator.clipboard.writeText(text).catch(() => {});
-      showPanel(`<h4>홈판 제목</h4><div class="ws-row warn">
-        제목을 바로 바꾸지 못했습니다. 복사해 뒀으니 제목 칸에서 Ctrl+V를 눌러주세요.</div>`);
-      return;
+    const selectAll = () => {
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+
+    // ⚠️ 순서가 중요합니다. execCommand("insertText")가 contenteditable에서
+    // 제일 잘 먹습니다. 합성 붙여넣기는 브라우저가 막는 경우가 많아 뒤로 뺐습니다.
+    const ways = [
+      () => { selectAll(); document.execCommand("insertText", false, want); },
+      () => {
+        selectAll();
+        const dt = new DataTransfer();
+        dt.setData("text/plain", want);
+        el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      },
+      // 마지막 수단 — DOM을 직접 씁니다. 편집기가 안 받아들일 수 있어서 맨 뒤입니다.
+      () => {
+        selectAll();
+        el.textContent = want;
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: want }));
+      },
+    ];
+
+    for (const way of ways) {
+      try { way(); } catch {}
+      if (changed()) {
+        panel.hidden = true;
+        scheduleCount();
+        return;
+      }
     }
-    panel.hidden = true;
+
+    // 여기까지 왔으면 정말 안 된 겁니다. 된 척하지 않습니다.
+    navigator.clipboard.writeText(want).catch(() => {});
+    showPanel(`<h4>홈판 제목</h4>
+      <div class="ws-row warn">제목을 자동으로 바꾸지 못했습니다.
+        <b>복사해 뒀으니</b> 제목 칸을 클릭하고 전체 선택(Ctrl+A) 후 Ctrl+V를 눌러주세요.</div>
+      <div class="ws-preview"><pre>${esc(want)}</pre></div>`);
   }
 
   // ── 홈판 본문으로 보완 ────────────────────────────────
