@@ -146,6 +146,57 @@ function buildSystem(system, cacheMode) {
   return { system: [{ type: "text", text, cache_control: cc }] };
 }
 
+/**
+ * 주고받은 **대화 내용**도 캐시에 겁니다.
+ *
+ * ⚠️ 여기를 놓치고 있었습니다. 시스템 프롬프트만 캐시하고 있었습니다.
+ *
+ * 스킬은 7단계를 이어서 밟습니다. 단계마다 앞선 대화를 **통째로 다시** 보냅니다.
+ * 7단계쯤 가면 대화가 14,000토큰이 넘고, 그걸 매번 제값 주고 보냈습니다.
+ *
+ *   7단계 한 편   시스템 592원 + 대화 209원 + 쓴 글 319원 = 1,119원
+ *                              ↑ 이 209원이 그냥 나가고 있었습니다
+ *
+ * 대화도 캐시하면 160원이 됩니다. 한 편에 49원, 하루 3편이면 한 달 4,400원입니다.
+ *
+ * ⚠️ 대화 캐시도 **1시간**을 씁니다. 5분짜리는 오히려 손해입니다:
+ *     캐시 없음                    209원
+ *     5분 · 5분 안에 다 밟으면      108원
+ *     5분 · 단계마다 5분 넘기면     296원  ← 죽어서 87원 손해
+ *     1시간 · 천천히 밟아도         160원
+ *   사장님은 제목 45개를 읽고 고르십니다. 단계 사이가 5분을 넘습니다.
+ *
+ * ⚠️ 대화가 짧으면 안 겁니다. 1,024토큰이 안 되면 캐시가 안 걸리는데,
+ * 그래도 "캐시에 넣어달라"고 하면 넣는 값만 더 냅니다.
+ *
+ * ⚠️ 원본 배열을 안 건드립니다. 1시간이 거절당하면 5분으로 다시 부르는데,
+ * 그때 이미 손댄 배열이 넘어가면 무슨 일이 벌어질지 모릅니다.
+ */
+const MSG_CACHE_MIN_CHARS = 2000;
+
+function buildMessages(messages, cacheMode) {
+  if (!cacheMode || !Array.isArray(messages) || messages.length < 2) return messages;
+
+  // 마지막 것만 빼고 = 캐시에 걸릴 부분. 그게 충분히 길어야 값이 있습니다.
+  const priorChars = messages
+    .slice(0, -1)
+    .reduce((n, m) => n + (typeof m.content === "string" ? m.content.length : 0), 0);
+  if (priorChars < MSG_CACHE_MIN_CHARS) return messages;
+
+  const last = messages[messages.length - 1];
+  // 글자가 아니라 이미 덩이로 들어온 경우는 건드리지 않습니다. 섣불리 손대면 깨집니다.
+  if (typeof last.content !== "string") return messages;
+
+  const cc = cacheMode === "long" && longTtlWorks
+    ? { type: "ephemeral", ttl: "1h" }
+    : { type: "ephemeral" };
+
+  return [
+    ...messages.slice(0, -1),
+    { ...last, content: [{ type: "text", text: last.content, cache_control: cc }] },
+  ];
+}
+
 /** 마지막 호출에서 캐시가 얼마나 먹혔는지 — 화면에서 보여줄 때 씁니다. */
 let lastUsage = null;
 function getLastUsage() { return lastUsage; }
@@ -169,7 +220,7 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
       max_tokens: maxTokens,
       temperature,
       ...buildSystem(system, cache),
-      messages,
+      messages: buildMessages(messages, cache),
     }),
   }, timeoutMs);
 
@@ -220,4 +271,4 @@ function extractJson(text) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-module.exports = { callClaude, isConfigured, getModel, extractJson, explain, checkCredit, getLastUsage, buildSystem };
+module.exports = { callClaude, isConfigured, getModel, extractJson, explain, checkCredit, getLastUsage, buildSystem, buildMessages };
