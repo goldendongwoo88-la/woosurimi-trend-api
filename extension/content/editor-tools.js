@@ -41,13 +41,18 @@
   }
 
   const HOST = hostDocument();
-  const inFrame = HOST !== document;
 
-  // 같은 막대가 두 번 생기지 않게 — 바깥 창을 기준으로 표시를 답니다.
-  // (iframe 여러 개에서 동시에 붙이려 할 수 있습니다)
-  const hostWin = inFrame ? window.top : window;
-  if (hostWin.__wsTools) return;
-  hostWin.__wsTools = true;
+  // ⚠️ 여기에 "이미 실행됐으면 나간다"는 깃발을 두면 안 됩니다. 제가 그렇게 했다가
+  // 막대가 아예 안 뜨는 버그를 만들었습니다.
+  //
+  // 스크립트는 바깥 창과 iframe 양쪽에서 돕니다. 보통 바깥 창이 먼저입니다.
+  //   1) 바깥 창 — 깃발을 꽂음. 그런데 주소도 안 맞고 .se-content도 없어서
+  //                 정작 아무것도 안 그림
+  //   2) iframe  — 깃발을 보고 "이미 누가 했군" 하고 그냥 나감
+  // 결국 아무도 안 그립니다. 실제로 이 상태로 배포됐습니다.
+  //
+  // 중복은 깃발이 아니라 **실제로 붙였는지**로 막습니다.
+  // 두 창이 같은 HOST를 보므로 start()의 getElementById 검사 하나면 충분합니다.
 
   const DEFAULT_SERVER = "https://woosurimi-trend-api.onrender.com";
 

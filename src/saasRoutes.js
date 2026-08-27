@@ -19,6 +19,7 @@ const titleRewrite = require("./titleRewrite");
 const notify = require("./notify");
 const bodyRewrite = require("./bodyRewrite");
 const topicFit = require("./topicFit");
+const suggestTopics = require("./suggestTopics");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -418,6 +419,27 @@ module.exports = function attachSaas(app) {
       res.status(502).json({ error: "확인에 실패했습니다. 잠시 뒤에 다시 해주세요." });
     }
   });
+
+  // ── 추천 검색어 (오늘 뭘 쓸까) ─────────────────────────
+  // ⚠️ 네이버를 여러 번 두들기는 기능이라 키워드 한도를 씁니다.
+  app.post("/api/suggest-topics", usage.gate("keyword"), async (req, res) => {
+    const { seeds, topic } = req.body || {};
+    const planId = req.user ? req.user.plan : "free";
+    // 문서 수까지 확인하는 개수 — 무료는 얕게. 하나당 요청이 한 번씩 더 나갑니다.
+    const depth = planId === "free" ? 4 : planId === "light" ? 8 : 12;
+    try {
+      const r = await suggestTopics.suggest({ seeds, topic, depth });
+      if (!r.ok) return res.status(400).json({ error: r.why });
+      res.json({ ...r, plan: planId, usage: req.usage });
+    } catch (e) {
+      console.error("[suggest-topics]", e.message);
+      res.status(502).json({ error: "추천 검색어를 가져오지 못했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  app.get("/api/suggest-topics/seeds", (req, res) =>
+    res.json({ seeds: suggestTopics.SEEDS })
+  );
 
   // ── 연예인 소재 찾기 ───────────────────────────────────
   app.post("/api/celeb/mine", usage.gate("keyword"), async (req, res) => {
