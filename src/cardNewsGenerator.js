@@ -827,6 +827,12 @@ async function renderCardNewsSet(plan, { styleId = "midnight-purple", layoutId =
 }
 
 module.exports = {
+  // ⚠️ 글자를 SVG path로 그리는 함수들입니다. 썸네일 만들 때도 같은 폰트·같은 방식이
+  // 필요해서 내보냅니다. 각자 폰트를 따로 불러오면 언젠가 서로 어긋납니다.
+  measureText,
+  glyphPaths,
+  alignedText,
+  wrapByWidth,
   getStyles,
   getLayouts,
   getAspectRatios,

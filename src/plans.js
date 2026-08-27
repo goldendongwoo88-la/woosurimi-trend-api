@@ -39,6 +39,7 @@ const PLANS = {
       // 경쟁 글 비교 — 글을 5편씩 받아오느라 무겁습니다. 따로 셉니다.
       // 무료는 하루 1번. 한 번 써보면 값어치를 알게 되고, 그게 결제 이유가 됩니다.
       compare: { perDay: 1 },
+      thumb: { perDay: 5 },        // 홈판 썸네일 만들기
       aiCredits: { perDay: 0 },       // AI 생성 — 무료는 없음
     },
     features: { ads: true, alert: false, academy: false, bulk: false },
@@ -56,6 +57,7 @@ const PLANS = {
       rankKeywords: 20,
       rankPosts: 10,
       compare: { perDay: 5 },
+      thumb: { perDay: 60 },        // 홈판 썸네일 만들기
       aiCredits: { perDay: 10 },
     },
     features: { ads: false, alert: true, academy: true, bulk: false },
@@ -74,6 +76,7 @@ const PLANS = {
       rankKeywords: 100,
       rankPosts: 50,
       compare: { perDay: 20 },
+      thumb: { perDay: 200 },        // 홈판 썸네일 만들기
       aiCredits: { perDay: 40 },
     },
     features: { ads: false, alert: true, academy: true, bulk: true },
@@ -91,6 +94,7 @@ const PLANS = {
       rankKeywords: 500,
       rankPosts: 200,
       compare: { perDay: 80 },
+      thumb: { perDay: 800 },        // 홈판 썸네일 만들기
       aiCredits: { perDay: 120 },
     },
     features: { ads: false, alert: true, academy: true, bulk: true },
@@ -132,6 +136,7 @@ function comparison() {
     { key: "rankKeywords", label: "순위 추적 키워드", fmt: (l) => `${l.rankKeywords}개` },
     { key: "rankPosts", label: "순위 추적 글", fmt: (l) => `${l.rankPosts}개` },
     { key: "compare", label: "경쟁 글 비교", fmt: (l) => `일 ${l.compare.perDay}회` },
+    { key: "thumb", label: "홈판 썸네일", fmt: (l) => `일 ${l.thumb.perDay}장` },
     { key: "aiCredits", label: "AI 크레딧", fmt: (l) => (l.aiCredits.perDay ? `일 ${l.aiCredits.perDay}` : "없음") },
   ];
   return {

@@ -189,6 +189,7 @@
       <button data-act="keyword" class="ws-dock-btn" title="지금 누가 상위에 있는지">키워드</button>
       <button data-act="font" class="ws-dock-btn" title="글꼴·크기를 본문 전체에 한 번에">폰트</button>
       <button data-act="image" class="ws-dock-btn" title="사진 너비를 한 번에 맞춥니다">사진</button>
+      <button data-act="thumb" class="ws-dock-btn" title="홈판용 썸네일 만들기">썸네일</button>
       <button data-act="table" class="ws-dock-btn" title="표 넣기">표</button>
       <button data-act="word" class="ws-dock-btn" title="워드로 내려받기">워드</button>
       <button data-act="toggle" class="ws-dock-min" title="접기">▾</button>
@@ -897,6 +898,19 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   }
 
+  // ── 홈판 썸네일 ───────────────────────────────────────
+  //
+  // ⚠️ 여기서 썸네일까지 만들지는 않습니다. 사진을 골라야 하는데, 글쓰기 창에
+  // 파일 선택 창을 띄우면 편집기가 포커스를 잃고 사장님이 쓰던 자리를 놓칩니다.
+  // 대신 **제목을 들고** 썸네일 화면을 엽니다. 가서 문구가 이미 뽑혀 있습니다.
+  async function openThumb() {
+    const title = getTitle();
+    const cfg = await new Promise((r) => chrome.storage.sync.get(["server"], r));
+    const base = (cfg.server || "https://woosurimi-trend-api.onrender.com").replace(/\/+$/, "");
+    const url = `${base}/thumb.html${title ? "?title=" + encodeURIComponent(title) : ""}`;
+    window.open(url, "_blank", "noopener");
+  }
+
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -917,6 +931,7 @@
       else if (act === "image") resizeImages();
       else if (act === "audit") runAudit();
       else if (act === "keyword") runKeyword();
+      else if (act === "thumb") openThumb();
       else if (act === "table") insertTable();
       else if (act === "word") downloadWord();
       else if (act === "toggle") {

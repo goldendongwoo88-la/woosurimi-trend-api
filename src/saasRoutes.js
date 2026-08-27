@@ -21,6 +21,17 @@ const bodyRewrite = require("./bodyRewrite");
 const topicFit = require("./topicFit");
 const suggestTopics = require("./suggestTopics");
 const research = require("./research");
+const thumbnail = require("./thumbnail");
+
+// 썸네일용 사진 받기.
+// ⚠️ 디스크에 안 씁니다(memoryStorage). 만들어서 바로 돌려주면 끝인 사진을
+// 서버에 남길 이유가 없습니다. 남기면 지우는 일도 제 몫이 되고, 언젠가 잊습니다.
+// 8MB 두 장이면 넉넉합니다. 요즘 폰 사진이 3~5MB입니다.
+const multer = require("multer");
+const thumbUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 2 },
+});
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -552,6 +563,100 @@ module.exports = function attachSaas(app) {
   app.get("/api/drop-stats", (req, res) => {
     res.json(rankTracker.publicDropStats());
   });
+
+  // ── 홈판 썸네일 ─────────────────────────────────────────
+  //
+  // ⚠️ 사진은 사장님이 올리신 것만 씁니다. 연예인 사진을 대신 찾아다 주는 기능은
+  // 만들지 않았습니다. 저작권(찍은 사람)과 초상권(찍힌 사람)이 둘 다 걸리고,
+  // 썸네일은 제일 눈에 띄는 자리라 문제가 되면 바로 걸립니다.
+
+  // 설정값 — 화면이 크기·색을 하드코딩하지 않게 서버에서 내려줍니다.
+  app.get("/api/thumb/options", (req, res) => {
+    res.json({
+      sizes: Object.entries(thumbnail.SIZES).map(([id, s]) => ({ id, ...s })),
+      themes: Object.entries(thumbnail.THEMES).map(([id, t]) => ({ id, label: t.label, band: t.band, text: t.text })),
+    });
+  });
+
+  // 제목에서 썸네일 문구 뽑기 — AI를 안 쓰니 사용량도 안 셉니다.
+  app.post("/api/thumb/suggest", (req, res) => {
+    const title = String((req.body || {}).title || "");
+    res.json({ ok: true, suggestions: thumbnail.suggestText(title) });
+  });
+
+  // 실제로 만들기. 사진 1장이면 한 장짜리, 2장이면 비포/애프터.
+  app.post(
+    "/api/thumb",
+    // ⚠️ consumeOnPass를 끕니다. 한도 확인만 먼저 하고, **실제로 사진이 나왔을 때**
+    // 셉니다. 처음엔 그냥 gate로 세고 실패하면 되돌리게(-1) 했는데, 되돌리는 길이
+    // 하나라도 새면 사장님 하루 몫이 조용히 깎입니다. 아예 안 세는 게 맞습니다.
+    usage.gate("thumb", { consumeOnPass: false }),
+    thumbUpload.fields([{ name: "before", maxCount: 1 }, { name: "after", maxCount: 1 }]),
+    async (req, res) => {
+      const f = req.files || {};
+      const before = (f.before || [])[0];
+      const after = (f.after || [])[0];
+      const b = req.body || {};
+
+      if (!before && !after) {
+        return res.status(400).json({ error: "사진을 한 장 이상 올려주세요." });
+      }
+
+      const text = String(b.text || "").trim();
+      const sub = String(b.sub || "").trim();
+      const size = String(b.size || "square");
+      const theme = String(b.theme || "black");
+
+      // 길다고 막지는 않습니다. 줄여서라도 넣고, 대신 알려드립니다.
+      const warn = [];
+      if (text.replace(/\s/g, "").length > 10) {
+        warn.push(`문구가 ${text.replace(/\s/g, "").length}자입니다. 8자 안팎이 모바일에서 제일 잘 읽힙니다.`);
+      }
+
+      try {
+        let buf;
+        let mode;
+        if (before && after) {
+          mode = "beforeAfter";
+          buf = await thumbnail.beforeAfter({
+            beforeBuf: before.buffer,
+            afterBuf: after.buffer,
+            text,
+            sub,
+            size,
+            theme,
+            labels:
+              b.labels === "off"
+                ? null
+                : { left: String(b.leftLabel || "BEFORE"), right: String(b.rightLabel || "AFTER") },
+          });
+        } else {
+          mode = "single";
+          buf = await thumbnail.single({
+            buf: (before || after).buffer,
+            text,
+            sub,
+            size,
+            theme,
+            position: b.position === "top" ? "top" : "bottom",
+          });
+        }
+        // 사진이 실제로 나온 뒤에 셉니다.
+        usage.consume(req, "thumb");
+        res.setHeader("Content-Type", "image/jpeg");
+        res.setHeader("X-Thumb-Mode", mode);
+        // 경고는 헤더로 — 본문은 이미지라 JSON을 못 실습니다. 한글은 그대로 못 넣습니다.
+        res.setHeader("Access-Control-Expose-Headers", "X-Thumb-Mode, X-Thumb-Warn");
+        if (warn.length) res.setHeader("X-Thumb-Warn", encodeURIComponent(warn.join(" ")));
+        res.send(buf);
+      } catch (e) {
+        // sharp가 못 읽는 파일(HEIC 등)이면 여기로 옵니다.
+        res.status(400).json({
+          error: "사진을 읽지 못했습니다. JPG나 PNG로 올려주세요. (아이폰 HEIC는 아직 못 읽습니다)",
+        });
+      }
+    }
+  );
 
   // ── 사용량 ─────────────────────────────────────────────
   app.get("/api/usage", (req, res) => res.json(usage.summary(req)));
