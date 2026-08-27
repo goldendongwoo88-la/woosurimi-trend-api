@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "우수리미 포스팅",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "글 다 쓰고 누르면 홈판용 제목·본문으로 보완해 줍니다. 글자수·표현검사·키워드도 그 자리에서. 발행은 직접 하십니다.",
   "permissions": [
     "storage",
@@ -52,7 +52,8 @@
         "https://search.naver.com/*"
       ],
       "js": [
-        "content/naver-search.js"
+        "content/naver-search.js",
+        "content/search-nav.js"
       ],
       "css": [
         "content/panel.css"

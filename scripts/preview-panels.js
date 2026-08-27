@@ -107,3 +107,66 @@ ${parts.join("\n")}
 const out = path.join(ROOT, "public", "preview-panels.html");
 fs.writeFileSync(out, html);
 console.log("만들었습니다:", out);
+
+// ── 통합검색 네비게이터도 함께 ───────────────────────────
+// ⚠️ 이건 화면 위치(px)를 재야 그려집니다. 브라우저에서만 됩니다.
+// 그래서 가짜 검색 결과 페이지를 만들어 실제 스크립트를 얹습니다.
+{
+  const navJs = fs.readFileSync(path.join(ROOT, "extension", "content", "search-nav.js"), "utf8");
+  // chrome.storage를 흉내 냅니다.
+  const shim = `
+  window.chrome = { storage: { sync: { get: (k, cb) => cb({ blogId: "man_is_best" }) } } };`;
+
+  const row = (href, title, who) =>
+    `<li class="fake-item"><a href="${href}">${title}</a>
+      <div class="fake-who">${who}</div>
+      <p class="fake-desc">본문 미리보기가 여기에 들어갑니다. 실제 검색 결과처럼 몇 줄 나옵니다.</p></li>`;
+
+  const fake = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"/>
+<title>통합검색 네비게이터 미리보기</title>
+<style>
+body{margin:0;font-family:'Malgun Gothic',system-ui,sans-serif;background:#fff;color:#17181c}
+#main_pack{max-width:740px;margin:0 auto;padding:16px}
+.fake-sec{margin:0 0 30px}
+.fake-sec h2{font-size:16px;margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid #17181c}
+.fake-sec ul{list-style:none;margin:0;padding:0}
+.fake-item{padding:14px 0;border-bottom:1px solid #f0f1f4}
+.fake-item a{font-size:15px;color:#1a4ba0;text-decoration:none}
+.fake-who{font-size:12px;color:#8a8f9a;margin:4px 0}
+.fake-desc{font-size:13px;color:#5a5f6b;margin:4px 0 0;line-height:1.6}
+${css}
+</style></head><body>
+<div id="main_pack">
+  <div class="fake-sec"><h2>파워링크</h2><ul>
+    ${row("https://adcr.naver.com/adcr?x=1", "화장품 전문몰 - 오늘출발", "광고")}
+    ${row("https://adcr.naver.com/adcr?x=2", "아이라이너 최저가", "광고")}
+    ${row("https://adcr.naver.com/adcr?x=3", "메이크업 클래스 모집", "광고")}
+  </ul></div>
+  <div class="fake-sec"><h2>쇼핑</h2><ul>
+    ${row("https://smartstore.naver.com/a/products/1", "아이라이너 세트", "스마트스토어")}
+    ${row("https://shopping.naver.com/b", "펄 섀도우 팔레트", "쇼핑")}
+  </ul></div>
+  <div class="fake-sec"><h2>인플루언서</h2><ul>
+    ${row("https://in.naver.com/beauty/contents/internal/1", "카리나 메이크업 따라하기", "뷰티 인플루언서")}
+    ${row("https://in.naver.com/beauty/contents/internal/2", "아이라인 두께로 인상이 바뀝니다", "뷰티 인플루언서")}
+    ${row("https://in.naver.com/beauty/contents/internal/3", "여름 데일리 메이크업", "뷰티 인플루언서")}
+  </ul></div>
+  <div class="fake-sec"><h2>블로그</h2><ul>
+    ${row("https://blog.naver.com/someone/111", "카리나 메이크업 근황 변화", "someone")}
+    ${row("https://blog.naver.com/man_is_best/224391863205", "&quot;착해진 아이라인&quot; 카리나 메이크업 핵심은 이것", "man_is_best")}
+    ${row("https://blog.naver.com/other/333", "에스파 카리나 스모키 메이크업", "other")}
+    ${row("https://blog.naver.com/man_is_best/224300000000", "출근룩에 어울리는 아이라인", "man_is_best")}
+    ${row("https://blog.naver.com/other2/555", "메이크업 아티스트가 알려준 비법", "other2")}
+  </ul></div>
+  <div class="fake-sec"><h2>카페</h2><ul>
+    ${row("https://cafe.naver.com/beauty/1", "이 아이라이너 써보신 분?", "뷰티카페")}
+    ${row("https://cafe.naver.com/beauty/2", "펄 섀도우 추천해주세요", "뷰티카페")}
+  </ul></div>
+</div>
+<script>${shim}</script>
+<script>${navJs}</script>
+</body></html>`;
+  const navOut = path.join(ROOT, "public", "preview-searchnav.html");
+  fs.writeFileSync(navOut, fake);
+  console.log("만들었습니다:", navOut);
+}
