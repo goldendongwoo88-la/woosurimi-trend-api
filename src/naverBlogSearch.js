@@ -6,6 +6,42 @@
 
 const { createLimiter } = require("./concurrencyLimiter");
 
+/**
+ * 일별 한도를 넘겼는지 기억해 둡니다.
+ *
+ * ⚠️ 왜 필요한가 — 실제로 이런 일이 있었습니다.
+ * /api/keyword/status 는 "search: true, ready: true"라고 답했습니다.
+ * 그런데 실제로 부르면 429가 났습니다: "일별 사용량 한도가 초과하였습니다."
+ * 화면은 준비됐다고 하는데 눌러보면 빈칸이 나옵니다.
+ *
+ * 크레딧이 0인데 "AI 준비됨"이라고 답하던 것과 **똑같은 종류**입니다.
+ * 열쇠가 있는 것과 지금 쓸 수 있는 것은 다릅니다.
+ *
+ * ⚠️ 한도는 날마다 풀립니다. 그래서 한국 날짜가 바뀌면 스스로 잊습니다.
+ * 안 잊으면 자정이 지나도 "안 된다"고 말하게 됩니다.
+ */
+let quota = { hitAt: null, day: null, message: null };
+
+const kstDay = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+
+function noteQuota(status, body) {
+  if (status !== 429 && !/한도|quota|exceed/i.test(String(body))) return;
+  quota = { hitAt: Date.now(), day: kstDay(), message: String(body).slice(0, 160) };
+}
+
+/** 지금 쓸 수 있나. 열쇠가 아니라 **실제로 되는지**를 봅니다. */
+function quotaStatus() {
+  if (quota.day && quota.day !== kstDay()) quota = { hitAt: null, day: null, message: null };
+  return {
+    exhausted: !!quota.hitAt,
+    at: quota.hitAt,
+    message: quota.message,
+    note: quota.hitAt
+      ? "네이버 블로그 검색의 하루 사용량을 다 썼습니다. 한국 시간으로 자정이 지나면 다시 됩니다."
+      : null,
+  };
+}
+
 const BASE_URL = "https://naverapihub.apigw.ntruss.com";
 const PATH = "/search/v1/blog";
 
@@ -32,6 +68,7 @@ async function getBlogPostCount(keyword) {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      noteQuota(res.status, body);
       throw new Error(`블로그 검색 API 오류 (${res.status}): ${body.slice(0, 200)}`);
     }
 
@@ -76,6 +113,7 @@ async function getTodayPostCount(keyword) {
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      noteQuota(res.status, body);
       throw new Error(`블로그 검색 API 오류 (${res.status}): ${body.slice(0, 200)}`);
     }
 
@@ -91,4 +129,4 @@ async function getTodayPostCount(keyword) {
   });
 }
 
-module.exports = { getBlogPostCount, getTodayPostCount };
+module.exports = { getBlogPostCount, getTodayPostCount, quotaStatus };

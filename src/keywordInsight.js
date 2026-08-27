@@ -169,10 +169,25 @@ async function inspect(keyword, { relatedLimit = 12 } = {}) {
 
 /** 키가 있는지 화면에 알려주기 위한 상태. */
 function status() {
+  /**
+   * ⚠️ 예전엔 **열쇠가 있는지만** 봤습니다. 그래서 하루 한도를 다 쓴 날에도
+   * "search: true, ready: true" 라고 답했습니다. 화면은 준비됐다고 하는데
+   * 눌러보면 문서 수가 빈칸으로 나왔습니다.
+   *
+   * 크레딧이 0인데 "AI 준비됨"이라고 하던 것과 같은 종류입니다.
+   * **열쇠가 있는 것**과 **지금 쓸 수 있는 것**은 다릅니다.
+   */
+  const q = require("./naverBlogSearch").quotaStatus();
+  const searchUsable = hasSearchKeys() && !q.exhausted;
+
   return {
     ad: hasAdKeys(),
     search: hasSearchKeys(),
-    ready: hasAdKeys() || hasSearchKeys(),
+    // 지금 실제로 쓸 수 있나 — 화면은 이걸 봐야 합니다.
+    searchUsable,
+    quota: q,
+    ready: hasAdKeys() || searchUsable,
+    ...(q.exhausted ? { warning: q.note } : {}),
     guide: {
       ad: {
         what: "월간 검색량과 연관 키워드",

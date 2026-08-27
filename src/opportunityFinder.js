@@ -70,8 +70,22 @@ async function findOpportunities(category, limit = 20, recencyMode = "all") {
     }
   }
 
-  // 넉넉히 뽑아둔 뒤, 블로그 검색량(경쟁)까지 확인해서 최종 20개로 추립니다.
-  const candidates = Array.from(seen.values()).slice(0, limit * 3);
+  /**
+   * 넉넉히 뽑아둔 뒤, 블로그 검색량(경쟁)까지 확인해서 최종 20개로 추립니다.
+   *
+   * ⚠️ 예전엔 limit × 3 이었습니다. 20개를 보여주려고 **60개를 조회**했습니다.
+   * 후보 하나에 네이버 오픈API를 2번 부릅니다(문서 수 + 오늘 글 수).
+   * 60 × 2 = 120회입니다. 카테고리 8개면 한 번 예열에 960회입니다.
+   *
+   * 실제로 일별 한도를 넘겼습니다 — 429 "일별 사용량 한도가 초과하였습니다".
+   * 그날 문서 수와 기회 점수가 전부 빈칸이 됐습니다.
+   *
+   * ⚠️ 그렇다고 딱 20개만 조회하면 안 됩니다. 조회해봐야 경쟁이 센 걸 알고
+   * 걸러내는데, 여유분이 없으면 20개를 못 채웁니다. 1.5배로 줄입니다.
+   * 60 → 30. 절반입니다.
+   */
+  const OVERFETCH = Number(process.env.OPPORTUNITY_OVERFETCH || 1.5);
+  const candidates = Array.from(seen.values()).slice(0, Math.ceil(limit * OVERFETCH));
 
   const settled = await mapWithConcurrency(candidates, CONCURRENCY, async (c) => {
     try {
