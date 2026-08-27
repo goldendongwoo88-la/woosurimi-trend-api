@@ -17,6 +17,7 @@ const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
 const claudeClient = require("./claudeClient");
+const spend = require("./spend");   // 오늘 AI에 얼마 썼는지
 const naverBlogExport = require("./naverBlogExport");
 const postAudit = require("./postAudit");
 const keywordInsight = require("./keywordInsight");
@@ -757,8 +758,21 @@ app.get("/api/blog/writer-status", async (req, res) => {
     ready: !!c.ok,
     // 왜 안 되는지 사람 말로. 손님이 보고 뭘 해야 할지 알 수 있게.
     ...(c.ok ? {} : { reason: c.why, checkedAt: creditCache.at }),
+    // 오늘 얼마나 나갔는지도 같이 보냅니다. 이미 부르는 주소라 새로 부를 게 없습니다.
+    spend: spend.status(),
   });
 });
+
+/**
+ * 오늘 AI에 얼마 썼는지, 어느 기능이 먹었는지.
+ *
+ * ⚠️ 크레딧이 0이 됐을 때 **어디에 썼는지 알 방법이 아예 없었습니다.**
+ * 그래서 "생각보다 너무 빨리 다 쓴다"는 것만 알고 원인을 못 찾았습니다.
+ *
+ * ⚠️ 넘어도 **막지 않습니다.** 여기는 손님이 쓰는 서버라
+ * 막으면 손님 화면이 그 자리에서 멈춥니다. 알리기만 합니다.
+ */
+app.get("/api/ai-spend", (req, res) => res.json(spend.status()));
 
 // --- 인스타그램(Meta) 계정 연동 ---
 // "인스타그램 연결하기" 버튼이 이 주소로 이동하면 Meta 로그인 화면으로 리다이렉트합니다.

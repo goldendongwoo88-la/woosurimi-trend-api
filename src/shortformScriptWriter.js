@@ -199,6 +199,7 @@ ${(bodyText || "").slice(0, 2500)}
 lines는 정확히 ${sceneCount}개로 만들어 주세요.`;
 
   const raw = await callClaude({
+    feature: "쇼츠 대본",
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: userPrompt }],
     maxTokens: 1500,

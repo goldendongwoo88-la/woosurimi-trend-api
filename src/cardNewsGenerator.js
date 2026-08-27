@@ -294,6 +294,7 @@ async function callClaudeForPlan(topic, pageCount) {
     `각 장의 body는 카드 이미지 한 장에 들어갈 분량이니 너무 길게 쓰지 말고, content 장은 3~5문장, cover/outro 장은 1~2문장으로 짧게 쓰세요.`;
 
   const text = await claudeClient.callClaude({
+    feature: "카드뉴스",
     messages: [{ role: "user", content: prompt }],
     maxTokens: 2200,
     temperature: 0.85,
@@ -356,6 +357,7 @@ async function callClaudeForPlanFromUrl(pageData, pageCount) {
     `"✏️(확인 후 채워주세요)" 형태로 표시하세요. 각 장의 body는 카드 이미지 한 장 분량이니 content 장은 3~5문장, cover/outro 장은 1~2문장으로 짧게 쓰세요.`;
 
   const text = await claudeClient.callClaude({
+    feature: "카드뉴스",
     messages: [{ role: "user", content: prompt }],
     maxTokens: 2200,
     temperature: 0.85,

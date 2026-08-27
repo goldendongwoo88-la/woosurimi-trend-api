@@ -47,6 +47,7 @@ async function outline({ topic, audience, material = "", chapters = 8 } = {}) {
   }
 
   const data = await callClaude({
+    feature: "전자책",
     system:
       "한국에서 팔리는 실용 전자책의 목차를 짭니다.\n\n" +
       "⚠️ 목차가 곧 상품 설명입니다. 사는 사람은 목차만 보고 결정합니다.\n" +
@@ -218,6 +219,7 @@ async function stripUnsourcedNumbers(text, suspects, material) {
   if (!suspects.length) return { text, fixed: 0 };
   try {
     const out = await callClaude({
+      feature: "전자책",
       system:
         "글에서 근거 없는 숫자만 걷어냅니다.\n\n" +
         "⚠️ 숫자를 **다른 숫자로 바꾸지 마세요.** 그것도 지어내는 겁니다.\n" +
@@ -263,6 +265,7 @@ async function writeChapter(book, index, { material = "", words = 1800 } = {}) {
     .join("\n");
 
   return callClaude({
+    feature: "전자책",
     system:
       `"${book.title}"이라는 전자책의 한 장을 씁니다.\n\n` +
       VOICE + "\n\n" +
@@ -287,6 +290,7 @@ async function writeChapter(book, index, { material = "", words = 1800 } = {}) {
 /** 머리말 — 사는 사람이 미리보기로 보는 부분이라 여기서 승부가 납니다. */
 async function writeIntro(book, { material = "" } = {}) {
   return callClaude({
+    feature: "전자책",
     system:
       "전자책의 머리말을 씁니다.\n\n" + VOICE + "\n\n" +
       "⚠️ 머리말은 미리보기로 공개되는 부분입니다. 여기서 살지 말지가 갈립니다.\n" +

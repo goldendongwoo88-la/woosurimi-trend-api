@@ -87,6 +87,7 @@ ${patternHint(patterns)}
 JSON만 출력하세요.`;
 
   const reply = await callClaude({
+    feature: "제목 뽑기",
     system: SYSTEM,
     messages: [{ role: "user", content: user }],
     maxTokens: 3000,

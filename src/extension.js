@@ -296,6 +296,7 @@ async function repairRisks(draft, audit) {
 
 async function jsonFromClaude({ system, user, maxTokens = 6000, temperature = 0.85 }) {
   const text = await callClaude({
+    feature: "확장프로그램",
     system,
     messages: [{ role: "user", content: user }],
     maxTokens,

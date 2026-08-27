@@ -276,6 +276,7 @@ async function callClaude(topic, cat, imageCount, bench = null) {
   const timeoutMs = Math.min(150000, Math.max(45000, maxTokens * 30));
 
   const text = await claudeClient.callClaude({
+    feature: "블로그 원고",
     messages: [{ role: "user", content: prompt }],
     maxTokens,
     temperature: 0.8,
@@ -328,6 +329,7 @@ async function callClaudeFromUrl(pageData, cat) {
     `다만 원문에 없는 구체적 사실은 지어내지 말고 "✏️(확인 후 채워주세요)" 형태로 표시하세요.`;
 
   const text = await claudeClient.callClaude({
+    feature: "블로그 원고",
     messages: [{ role: "user", content: prompt }],
     maxTokens: 2000,
     temperature: 0.8,

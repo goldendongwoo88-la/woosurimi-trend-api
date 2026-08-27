@@ -207,6 +207,7 @@ async function outline({ topic, sources, angle = "" }) {
   let parsed;
   try {
     const text = await claudeClient.callClaude({
+      feature: "자료 찾기",
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
       maxTokens: 4000,

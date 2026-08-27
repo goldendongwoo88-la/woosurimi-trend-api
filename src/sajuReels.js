@@ -239,6 +239,7 @@ async function writeScript(z, topic, character) {
     : "";
 
   const data = await callClaude({
+    feature: "사주 릴스",
     system:
       "한국 사주 콘텐츠를 만드는 사람입니다. 44초짜리 세로 영상 대본을 씁니다.\n\n" +
       "⚠️ 첫 장면 3초 안에 붙잡지 못하면 사람들이 넘깁니다. 첫 줄이 전부입니다.\n" +
@@ -276,6 +277,7 @@ async function writeScript(z, topic, character) {
   if (hits.length) {
     try {
       const fixed = await callClaude({
+        feature: "사주 릴스",
         system:
           "사주 영상 대본에서 넘지 말아야 할 선을 넘은 문장만 고칩니다.\n\n" +
           "⚠️ 뜻과 말투는 그대로 두고 걸린 표현만 바꿉니다. 글을 더 좋게 만들려 하지 마세요.\n" +

@@ -80,6 +80,7 @@ ${conversationText.slice(0, 60000)}
 JSON만 출력하세요.`;
 
   const reply = await callClaude({
+    feature: "블로그 내보내기",
     system,
     messages: [{ role: "user", content: user }],
     maxTokens: 8000,

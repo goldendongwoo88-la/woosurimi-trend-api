@@ -62,6 +62,7 @@ async function generateCaptionFromImage(imagePath, topic = "", bodyContext = "")
     const userText = parts.join("\n");
 
     const raw = await callClaude({
+      feature: "사진 설명",
       system,
       messages: [
         {

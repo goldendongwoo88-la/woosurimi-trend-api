@@ -150,7 +150,7 @@ function buildSystem(system, cacheMode) {
 let lastUsage = null;
 function getLastUsage() { return lastUsage; }
 
-async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8, timeoutMs, cache } = {}) {
+async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8, timeoutMs, cache, feature } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("서버에 ANTHROPIC_API_KEY가 설정되어 있지 않습니다.");
   if (!Array.isArray(messages) || !messages.length) throw new Error("messages가 비어 있습니다.");
@@ -180,7 +180,7 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
     if (cache === "long" && longTtlWorks && /ttl|beta|cache_control/i.test(errText)) {
       longTtlWorks = false;
       console.warn("[claude] 1시간 캐시를 못 써서 5분짜리로 물러섭니다.");
-      return callClaude({ system, messages, maxTokens, temperature, timeoutMs, cache: "short" });
+      return callClaude({ system, messages, maxTokens, temperature, timeoutMs, cache: "short", feature });
     }
     throw new Error(explain(res.status, errText));
   }
@@ -201,6 +201,11 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
   lastUsage.usd = +(
     (lastUsage.input * 3 + lastUsage.output * 15 + lastUsage.cacheRead * 0.3 + lastUsage.cacheWrite * 3.75) / 1e6
   ).toFixed(4);
+
+  // ⚠️ 여기 한 군데에서 기록하면 **모든 기능이 자동으로** 잡힙니다.
+  // 기능마다 따로 적으면 언젠가 하나를 빠뜨리고, 그러면 그 기능만 값이 안 보입니다.
+  // 안 보이는 기능이 하필 제일 비싼 기능일 수 있습니다.
+  try { require("./spend").record(feature, lastUsage); } catch {}
 
   return (data.content || []).map((b) => b.text || "").join("\n");
 }

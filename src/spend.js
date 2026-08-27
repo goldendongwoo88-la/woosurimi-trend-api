@@ -1,0 +1,100 @@
+/**
+ * 오늘 AI에 얼마 썼는지 셉니다.
+ *
+ * ⚠️ 왜 필요한가
+ * 오늘 크레딧이 0이 됐는데 **왜 그렇게 됐는지 알 방법이 없었습니다.**
+ * 어느 기능이 얼마를 쓰는지, 오늘 얼마나 나갔는지 아무 데도 안 남았습니다.
+ * 그래서 사장님이 "생각보다 너무 빨리 다 쓴다"고만 느끼셨습니다.
+ *
+ * ⚠️ 다른 대화창(증권사 에이전트)은 **넘으면 아예 막는** 방식을 씁니다.
+ * 거기는 배치라 막아도 사람이 안 기다립니다.
+ * 여기는 **손님이 쓰는 서버**입니다. 막으면 손님 화면이 그 자리에서 멈춥니다.
+ * 그래서 여기는 **경고만** 합니다. 막을지 말지는 사장님이 정하실 일입니다.
+ *
+ * ⚠️ 무료 서버는 배포할 때마다 파일이 지워집니다.
+ * 그래서 이 기록도 사라집니다. 그건 감수합니다 — 정확한 회계가 아니라
+ * "오늘 많이 나갔나"를 보려는 것이니까요. 정확한 값은 Anthropic 콘솔에 있습니다.
+ */
+
+const fs = require("fs");
+const path = require("path");
+
+const DIR = path.join(__dirname, "..", "data");
+const FILE = path.join(DIR, "spend.json");
+
+/** 하루 얼마를 넘으면 알릴지. 사장님이 $20 넣으셨으니 하루 $1이면 20일 갑니다. */
+const DAILY_WARN_USD = Number(process.env.AI_DAILY_WARN_USD || 1);
+const KRW = 1380;
+
+let today = { day: "", usd: 0, calls: 0, byFeature: {} };
+
+function dayStr() {
+  // 한국 시간으로 하루를 끊습니다. UTC로 하면 오전 9시에 초기화됩니다.
+  return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+}
+
+function load() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(FILE, "utf8"));
+    if (raw.day === dayStr()) today = raw;
+    else today = { day: dayStr(), usd: 0, calls: 0, byFeature: {} };
+  } catch {
+    today = { day: dayStr(), usd: 0, calls: 0, byFeature: {} };
+  }
+}
+
+let timer = null;
+function save() {
+  if (timer) return;
+  timer = setTimeout(() => {
+    timer = null;
+    try {
+      fs.mkdirSync(DIR, { recursive: true });
+      fs.writeFileSync(FILE, JSON.stringify(today));
+    } catch {}
+  }, 2000);
+  if (timer.unref) timer.unref();
+}
+
+load();
+
+/**
+ * 한 번 부른 값을 기록합니다.
+ * @param {string} feature 어느 기능인지 ("draft", "title", "emphasis"…)
+ * @param {{usd:number}} usage claudeClient.getLastUsage()
+ */
+function record(feature, usage) {
+  if (!usage || !usage.usd) return;
+  if (today.day !== dayStr()) load();   // 날이 바뀌었으면 새로 시작
+  today.usd = +(today.usd + usage.usd).toFixed(4);
+  today.calls++;
+  const f = feature || "기타";
+  today.byFeature[f] = +((today.byFeature[f] || 0) + usage.usd).toFixed(4);
+  save();
+}
+
+/** 지금 상태 — 화면과 관리자 페이지에서 씁니다. */
+function status() {
+  if (today.day !== dayStr()) load();
+  const krw = Math.round(today.usd * KRW);
+  const over = today.usd >= DAILY_WARN_USD;
+  return {
+    day: today.day,
+    usd: +today.usd.toFixed(4),
+    krw,
+    calls: today.calls,
+    limitUsd: DAILY_WARN_USD,
+    limitKrw: Math.round(DAILY_WARN_USD * KRW),
+    over,
+    // ⚠️ 막지 않습니다. 손님 서버라 막으면 그 자리에서 멈춥니다.
+    warning: over
+      ? `오늘 AI에 ${krw.toLocaleString()}원 썼습니다. 정해둔 하루 기준(${Math.round(DAILY_WARN_USD * KRW).toLocaleString()}원)을 넘었습니다.`
+      : null,
+    byFeature: Object.entries(today.byFeature)
+      .map(([k, v]) => ({ feature: k, usd: +v.toFixed(4), krw: Math.round(v * KRW) }))
+      .sort((a, b) => b.usd - a.usd),
+    note: "무료 서버는 배포할 때마다 이 기록이 지워집니다. 정확한 값은 Anthropic 콘솔에 있습니다.",
+  };
+}
+
+module.exports = { record, status, DAILY_WARN_USD };

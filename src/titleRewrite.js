@@ -97,6 +97,7 @@ async function rewrite({ title, body = "", count = 5 }) {
   let parsed;
   try {
     const text = await claudeClient.callClaude({
+      feature: "제목 고치기",
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
       maxTokens: 1500,

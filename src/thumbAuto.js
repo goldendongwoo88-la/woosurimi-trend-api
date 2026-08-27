@@ -273,6 +273,7 @@ ${ask}`,
   });
 
   const raw = await callClaude({
+    feature: "썸네일 자동",
     system: SYSTEM,
     messages: [{ role: "user", content }],
     maxTokens: 1600,

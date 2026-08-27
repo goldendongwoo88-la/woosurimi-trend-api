@@ -389,9 +389,31 @@
       const res = await fetch("/api/blog/writer-status");
       const data = await res.json();
       const el = document.getElementById("writerStatusNote");
-      el.innerHTML = data.ready
-        ? `<div class="note" style="margin-top:0;">✅ Claude API(${escapeHtml(data.model)})가 서버에 설정되어 있어요 — 모든 챗봇 카드를 바로 쓸 수 있습니다.</div>`
-        : `<div class="note" style="margin-top:0;">⚠️ 서버에 ANTHROPIC_API_KEY가 아직 설정되지 않았어요 — 모든 카드는 키 등록 후에 쓸 수 있어요. README를 참고해 주세요.</div>`;
+
+      // ⚠️ 예전에는 안 될 때 무조건 "키가 없어요"라고 했습니다.
+      // 그런데 실제로는 **크레딧이 떨어져서** 안 되는 경우가 더 많습니다.
+      // 키를 아무리 확인해봐야 안 풀립니다. 서버가 진짜 이유(reason)를 보내주니 그걸 씁니다.
+      const why = data.reason
+        ? escapeHtml(data.reason)
+        : "서버에 ANTHROPIC_API_KEY가 아직 설정되지 않았어요. README를 참고해 주세요.";
+
+      // 오늘 얼마 나갔는지. 크레딧이 왜 빨리 주는지 보려면 이게 보여야 합니다.
+      const s = data.spend;
+      let money = "";
+      if (s && s.calls > 0) {
+        const top = s.byFeature.slice(0, 3).map((f) => `${escapeHtml(f.feature)} ${f.krw.toLocaleString()}원`).join(" · ");
+        money =
+          `<div class="note" style="margin-top:6px;${s.over ? "border-color:#e0a800;" : ""}">` +
+          `${s.over ? "⚠️" : "💰"} 오늘 AI에 <b>${s.krw.toLocaleString()}원</b> 썼어요 (${s.calls}번)` +
+          (top ? `<br><span style="opacity:.75;font-size:.92em;">${top}</span>` : "") +
+          (s.over ? `<br><span style="opacity:.75;font-size:.92em;">하루 기준 ${s.limitKrw.toLocaleString()}원을 넘었습니다. 막지는 않았어요.</span>` : "") +
+          `</div>`;
+      }
+
+      el.innerHTML =
+        (data.ready
+          ? `<div class="note" style="margin-top:0;">✅ Claude API(${escapeHtml(data.model)})가 서버에 설정되어 있어요 — 모든 챗봇 카드를 바로 쓸 수 있습니다.</div>`
+          : `<div class="note" style="margin-top:0;">⚠️ ${why}</div>`) + money;
     } catch (err) {
       /* 무시 */
     }

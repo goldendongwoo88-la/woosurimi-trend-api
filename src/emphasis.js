@@ -181,6 +181,7 @@ async function plan({ title = "", body = "" } = {}) {
   let parsed;
   try {
     const raw = await callClaude({
+      feature: "강조 표시",
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
       maxTokens: 3000,

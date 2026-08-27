@@ -81,6 +81,7 @@ async function fromPhotos(imagePaths, { note = "", product = "", affiliate = tru
   }
 
   const data = await callClaude({
+    feature: "스레드",
     system:
       "스레드(Threads)에 올릴 짧은 글을 쓰는 사람입니다.\n\n" +
       STYLE + "\n\n" +
@@ -142,6 +143,7 @@ async function fromProduct({ product, note = "", affiliate = true } = {}) {
   }
 
   const data = await callClaude({
+    feature: "스레드",
     system:
       "스레드(Threads)에 올릴 짧은 글을 쓰는 사람입니다.\n\n" +
       STYLE + "\n\n" +

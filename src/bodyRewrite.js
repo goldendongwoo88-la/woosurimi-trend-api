@@ -107,6 +107,7 @@ async function rewrite({ body, title = "" }) {
   let parsed;
   try {
     const text = await claudeClient.callClaude({
+      feature: "본문 다듬기",
       system: SYSTEM,
       messages: [{ role: "user", content: prompt }],
       // 원문 길이의 두 배쯤은 나올 수 있게 잡습니다. 모자라면 잘립니다.
@@ -216,6 +217,7 @@ async function fillMissing({ body, title = "", missing = [], facts = "" }) {
   let parsed;
   try {
     const text = await claudeClient.callClaude({
+      feature: "본문 다듬기",
       system,
       messages: [{ role: "user", content: prompt }],
       maxTokens: Math.min(8000, Math.max(3000, Math.round(src.length * 2.4))),

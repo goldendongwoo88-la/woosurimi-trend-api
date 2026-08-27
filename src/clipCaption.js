@@ -38,6 +38,7 @@ async function make({ topic, lines = [], product = "", place = "" } = {}) {
   }
 
   const data = await callClaude({
+    feature: "영상 자막",
     system:
       "네이버 클립에 올릴 문구를 씁니다.\n\n" +
       "⚠️ 인스타 릴스와 다릅니다. 클립은 **네이버 검색과 연결**됩니다.\n" +

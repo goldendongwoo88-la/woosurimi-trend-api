@@ -136,6 +136,7 @@ async function pickMoments(cues, { count = 4, topic = "" } = {}) {
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
   const data = await callClaude({
+    feature: "긴영상→쇼츠",
     system:
       "긴 영상에서 쇼츠로 만들 구간을 고릅니다.\n\n" +
       "⚠️ 쇼츠는 **첫 3초**에 붙잡지 못하면 넘어갑니다. 그러니 시작 지점이 중요합니다.\n" +
