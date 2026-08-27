@@ -24,6 +24,7 @@ const research = require("./research");
 const thumbnail = require("./thumbnail");
 const lineBreak = require("./lineBreak");
 const spellCheck = require("./spellCheck");
+const thumbAuto = require("./thumbAuto");
 
 // 썸네일용 사진 받기.
 // ⚠️ 디스크에 안 씁니다(memoryStorage). 만들어서 바로 돌려주면 끝인 사진을
@@ -33,6 +34,12 @@ const multer = require("multer");
 const thumbUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024, files: 2 },
+});
+
+// 자동 고르기용 — 본문 사진을 여러 장 받습니다.
+const thumbAutoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 12 },
 });
 
 // ── 쿠키 ──────────────────────────────────────────────────
@@ -659,6 +666,86 @@ module.exports = function attachSaas(app) {
       }
     }
   );
+
+  // ── 홈판 썸네일 · 자동 ──────────────────────────────────
+  //
+  // 수동 버전(/api/thumb)은 사장님이 사진 두 장을 직접 고릅니다.
+  // 여기서는 본문에 이미 넣으신 사진들을 전부 받아서 AI가 고릅니다.
+  //
+  // 사진은 두 가지로 받습니다.
+  //   imageUrls — 크롬 확장에서 씁니다. 글쓰기 창의 사진은 이미 네이버에
+  //               올라가 있어서 주소만 넘기면 됩니다. 다시 올릴 필요가 없습니다.
+  //   파일       — 화면에서 씁니다.
+  //
+  // ⚠️ AI를 쓰니 크레딧을 깎습니다. 사진 12장을 읽는 값이 나갑니다.
+  app.post(
+    "/api/thumb/auto",
+    usage.creditGate("thumbAuto", accounts),
+    thumbAutoUpload.array("photos", 12),
+    async (req, res) => {
+      const b = req.body || {};
+      const title = String(b.title || "");
+      const body = String(b.body || "");
+      const size = String(b.size || "square");
+      const theme = String(b.theme || "black");
+      const force = b.force === "single" || b.force === "beforeAfter" ? b.force : null;
+
+      let buffers = (req.files || []).map((f) => f.buffer);
+
+      // 주소로 넘어온 경우 — 우리 서버가 받아옵니다.
+      if (!buffers.length && b.imageUrls) {
+        let urls;
+        try {
+          urls = typeof b.imageUrls === "string" ? JSON.parse(b.imageUrls) : b.imageUrls;
+        } catch {
+          return res.status(400).json({ error: "사진 주소 목록을 읽지 못했습니다." });
+        }
+        if (!Array.isArray(urls) || !urls.length) {
+          return res.status(400).json({ error: "본문에서 사진을 찾지 못했습니다. 사진을 먼저 넣어주세요." });
+        }
+        const bad = urls.filter((u) => !thumbAuto.isAllowedUrl(u));
+        if (bad.length === urls.length) {
+          return res.status(400).json({
+            error: "네이버에 올라간 사진만 받아올 수 있습니다. 사진을 본문에 넣으면 자동으로 올라갑니다.",
+          });
+        }
+        const good = urls.filter((u) => thumbAuto.isAllowedUrl(u)).slice(0, thumbAuto.MAX_PHOTOS);
+        // ⚠️ 한꺼번에 12장을 부르면 네이버가 막습니다. 실패한 건 조용히 빼고 갑니다.
+        const got = await Promise.all(
+          good.map((u) => thumbAuto.fetchImage(u).catch(() => null))
+        );
+        buffers = got.filter(Boolean);
+        if (!buffers.length) {
+          return res.status(400).json({ error: "사진을 받아오지 못했습니다. 잠시 뒤에 다시 해주세요." });
+        }
+      }
+
+      if (!buffers.length) {
+        return res.status(400).json({ error: "사진을 올려주세요." });
+      }
+
+      try {
+        const r = await thumbAuto.run(buffers, { title, body, size, theme, force });
+        res.json({
+          ok: true,
+          plan: r.plan,
+          ba: r.ba,
+          considered: r.considered,
+          // 사진은 본문에 JSON으로 실어야 해서 base64로 보냅니다.
+          image: "data:image/jpeg;base64," + r.jpeg.toString("base64"),
+          usage: req.usage,
+        });
+      } catch (e) {
+        res.status(502).json({ error: e.message || "자동으로 고르지 못했습니다." });
+      }
+    }
+  );
+
+  // 제목만 보고 전후 비교인지 — AI를 안 쓰니 공짜입니다.
+  app.post("/api/thumb/mode", (req, res) => {
+    const { title, body } = req.body || {};
+    res.json({ ok: true, ...thumbAuto.looksBeforeAfter(title || "", body || "") });
+  });
 
   // ── 줄바꿈 ─────────────────────────────────────────────
   //

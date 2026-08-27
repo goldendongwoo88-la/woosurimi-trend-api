@@ -190,6 +190,42 @@
 #ws-tools-panel .ws-topics { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 #ws-tools-panel .ws-topics .ws-apply { margin-top: 0; font-size: 11.5px; padding: 4px 9px; }
 
+/* 결과를 덩어리로 나눠 보여주기
+   ⚠️ 사장님이 "이게 무슨 말인지 모르겠다"고 하셨습니다. 숫자·경고·목록·안내가
+   라벨 없이 붙어 있어서, 목록을 보고 "넣는다는 건가 지운다는 건가" 하시게 됐습니다.
+   덩어리마다 번호와 제목을 붙이고, **자동인지 안내인지**를 딱지로 표시합니다. */
+#ws-tools-panel .ws-sec {
+  border: 1px solid #e6e8ed; border-radius: 9px; padding: 11px 12px; margin: 10px 0;
+  background: #fcfcfd;
+}
+#ws-tools-panel .ws-sec.warn-sec { border-color: #f0c987; background: #fffaf1; }
+#ws-tools-panel .ws-sec-h {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 700; color: #17181c; margin-bottom: 5px;
+}
+#ws-tools-panel .ws-sec-tag {
+  font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; letter-spacing: .01em;
+}
+/* 딱지 색이 곧 뜻입니다 — 초록은 이미 됐다, 주황은 봐주셔야 한다, 회색은 안내일 뿐 */
+#ws-tools-panel .ws-sec-tag.auto  { background: #e8f6ee; color: #0b6b3c; }
+#ws-tools-panel .ws-sec-tag.ok    { background: #e8f6ee; color: #0b6b3c; }
+#ws-tools-panel .ws-sec-tag.check { background: #fde9c8; color: #8a5a10; }
+#ws-tools-panel .ws-sec-tag.note  { background: #eef0f3; color: #5a5f6b; }
+#ws-tools-panel .ws-sec-p {
+  font-size: 12px; color: #5a5f6b; line-height: 1.65; margin: 0 0 8px;
+}
+#ws-tools-panel .ws-sec-p b { color: #17181c; }
+
+#ws-tools-panel .ws-spot {
+  border-left: 3px solid #e0a63f; padding: 7px 0 7px 10px; margin-bottom: 8px;
+}
+#ws-tools-panel .ws-spot:last-child { margin-bottom: 0; }
+#ws-tools-panel .ws-spot-w { font-size: 13px; font-weight: 700; color: #8a5a10; margin-bottom: 3px; }
+#ws-tools-panel .ws-spot-c { font-size: 12px; color: #5a5f6b; line-height: 1.7; }
+
+#ws-tools-panel .ws-sug { margin: 0; padding-left: 17px; font-size: 12.5px; line-height: 1.75; color: #5a5f6b; }
+#ws-tools-panel .ws-sug li { margin-bottom: 3px; }
+
 
 
 /* ── 글쓰기 창 아래 도구 막대 ─────────────────────────────

@@ -402,7 +402,7 @@
    * 넣는 방법을 여러 개 시도하되, 매번 제목을 되읽어 실제로 바뀌었는지 봅니다.
    * 다 실패하면 성공한 척하지 않고 복사해 드리고 그렇게 말합니다.
    */
-  function applyTitle(text) {
+  async function applyTitle(text) {
     const findTitleEl = () =>
       document.querySelector(".se-documentTitle .se-text-paragraph") ||
       document.querySelector(".se-documentTitle [contenteditable='true']") ||
@@ -416,8 +416,8 @@
     }
 
     const want = String(text).trim();
-    // 실제로 바뀌었는지 확인하는 유일한 방법 — 다시 읽어보기.
-    const changed = () => getTitle().replace(/\s+/g, "") === want.replace(/\s+/g, "");
+    const original = getTitle();
+    const norm = (s) => String(s || "").replace(/[\s​]/g, "");
 
     // 옛 에디터는 그냥 input입니다. 이건 확실히 먹습니다.
     if ("value" in el && el.tagName === "INPUT") {
@@ -429,73 +429,84 @@
     }
 
     /**
-     * ⚠️ 제목이 통째로 사라진 적이 있습니다. 원인은 제 코드였습니다.
+     * ⚠️ 제목이 통째로 사라진 걸 두 번 고쳤는데 두 번 다 못 고쳤습니다.
+     * 세 번째입니다. 이번엔 원인을 제대로 찾았습니다.
      *
-     * 전체 선택을 먼저 하고 넣는 방식이었는데, 넣기가 실패하면
-     * **선택된 글자만 지워지고 끝납니다.** 편집기가 붙여넣기를 안 받아주면
-     * 제목이 빈칸이 되고, 사장님은 되돌릴 방법도 없습니다.
+     * 스마트에디터의 제목은 이렇게 생겼습니다:
+     *   <p class="se-text-paragraph"><span class="se-ff-... se-fs-...">글자</span></p>
      *
-     * 그래서 원래 제목을 먼저 손에 쥐고 시작합니다.
-     * 시도해서 안 되면 **원래대로 되돌려놓고** 다음 방법으로 넘어갑니다.
-     * 다 실패해도 제목은 처음 그대로 남습니다. 최소한 잃지는 않습니다.
+     * 제가 `el.textContent = 새제목`을 썼습니다. 이러면 **안에 있던 span이
+     * 통째로 날아가고** 맨 글자만 남습니다. 에디터는 그 span 구조를 기준으로
+     * 문서를 관리하기 때문에, 구조가 깨진 걸 발견하면 자기 모델로 되돌립니다.
+     * 그 과정에서 제목이 빈칸이 됩니다.
+     *
+     * 게다가 저는 **넣자마자 바로** 확인했습니다. 그때는 글자가 들어가 있으니
+     * "성공"으로 보고 창을 닫았습니다. 에디터가 되돌리는 건 그 다음 순간입니다.
+     * 그래서 오류도 안 뜨고 제목만 사라졌습니다. 사장님이 보신 게 이것입니다.
+     *
+     * 두 가지를 고쳤습니다.
+     *   1) textContent를 아예 안 씁니다. execCommand("insertText")만 씁니다.
+     *      이건 사람이 타자 친 것과 같은 경로라 에디터가 스스로 span을 만듭니다.
+     *   2) 확인을 **기다렸다가** 합니다. 에디터가 정리할 시간을 주고 나서 봅니다.
      */
-    const original = getTitle();
+    // rAF는 안 씁니다 — 안 보이는 탭에서는 영원히 안 옵니다(settleEditor 설명 참고).
+    const settle = settleEditor;
 
-    const selectAll = () => {
-      el.focus();
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-    };
+    /** 사람이 타자 친 것과 같은 경로로 넣습니다. (공용 함수 setEditableText 참고) */
+    const typeIn = (value) => setEditableText(el, value);
 
-    // 되돌리기 — 어떤 방법이 실패해 빈칸이 됐을 때 씁니다.
-    const restore = () => {
+    /** 붙여넣기 흉내 — execCommand가 막힌 브라우저용. */
+    function pasteIn(value) {
       try {
-        if (getTitle() === original) return;
-        el.textContent = original;
-        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: original }));
-      } catch {}
-    };
-
-    // ⚠️ textContent를 맨 앞에 둡니다. 이건 **지우고 넣는 게 아니라 한 번에 바꾸는**
-    // 방식이라 중간에 실패해도 빈칸이 안 됩니다. 편집기가 안 받아줄 수는 있지만
-    // 그때는 원래 값이 그대로 남습니다. 안전한 것부터 시도합니다.
-    const ways = [
-      () => {
         el.focus();
-        el.textContent = want;
-        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: want }));
-      },
-      () => { selectAll(); document.execCommand("insertText", false, want); },
-      () => {
-        selectAll();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
         const dt = new DataTransfer();
-        dt.setData("text/plain", want);
+        dt.setData("text/plain", value);
         el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-      },
-    ];
+        return true;
+      } catch {
+        return false;
+      }
+    }
 
-    for (const way of ways) {
-      try { way(); } catch {}
-      if (changed()) {
+    for (const way of [typeIn, pasteIn]) {
+      way(want);
+      // ⚠️ 여기가 핵심입니다. 바로 보지 말고 에디터가 정리할 때까지 기다립니다.
+      await settle();
+      if (norm(getTitle()) === norm(want)) {
         panel.hidden = true;
         scheduleCount();
         return;
       }
-      // 안 됐으면 다음 방법으로 넘어가기 전에 원래대로 돌려놓습니다.
-      restore();
+      // 안 됐습니다. 빈칸이 됐으면 원래 제목을 되돌려 놓고 다음 방법으로.
+      if (!norm(getTitle())) {
+        typeIn(original);
+        await settle();
+      }
     }
 
     // 여기까지 왔으면 정말 안 된 겁니다. 된 척하지 않습니다.
-    restore();
+    // 마지막으로 한 번 더 — 지금 비어 있으면 무슨 일이 있어도 되돌립니다.
+    if (!norm(getTitle()) && original) {
+      typeIn(original);
+      await settle();
+    }
+    const lost = !norm(getTitle()) && !!original;
+
     navigator.clipboard.writeText(want).catch(() => {});
     showPanel(`<h4>홈판 제목</h4>
-      <div class="ws-row warn">제목을 자동으로 바꾸지 못했습니다.
-        <b>원래 제목은 그대로 뒀습니다.</b> 새 제목을 복사해 뒀으니
-        제목 칸을 클릭하고 전체 선택(Ctrl+A) 후 Ctrl+V를 눌러주세요.</div>
-      <div class="ws-preview"><pre>${esc(want)}</pre></div>`);
+      <div class="ws-row ${lost ? "bad" : "warn"}">제목을 자동으로 바꾸지 못했습니다.
+        ${lost
+          ? "<b>원래 제목도 되돌리지 못했습니다.</b> 아래에 원래 제목을 적어뒀으니 다시 넣어주세요."
+          : "<b>원래 제목은 그대로 뒀습니다.</b>"}
+        새 제목을 복사해 뒀으니 제목 칸을 클릭하고 전체 선택(Ctrl+A) 후 Ctrl+V를 눌러주세요.</div>
+      <div class="ws-preview"><pre>${esc(want)}</pre></div>
+      ${lost ? `<div style="font-size:11.5px;opacity:.8;margin-top:6px">원래 제목</div>
+        <div class="ws-preview"><pre>${esc(original)}</pre></div>` : ""}`);
   }
 
   // ── 제목이 약속한 내용을 본문에 채우기 ────────────────
@@ -623,33 +634,95 @@
       const d = await server("/api/body-rewrite", { body, title: getTitle() });
       lastBody = d.body;
       const keep = Math.round((d.after.chars / d.before.chars) * 100);
+
+      /**
+       * ⚠️ 이 화면을 다시 만든 이유
+       * 사장님이 "이게 무슨 말인지 이해가 안 된다"고 하셨습니다. 맞는 말씀입니다.
+       * 숫자, 경고, 목록, 안내가 라벨 없이 그냥 붙어 있었습니다. 목록을 보고
+       * "이걸 넣는다는 건가, 지운다는 건가" 하시게 만든 건 제 잘못입니다.
+       *
+       * 이제 세 덩어리에 번호와 제목을 붙이고, **무엇이 자동이고 무엇이 안내인지**
+       * 각 덩어리 첫 줄에 적습니다.
+       */
+
+      // 새로 쓴 말이 어느 문장에 있는지 찾아둡니다 — "확인하세요"만으로는 못 찾습니다.
+      const spots = (d.invented || []).map((w) => {
+        const at = d.body.indexOf(w);
+        if (at < 0) return { w, ctx: "" };
+        const from = Math.max(0, at - 30);
+        const to = Math.min(d.body.length, at + w.length + 30);
+        return {
+          w,
+          ctx: (from ? "…" : "") + d.body.slice(from, at) +
+               `<b style="color:#f87171">${esc(w)}</b>` +
+               d.body.slice(at + w.length, to) + (to < d.body.length ? "…" : ""),
+        };
+      });
+
       showPanel(`
-        <h4>홈판 본문</h4>
+        <h4>홈판 본문 — 다 됐습니다</h4>
+
         <div class="ws-stats">
           <span>소제목 <b>${d.before.subheads}</b> → <b class="ws-up">${d.after.subheads}</b>개</span>
-          <span>사진자리 <b class="ws-up">${d.after.photoSlots}</b>곳</span>
-          <span>분량 <b>${keep}%</b> 유지</span>
+          <span>사진 자리 <b class="ws-up">${d.after.photoSlots}</b>곳</span>
+          <span>분량 <b>${keep}%</b></span>
         </div>
-        ${d.invented.length ? `<div class="ws-row bad">
-          ⚠ 원문에 없던 말이 섞였습니다: <b>${esc(d.invented.join(", "))}</b><br>
-          붙여넣기 전에 그 부분을 꼭 확인하세요.</div>` : ""}
-        <div class="ws-subheads">
-          ${d.subheads.map((s, i) => `<div><b>${i + 1}</b> ${esc(s)}</div>`).join("")}
+
+        <button class="ws-apply" id="ws-copy-body" style="margin:12px 0 4px">
+          다듬은 본문 복사하기
+        </button>
+        <p class="ws-dim" style="margin:0 0 14px">
+          복사한 다음 본문을 <b>전체 선택(Ctrl+A) 후 Ctrl+V</b> 하시면 됩니다.
+          에디터를 제가 자동으로 바꾸지는 않습니다 — 한 번 덮어쓰면 되돌릴 수가 없어서요.
+        </p>
+
+        <div class="ws-sec">
+          <div class="ws-sec-h">1 · 새 소제목 ${d.subheads.length}개
+            <span class="ws-sec-tag auto">넣어뒀습니다</span></div>
+          <p class="ws-sec-p">아래 문장들이 <b>이미 다듬은 본문 안에 들어가 있습니다.</b>
+            글 사이사이에 소제목으로 놓였습니다. 따로 하실 일은 없습니다.</p>
+          <div class="ws-subheads">
+            ${d.subheads.map((s, i) => `<div><b>${i + 1}</b> ${esc(s)}</div>`).join("")}
+          </div>
         </div>
-        ${d.suggestions && d.suggestions.length ? `<div class="ws-row good">
-          <b>더 쓰면 좋을 것</b><br>${d.suggestions.map(esc).join("<br>")}</div>` : ""}
-        <button class="ws-apply" id="ws-copy-body">다듬은 본문 복사</button>
-        <details class="ws-preview"><summary>다듬은 본문 보기</summary><pre>${esc(d.body)}</pre></details>
+
+        ${spots.length ? `
+        <div class="ws-sec warn-sec">
+          <div class="ws-sec-h">2 · 사실인지 봐주실 곳 ${spots.length}군데
+            <span class="ws-sec-tag check">확인 필요</span></div>
+          <p class="ws-sec-p">AI가 <b>원래 본문에 없던 말</b>을 새로 썼습니다.
+            지어낸 것일 수 있으니 맞는 내용인지 보시고, 아니면 그 부분만 지우세요.</p>
+          ${spots.map((s) => `
+            <div class="ws-spot">
+              <div class="ws-spot-w">"${esc(s.w)}"</div>
+              ${s.ctx ? `<div class="ws-spot-c">${s.ctx}</div>` : ""}
+            </div>`).join("")}
+        </div>` : `
+        <div class="ws-sec">
+          <div class="ws-sec-h">2 · 사실 확인
+            <span class="ws-sec-tag ok">이상 없음</span></div>
+          <p class="ws-sec-p">원래 본문에 없던 말이 섞이지 않았습니다.</p>
+        </div>`}
+
+        ${d.suggestions && d.suggestions.length ? `
+        <div class="ws-sec">
+          <div class="ws-sec-h">3 · 더 쓰시면 좋을 것
+            <span class="ws-sec-tag note">안내만</span></div>
+          <p class="ws-sec-p"><b>자동으로 안 들어갑니다.</b> 아래는 "이런 내용이 더 있으면
+            글이 좋아진다"는 제안입니다. 쓰실지는 사장님이 정하세요.</p>
+          <ul class="ws-sug">${d.suggestions.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+        </div>` : ""}
+
+        <details class="ws-preview" style="margin-top:12px">
+          <summary>다듬은 본문 전체 보기</summary><pre>${esc(d.body)}</pre></details>
         <p class="ws-dim">${esc(d.note)}</p>
-        <p class="ws-dim"><b>에디터를 자동으로 바꾸지 않습니다.</b>
-          복사해서 직접 붙여넣으세요. 한 번 덮어쓰면 되돌릴 수가 없어서요.
-          [사진: …] 자리에는 실제 사진을 넣으시면 됩니다.</p>
+        <p class="ws-dim"><b>[사진: …]</b> 라고 적힌 자리에는 실제 사진을 넣으시면 됩니다.</p>
       `);
       const btn = panel.querySelector("#ws-copy-body");
       if (btn) btn.addEventListener("click", () => {
         navigator.clipboard.writeText(lastBody).then(() => {
-          btn.textContent = "복사됐습니다";
-          setTimeout(() => (btn.textContent = "다듬은 본문 복사"), 1200);
+          btn.textContent = "복사됐습니다 — 이제 본문에 Ctrl+V 하세요";
+          setTimeout(() => (btn.textContent = "다듬은 본문 복사하기"), 2600);
         }).catch(() => { btn.textContent = "복사에 실패했습니다"; });
       });
     } catch (e) {
@@ -1016,52 +1089,29 @@
       <button class="ws-mini" id="ws-lb-all" style="margin-top:10px">전부 고치기 (${long.length}개)</button>
       <button class="ws-mini" id="ws-lb-copy" style="margin-top:10px">고친 본문 복사</button>`);
 
-    // ⚠️ 한 문단이 실패해도 나머지는 살아야 합니다. 그리고 실패한 문단은
-    // **원래대로 되돌려야** 합니다. 제목에서 이걸 안 해서 사장님 제목을 날렸습니다.
-    function fixOne(L) {
-      const el = L.node;
-      const original = el.innerHTML;
-      const want = L.pieces.join("\n");
-      const sel = window.getSelection();
-      const range = document.createRange();
-      try {
-        range.selectNodeContents(el);
-        sel.removeAllRanges();
-        sel.addRange(range);
-        el.focus && el.focus();
-        let done = false;
-        try { done = document.execCommand("insertText", false, want); } catch {}
-        // 넣은 뒤에 정말 나뉘었는지, 글자가 안 사라졌는지 확인합니다.
-        const after = (getEditorRoot().innerText || "");
-        const okChars = after.replace(INVIS, "").includes(L.pieces[0].replace(INVIS, ""));
-        if (done && okChars) return true;
-        el.innerHTML = original;
-        return false;
-      } catch {
-        el.innerHTML = original;
-        return false;
-      }
-    }
+    // 한 문단이 실패해도 나머지는 살아야 합니다. 실패한 문단은 원문 그대로 둡니다.
+    // ⚠️ 넣는 일과 확인하는 일은 replaceParagraph에 맡깁니다.
+    // 예전에 여기서 직접 넣고 **바로** 확인했는데, 그러면 에디터가 되돌리기 전이라
+    // 항상 "성공"으로 보입니다. 제목을 그렇게 날려먹었습니다.
+    const fixOne = (L) => replaceParagraph(L.node, L.pieces.join("\n"), { expect: L.pieces[0] });
 
     panel.querySelectorAll("[data-lbfix]").forEach((b) => {
-      b.addEventListener("click", () => {
+      b.addEventListener("click", async () => {
         const L = long[+b.dataset.lbfix];
-        if (fixOne(L)) {
-          b.textContent = "고쳤습니다";
-          b.disabled = true;
-          scheduleCount();
-        } else {
-          b.textContent = "편집기가 안 받네요 — 원문 그대로 뒀습니다";
-          b.disabled = true;
-        }
+        b.disabled = true;
+        b.textContent = "고치는 중…";
+        const done = await fixOne(L);
+        b.textContent = done ? "고쳤습니다" : "편집기가 안 받네요 — 원문 그대로 뒀습니다";
+        if (done) scheduleCount();
       });
     });
 
-    panel.querySelector("#ws-lb-all").addEventListener("click", (e) => {
+    panel.querySelector("#ws-lb-all").addEventListener("click", async (e) => {
       // 뒤에서부터 고칩니다. 앞에서 고치면 뒤 문단의 자리가 밀립니다.
-      let done = 0, failed = 0;
-      for (let i = long.length - 1; i >= 0; i--) (fixOne(long[i]) ? done++ : failed++);
       e.target.disabled = true;
+      e.target.textContent = "고치는 중…";
+      let done = 0, failed = 0;
+      for (let i = long.length - 1; i >= 0; i--) ((await fixOne(long[i])) ? done++ : failed++);
       e.target.textContent = failed
         ? `${done}개 고쳤습니다 · ${failed}개는 원문 그대로 뒀습니다`
         : `${done}개 전부 고쳤습니다`;
@@ -1121,8 +1171,8 @@
         </p>`);
 
       // ⚠️ 문단 하나씩 바꿉니다. 편집기 전체를 갈아끼우면 사진·링크가 다 날아갑니다.
-      // 그리고 실패하면 그 문단만 원래대로 돌려놓습니다.
-      function applyFix(found, suggest) {
+      // 넣고 확인하고 실패하면 되돌리는 일은 replaceParagraph에 맡깁니다.
+      async function applyFix(found, suggest) {
         const root = getEditorRoot();
         if (!root) return false;
         const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
@@ -1131,42 +1181,31 @@
         );
         let done = false;
         for (const n of nodes) {
-          const t = n.innerText || "";
+          const t = (n.innerText || "").replace(/​/g, "");
           if (!t.includes(found)) continue;
-          const original = n.innerHTML;
-          try {
-            const range = document.createRange();
-            range.selectNodeContents(n);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-            n.focus && n.focus();
-            const want = t.replace(/​/g, "").split(found).join(suggest);
-            let put = false;
-            try { put = document.execCommand("insertText", false, want); } catch {}
-            if (put && (n.innerText || "").includes(suggest)) { done = true; continue; }
-            n.innerHTML = original;
-          } catch {
-            n.innerHTML = original;
-          }
+          const want = t.split(found).join(suggest);
+          if (await replaceParagraph(n, want, { expect: suggest })) done = true;
         }
         return done;
       }
 
       panel.querySelectorAll("[data-sp]").forEach((b) => {
-        b.addEventListener("click", () => {
+        b.addEventListener("click", async () => {
           const i = r.issues[+b.dataset.sp];
           b.disabled = true;
-          b.textContent = applyFix(i.found, i.suggest) ? "고쳤습니다" : "편집기가 안 받네요 — 원문 그대로";
-          scheduleCount();
+          b.textContent = "고치는 중…";
+          const done = await applyFix(i.found, i.suggest);
+          b.textContent = done ? "고쳤습니다" : "편집기가 안 받네요 — 원문 그대로";
+          if (done) scheduleCount();
         });
       });
 
       const allBtn = panel.querySelector("#ws-sp-all");
-      if (allBtn) allBtn.addEventListener("click", () => {
-        let done = 0, failed = 0;
-        for (const i of sure) (applyFix(i.found, i.suggest) ? done++ : failed++);
+      if (allBtn) allBtn.addEventListener("click", async () => {
         allBtn.disabled = true;
+        allBtn.textContent = "고치는 중…";
+        let done = 0, failed = 0;
+        for (const i of sure) ((await applyFix(i.found, i.suggest)) ? done++ : failed++);
         allBtn.textContent = failed ? `${done}건 고쳤습니다 · ${failed}건 실패` : `${done}건 전부 고쳤습니다`;
         scheduleCount();
       });
@@ -1180,12 +1219,264 @@
   // ⚠️ 여기서 썸네일까지 만들지는 않습니다. 사진을 골라야 하는데, 글쓰기 창에
   // 파일 선택 창을 띄우면 편집기가 포커스를 잃고 사장님이 쓰던 자리를 놓칩니다.
   // 대신 **제목을 들고** 썸네일 화면을 엽니다. 가서 문구가 이미 뽑혀 있습니다.
+  /**
+   * 본문에 들어 있는 사진들의 주소를 모읍니다.
+   *
+   * ⚠️ 사진을 본문에 넣으면 네이버가 **바로 서버에 올립니다.** 발행 전이라도요.
+   * 그래서 주소만 넘기면 우리 서버가 받아올 수 있습니다. 다시 올릴 필요가 없습니다.
+   *
+   * ⚠️ 스티커·이모티콘·링크카드 미리보기는 뺍니다. 그건 사장님 사진이 아닙니다.
+   * 그리고 작은 것도 뺍니다 — 썸네일로 쓰기엔 뭉개집니다.
+   */
+  function collectPhotoUrls() {
+    const root = getEditorRoot();
+    if (!root) return [];
+    const SKIP = ".se-sticker, .se-oglink, .se-material, .se-placesMap";
+    const out = [];
+    for (const img of root.querySelectorAll(".se-image-resource, .se-component.se-image img")) {
+      if (img.closest(SKIP)) continue;
+      // 아직 올라가는 중이면 blob: 이나 data: 입니다. 그건 우리가 못 받습니다.
+      const src = img.getAttribute("data-src") || img.src || "";
+      if (!/^https:\/\//i.test(src)) continue;
+      // 네이버가 붙이는 크기 지시(?type=w80)를 떼야 원본이 옵니다.
+      const clean = src.split("?")[0];
+      // 화면에서 너무 작게 나오는 건 아이콘일 가능성이 큽니다.
+      if (img.naturalWidth && img.naturalWidth < 200) continue;
+      if (!out.includes(clean)) out.push(clean);
+    }
+    return out;
+  }
+
   async function openThumb() {
     const title = getTitle();
+    const body = getBodyText();
+    const urls = collectPhotoUrls();
     const cfg = await new Promise((r) => chrome.storage.sync.get(["server"], r));
     const base = (cfg.server || "https://woosurimi-trend-api.onrender.com").replace(/\/+$/, "");
-    const url = `${base}/thumb.html${title ? "?title=" + encodeURIComponent(title) : ""}`;
-    window.open(url, "_blank", "noopener");
+
+    const modeInfo = /전후|비포|애프터|before|after|비교|바뀐|달라진|변화|변신|민낯/i.test(title)
+      ? { kind: "beforeAfter", label: "비포 / 애프터", note: "제목이 전후 비교라서 두 장을 짝지어 붙입니다." }
+      : { kind: "single", label: "한 장", note: "인물 사진 중에 제일 눈에 걸릴 한 장을 고릅니다." };
+
+    if (!urls.length) {
+      return showPanel(`<h4>홈판 썸네일</h4>
+        <div class="ws-row warn">본문에서 사진을 못 찾았습니다.</div>
+        <p class="ws-note">사진을 본문에 넣으면 자동으로 고를 수 있습니다.
+        아직 올라가는 중이면 잠깐 기다렸다 다시 눌러주세요.</p>
+        <button class="ws-mini" id="ws-th-manual" style="margin-top:8px">직접 고르기 (수동)</button>`);
+    }
+
+    showPanel(`<h4>홈판 썸네일</h4>
+      <p class="ws-note">본문에서 사진 <b>${urls.length}장</b>을 찾았습니다.</p>
+      <div class="ws-row">
+        <div style="margin-bottom:6px"><b>자동</b> — ${modeInfo.label}</div>
+        <div style="font-size:11.5px;opacity:.75;margin-bottom:8px">${modeInfo.note}</div>
+        <button class="ws-mini" id="ws-th-auto">AI가 골라주기</button>
+        <button class="ws-mini" id="ws-th-flip" style="margin-left:6px">${
+          modeInfo.kind === "beforeAfter" ? "한 장으로" : "비포/애프터로"
+        }</button>
+      </div>
+      <div class="ws-row">
+        <div style="margin-bottom:6px"><b>수동</b> — 직접 고르기</div>
+        <div style="font-size:11.5px;opacity:.75;margin-bottom:8px">사진을 직접 올리고 문구도 직접 정합니다.</div>
+        <button class="ws-mini" id="ws-th-manual">직접 만들기</button>
+      </div>
+      <div id="ws-th-out"></div>`);
+
+    let force = modeInfo.kind;
+    const flip = panel.querySelector("#ws-th-flip");
+    if (flip) flip.addEventListener("click", () => {
+      force = force === "beforeAfter" ? "single" : "beforeAfter";
+      flip.textContent = force === "beforeAfter" ? "한 장으로" : "비포/애프터로";
+    });
+
+    panel.querySelector("#ws-th-manual").addEventListener("click", () => {
+      window.open(`${base}/thumb.html${title ? "?title=" + encodeURIComponent(title) : ""}`, "_blank", "noopener");
+    });
+
+    const autoBtn = panel.querySelector("#ws-th-auto");
+    if (autoBtn) autoBtn.addEventListener("click", async () => {
+      autoBtn.disabled = true;
+      autoBtn.textContent = "사진을 보는 중…";
+      const out = panel.querySelector("#ws-th-out");
+      out.innerHTML = `<p class="ws-note">사진 ${urls.length}장을 AI가 하나씩 봅니다. 20~40초 걸립니다.</p>`;
+      try {
+        const r = await server("/api/thumb/auto", { imageUrls: urls, title, body, force });
+        const p = r.plan;
+        out.innerHTML = `
+          <div class="ws-row good">
+            <img src="${r.image}" alt="만들어진 썸네일"
+              style="width:100%;max-width:260px;border-radius:9px;display:block;margin-bottom:8px" />
+            <div style="font-size:11.5px;opacity:.8;margin-bottom:6px">${esc(p.why)}</div>
+            ${p.warn.map((w) => `<div style="font-size:11.5px;color:#fbbf24;margin-bottom:4px">⚠ ${esc(w)}</div>`).join("")}
+            <a class="ws-mini" href="${r.image}" download="홈판썸네일.jpg"
+              style="display:inline-block;text-decoration:none">내려받기</a>
+            <button class="ws-mini" id="ws-th-again" style="margin-left:6px">다시 고르기</button>
+          </div>`;
+        const again = out.querySelector("#ws-th-again");
+        if (again) again.addEventListener("click", () => { autoBtn.disabled = false; autoBtn.click(); });
+      } catch (e) {
+        out.innerHTML = `<div class="ws-row bad">${esc(e.message)}</div>`;
+      } finally {
+        autoBtn.disabled = false;
+        autoBtn.textContent = "AI가 골라주기";
+      }
+    });
+  }
+
+  /**
+   * 문단 하나의 글자를 바꿉니다. **에디터를 통해서** 바꿉니다.
+   *
+   * ⚠️ 이 함수가 왜 있는지 — 제목을 세 번 날려먹고 배운 것입니다.
+   *
+   * 1) `el.textContent = 새글`을 쓰면 안 됩니다.
+   *    스마트에디터의 문단은 <p><span class="se-ff-...">글자</span></p> 구조인데,
+   *    textContent를 넣으면 그 span이 날아갑니다. 에디터는 구조가 깨진 걸 발견하면
+   *    자기 모델로 되돌리고, 그 과정에서 **글이 빈칸이 됩니다.**
+   *    execCommand("insertText")는 사람이 타자 친 것과 같은 경로라 span이 유지됩니다.
+   *
+   * 2) 넣자마자 확인하면 안 됩니다.
+   *    그 순간에는 글자가 들어가 있습니다. 에디터가 되돌리는 건 **다음 순간**입니다.
+   *    그래서 "성공"이라고 창을 닫고, 사장님 화면에서는 글이 사라집니다.
+   *    한 프레임 + 280ms를 기다렸다가 봅니다.
+   *
+   * 3) 실패하면 원래대로 돌려놓습니다.
+   *    되는 척하다가 사장님 글을 날리는 것보다, 안 된다고 말하는 게 낫습니다.
+   *
+   * @returns {Promise<boolean>} 정말 바뀌었는지
+   */
+  // ⚠️ requestAnimationFrame을 쓰면 안 됩니다.
+  // 화면에 안 보이는 탭에서는 브라우저가 그림을 안 그리기 때문에 rAF가
+  // **영원히 안 옵니다.** 사장님이 고치는 중에 다른 탭으로 넘어가면
+  // 버튼이 "고치는 중…"에서 멈춘 채 안 돌아옵니다. 실제로 확인했습니다.
+  // 그냥 시간으로 기다립니다. 300ms면 에디터가 정리하기에 충분합니다.
+  const settleEditor = () => new Promise((r) => setTimeout(r, 300));
+
+  /**
+   * 편집기 칸의 글자를 바꿉니다. **span을 살려두면서.**
+   *
+   * ⚠️ 이걸 알아내는 데 세 번 실패했습니다. 브라우저에서 직접 재보고 알았습니다.
+   *
+   * 스마트에디터의 칸은 이렇게 생겼습니다:
+   *   <p class="se-text-paragraph"><span class="se-ff-... se-fs32">글자</span></p>
+   * 에디터는 저 span을 기준으로 문서를 관리합니다. span이 없어지면 구조가 깨졌다고
+   * 보고 자기 모델로 되돌리는데, 그 과정에서 **글이 빈칸이 됩니다.**
+   *
+   * 실제로 재본 것:
+   *   el.textContent = 새글                        → span 사라짐 ✗
+   *   문단 전체 선택 + execCommand("insertText")    → span 사라짐 ✗   ← 이것도 안 됩니다
+   *   span 안쪽만 선택 + execCommand("insertText")  → span 사라짐 ✗   ← 이것도요
+   *
+   * 왜냐면 브라우저는 **span이 빈 순간 그 span을 치워버립니다.**
+   * 글자를 전부 선택해서 바꾸면 반드시 한 번은 비게 됩니다.
+   *
+   * 그래서 **한 번도 안 비게** 합니다:
+   *   1) 끝에 커서를 두고 새 글자를 **붙입니다**  → "원래글새글" (span 유지)
+   *   2) 앞쪽 원래 글자만 골라서 지웁니다          → "새글"     (span 유지)
+   * 둘 다 execCommand라 에디터가 자기 명령으로 인식하고 모델도 같이 갱신합니다.
+   *
+   * 이게 막히면 텍스트 노드의 값만 직접 바꿉니다 — 구조는 안 건드리는 방식입니다.
+   */
+  function setEditableText(el, want) {
+    const value = String(want);
+    try {
+      // 글자를 담고 있는 그릇 — 보통 span, 없으면 칸 자체.
+      const host = el.querySelector("span") || el;
+      const before = host.textContent || "";
+      const sel = window.getSelection();
+
+      if (before.length) {
+        // 1) 끝에 붙이기
+        el.focus();
+        const r1 = document.createRange();
+        r1.selectNodeContents(host);
+        r1.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(r1);
+        if (!document.execCommand("insertText", false, value)) throw new Error("insert 실패");
+
+        // 2) 앞쪽 옛 글자만 지우기
+        // ⚠️ 붙이면서 텍스트 노드가 쪼개질 수 있습니다. 글자 수로 자리를 찾습니다.
+        const spot = charOffset(host, before.length);
+        if (!spot) throw new Error("지울 자리를 못 찾음");
+        const r2 = document.createRange();
+        r2.setStart(host.firstChild && host.firstChild.nodeType === 3 ? host.firstChild : spot.node, 0);
+        r2.setEnd(spot.node, spot.offset);
+        sel.removeAllRanges();
+        sel.addRange(r2);
+        document.execCommand("delete");
+      } else {
+        el.focus();
+        const r = document.createRange();
+        r.selectNodeContents(host);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        document.execCommand("insertText", false, value);
+      }
+
+      if ((el.innerText || "").replace(/​/g, "").trim() === value.trim()) return true;
+    } catch {}
+
+    // 물러서기 — 텍스트 노드 값만 바꿉니다. 구조를 안 건드리니 span이 삽니다.
+    try {
+      const host = el.querySelector("span") || el;
+      const tn = [...host.childNodes].find((n) => n.nodeType === 3);
+      if (tn) {
+        tn.nodeValue = value;
+      } else {
+        host.appendChild(document.createTextNode(value));
+      }
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+      return (el.innerText || "").replace(/​/g, "").trim() === value.trim();
+    } catch {
+      return false;
+    }
+  }
+
+  /** 그릇 안에서 n번째 글자가 어느 텍스트 노드의 몇 번째인지 찾습니다. */
+  function charOffset(host, n) {
+    let left = n;
+    const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    let node;
+    let last = null;
+    while ((node = walk.nextNode())) {
+      last = node;
+      if (left <= node.length) return { node, offset: left };
+      left -= node.length;
+    }
+    return last ? { node: last, offset: last.length } : null;
+  }
+
+  async function replaceParagraph(el, want, { expect } = {}) {
+    const originalHtml = el.innerHTML;
+    const originalText = (el.innerText || "").replace(/​/g, "");
+    const norm = (s) => String(s || "").replace(/[\s​]/g, "");
+    const target = expect != null ? expect : want;
+
+    // ⚠️ span을 살려서 바꿉니다. 그냥 전체 선택 후 넣으면 span이 사라지고
+    // 에디터가 글을 통째로 지웁니다 (setEditableText 설명 참고).
+    if (!setEditableText(el, want)) {
+      el.innerHTML = originalHtml;
+      return false;
+    }
+
+    await settleEditor();
+
+    const now = (el.innerText || "").replace(/​/g, "");
+    // 넣으려던 게 들어갔으면 성공. 줄바꿈처럼 여러 문단으로 쪼개진 경우도 있어서
+    // 첫 조각이 보이면 된 것으로 봅니다.
+    if (norm(now).includes(norm(target)) || norm(now) === norm(want)) return true;
+
+    // 실패 — 원래대로. 특히 **빈칸이 됐으면 반드시** 되돌립니다.
+    try {
+      el.innerHTML = originalHtml;
+      await settleEditor();
+      if (!norm(el.innerText || "") && originalText) {
+        // innerHTML로도 안 돌아왔으면 다시 넣습니다.
+        setEditableText(el, originalText);
+      }
+    } catch {}
+    return false;
   }
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>

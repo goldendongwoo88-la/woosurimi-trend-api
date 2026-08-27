@@ -113,6 +113,10 @@ const CREDIT_COST = {
   improve: 2,        // 글 고쳐쓰기
   cardnews: 3,       // 카드뉴스
   shortform: 4,      // 숏폼 대본 + 렌더
+  // 썸네일 자동 고르기 — 사진 12장을 AI가 눈으로 봅니다.
+  // 사진 한 장 읽는 비용이 400px 기준 200토큰쯤이라 12장이면 2,400토큰입니다.
+  // 글 한 편 쓰는 것(draft)보다는 싸고 제목 뽑기보다는 비쌉니다.
+  thumbAuto: 2,
 };
 
 function getPlan(id) {
