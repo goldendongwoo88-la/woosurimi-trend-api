@@ -56,13 +56,44 @@
     // **한글 뒤에서는 안 먹습니다.** "4단계:"에서 '계'와 ':' 사이에는 경계가 없어서
     // /4단계\b/ 가 아예 안 맞습니다. 실제로 이것 때문에 본문을 못 잘라냈고,
     // 1단계 제목 45개가 통째로 원고에 들어갔습니다.
-    const startRe = /^\s*#{0,4}\s*(4단계|본문 작성|본문 출력|본문)\s*[:：\-—]?/;
-    const stopRe = /^\s*#{0,4}\s*(5단계|6단계|7단계|팩트체크|이미지 프롬프트|썸네일|인포그래픽)\s*[:：\-—]?/;
+    //
+    // ⚠️ 그런데 이번엔 **반대 방향으로** 틀렸습니다. 이렇게 돼 있었습니다:
+    //     /^\s*#{0,4}\s*(4단계|본문 작성|본문 출력|본문)\s*[:：\-—]?/
+    // 줄 끝을 안 묶어놔서 **"본문"으로 시작하는 아무 문장이나** 걸렸습니다.
+    //
+    //     "본문입니다."                → 표시로 잘못 보고 그 앞을 전부 버렸습니다
+    //     "썸네일은 밝은 걸로 골랐어요"  → 여기서 본문을 끊어버렸습니다
+    //
+    // 사장님 글이 **말없이 사라집니다.** 표시를 못 찾는 것보다 훨씬 나쁩니다.
+    // 못 찾으면 통째로 들어가서 바로 보이지만, 이건 조용히 없어집니다.
+    //
+    // 그래서 **줄 전체가 표시일 때만** 인정합니다.
+    const START = /^(\d+\s*단계)?\s*[:：\-—]?\s*(본문(\s*(작성|출력))?)?$/;
+    const STOP = /^(\d+\s*단계)?\s*[:：\-—]?\s*(팩트\s*체크|이미지\s*프롬프트|썸네일|인포그래픽|해시태그)?$/;
+
+    /** 머리글 표시(#)를 떼고 남은 알맹이. 길면 표시가 아니라 문장입니다. */
+    const marker = (line) => {
+      const t = String(line).replace(/^\s*#{0,4}\s*/, "").trim();
+      return t && t.length <= 20 ? t : null;
+    };
+    const isStart = (line) => {
+      const t = marker(line);
+      // 알맹이가 있어야 하고(빈 줄 제외), 단계나 본문이라는 말이 실제로 있어야 합니다.
+      return !!t && START.test(t) && /단계|본문/.test(t);
+    };
+    const isStop = (line) => {
+      const t = marker(line);
+      if (!t || !STOP.test(t)) return false;
+      // "4단계"는 시작이지 끝이 아닙니다. 5단계부터가 끝입니다.
+      const step = t.match(/^(\d+)\s*단계/);
+      if (step) return Number(step[1]) >= 5;
+      return /팩트|이미지|썸네일|인포그래픽|해시태그/.test(t);
+    };
 
     let from = -1, to = lines.length;
     for (let i = 0; i < lines.length; i++) {
-      if (from < 0 && startRe.test(lines[i])) { from = i + 1; continue; }
-      if (from >= 0 && stopRe.test(lines[i])) { to = i; break; }
+      if (from < 0 && isStart(lines[i])) { from = i + 1; continue; }
+      if (from >= 0 && isStop(lines[i])) { to = i; break; }
     }
     if (from >= 0) return lines.slice(from, to).join("\n");
 
@@ -202,5 +233,11 @@
     };
   }
 
-  window.__wsDraft = { parse, pickBody, dropTitleList, clean };
+  const api = { parse, pickBody, dropTitleList, clean };
+
+  // ⚠️ 확장 프로그램(브라우저)과 자동화 도구(서버)가 **같은 코드**를 씁니다.
+  // 두 군데에 따로 적어두면 언젠가 어긋나고, 그러면 화면에서 되던 게
+  // 자동화에서는 안 되는 일이 생깁니다. 그때 원인 찾기가 아주 어렵습니다.
+  if (typeof window !== "undefined") window.__wsDraft = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

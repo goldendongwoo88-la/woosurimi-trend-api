@@ -124,6 +124,65 @@ console.log("\n━━ 단계 표시가 없는 원고 ━━");
     "소제목 1 · 사진 1 · 문단 3", `${r.stats.subheads}/${r.stats.photos}/${r.stats.paras}`);
 }
 
+console.log("\n━━ '본문'으로 시작하는 문장을 표시로 착각하지 않는가 ━━");
+// ⚠️ 실제로 사고가 났습니다. 표시 규칙이 줄 끝을 안 묶어놔서
+// "본문으로 시작하는 아무 문장"이나 단계 표시로 봤습니다.
+// 그 앞의 글이 **말없이 사라졌습니다.** 조용히 없어지는 게 제일 나쁩니다.
+{
+  const TRAP = `# 가을 코트 고르기
+
+첫 문장입니다. 이게 사라지면 안 됩니다.
+
+본문입니다. 이 줄 때문에 앞이 다 날아갔었습니다.
+
+마지막 문장입니다.`;
+  const r = D.parse(TRAP);
+  const text = r.blocks.filter((b) => b.kind === "text").map((b) => b.text).join(" ");
+  ok(r.title === "가을 코트 고르기", "제목은 그대로", r.title);
+  ok(text.includes("첫 문장입니다"), "'본문…' 앞의 글이 안 사라진다  ← 여기가 핵심");
+  ok(text.includes("본문입니다"), "'본문입니다'도 본문으로 남는다");
+  ok(text.includes("마지막 문장입니다"), "뒤의 글도 남는다");
+  ok(r.stats.paras === 3, "문단 3개 다 있다", `${r.stats.paras}개`);
+}
+{
+  // 끝 표시도 같은 문제였습니다 — "썸네일"로 시작하는 문장에서 본문을 끊었습니다.
+  const TRAP2 = `4단계: 본문 작성
+
+코트를 샀습니다.
+
+썸네일은 밝은 사진으로 골랐어요.
+
+그리고 잘 입고 있습니다.`;
+  const r = D.parse(TRAP2);
+  const text = r.blocks.filter((b) => b.kind === "text").map((b) => b.text).join(" ");
+  ok(text.includes("썸네일은 밝은"), "'썸네일…' 문장에서 안 끊는다");
+  ok(text.includes("그리고 잘 입고"), "그 뒤의 글도 남는다");
+}
+{
+  // 진짜 표시는 여전히 잘라야 합니다 — 고치다가 반대로 망가지면 안 됩니다.
+  const REAL = `1단계: 제목 뽑기
+
+1. 제목 하나
+2. 제목 둘
+3. 제목 셋
+4. 제목 넷
+5. 제목 다섯
+6. 제목 여섯
+
+4단계: 본문 작성
+
+진짜 본문입니다.
+
+5단계: 팩트체크
+
+이건 본문이 아닙니다.`;
+  const r = D.parse(REAL);
+  const text = r.blocks.filter((b) => b.kind === "text").map((b) => b.text).join(" ");
+  ok(text.includes("진짜 본문입니다"), "진짜 본문은 가져온다");
+  ok(!text.includes("제목 하나"), "1단계 제목 목록은 안 들어온다");
+  ok(!text.includes("이건 본문이 아닙니다"), "5단계 뒤는 안 들어온다");
+}
+
 console.log("\n━━ 제목 표시가 없을 때 ━━");
 // ⚠️ 여기서 실제로 사고가 났습니다. 흉내 편집기에서 잡았습니다.
 //
