@@ -210,6 +210,62 @@
   }
 
   /**
+   * 본문 **끝에** 몇 줄을 덧붙입니다. ("함께 보면 좋은 글" 링크 묶음)
+   *
+   * ⚠️ pasteBody와 다릅니다. 저건 첫 문단을 **갈아끼우고**, 이건 맨 끝에 **더합니다.**
+   * 쓰시던 글은 한 글자도 안 건드립니다.
+   *
+   * ⚠️ 문단을 하나씩 만들지 않습니다. 그러다 26초 넘게 멈추고 같은 칸에
+   * 겹쳐 쓴 적이 있습니다. 붙여넣기 한 번이면 편집기가 알아서 나눕니다.
+   *
+   * ⚠️ 주소를 한 줄에 하나씩 둡니다. 그래야 네이버가 링크 카드로 바꿔줍니다.
+   * 글자 사이에 끼워 넣으면 그냥 파란 글씨로 남습니다.
+   */
+  async function appendBlock(text) {
+    const root = editorRoot();
+    if (!root) return { ok: false, why: "본문을 찾지 못했습니다." };
+
+    const paras = bodyParagraphs();
+    const last = paras[paras.length - 1];
+    if (!last) return { ok: false, why: "본문 문단을 찾지 못했습니다." };
+
+    const mark = norm(text).slice(0, 24);
+    const had = norm(root.innerText || "");
+    if (had.includes(mark)) return { ok: false, why: "이미 넣으신 것 같습니다. 본문 끝을 확인해 주세요." };
+
+    // 맨 끝으로 커서를 옮깁니다. 고르는 게 아니라 **끝에 세우는** 것이라
+    // 기존 글자가 지워질 일이 없습니다.
+    try {
+      last.focus();
+      const range = document.createRange();
+      range.selectNodeContents(last);
+      range.collapse(false);          // false = 끝으로
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      const dt = new DataTransfer();
+      dt.setData("text/plain", "\n" + text);
+      last.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      await settle(600);
+      if (norm(root.innerText || "").includes(mark)) return { ok: true, how: "paste" };
+    } catch {}
+
+    // ⚠️ 안 되면 되는 척하지 않습니다. 복사해 드리고 그렇게 말합니다.
+    try {
+      await Promise.race([
+        navigator.clipboard.writeText(text),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
+      ]);
+    } catch {}
+    return {
+      ok: false,
+      copied: true,
+      why: "편집기가 안 받았습니다. 복사해 뒀으니 본문 맨 끝을 누르고 Ctrl+V 해주세요.",
+    };
+  }
+
+  /**
    * 임시저장을 누릅니다.
    *
    * ⚠️ 클래스 이름으로 안 찾습니다. **보이는 글자**로 찾습니다.
@@ -241,5 +297,5 @@
     return { ok: true, changed: after !== before, label: after || before };
   }
 
-  window.__wsInsert = { insert, saveDraft, isEmpty, pasteBody, bodyParagraphs };
+  window.__wsInsert = { insert, saveDraft, isEmpty, pasteBody, appendBlock, bodyParagraphs };
 })();

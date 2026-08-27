@@ -381,3 +381,23 @@
   display: inline-block; background: #0b8f4d; color: #fff; font-size: 10.5px; font-weight: 700;
   padding: 1px 6px; border-radius: 4px; margin-right: 5px; vertical-align: middle;
 }
+
+/* 함께 보면 좋은 글 — 내 블로그 글 고르기 */
+/* ⚠️ .ws-warn 은 원래 .ws-msg.ws-warn 으로만 있었습니다. 그냥 <p class="ws-warn">로
+   쓰면 아무 색도 안 붙어서, 경고인지 아닌지 구분이 안 됩니다. 홀로 써도 되게 둡니다. */
+#ws-tools-panel .ws-warn { padding: 9px 11px; background: #fdf5e4; color: #8a5c11; border-radius: 7px; line-height: 1.6; }
+#ws-tools-panel .ws-err  { padding: 9px 11px; background: #fdeceb; color: #a02c2c; border-radius: 7px; line-height: 1.6; }
+
+#ws-tools-panel .ws-links { list-style: none; margin: 9px 0; padding: 0; max-height: 260px; overflow-y: auto; }
+#ws-tools-panel .ws-links li { border-bottom: 1px solid #f0f1f3; }
+#ws-tools-panel .ws-links li:last-child { border-bottom: 0; }
+#ws-tools-panel .ws-links label {
+  display: flex; align-items: flex-start; gap: 8px; padding: 7px 2px;
+  font-size: 12.5px; line-height: 1.5; cursor: pointer;
+}
+#ws-tools-panel .ws-links label:hover { background: #f7f8fa; }
+#ws-tools-panel .ws-links input { margin-top: 2px; flex: 0 0 auto; }
+#ws-tools-panel .ws-links span { flex: 1 1 auto; }
+#ws-tools-panel .ws-links em { flex: 0 0 auto; font-style: normal; font-size: 11px; }
+
+#ws-tools-panel .ws-btnrow { display: flex; gap: 7px; margin: 10px 0 8px; }

@@ -186,6 +186,7 @@
       <button data-act="homebody" class="ws-dock-btn primary" title="본문을 소제목 6개로 나눕니다">홈판 본문</button>
       <button data-act="paste" class="ws-dock-btn primary" title="클로드에서 복사한 원고를 통째로 넣습니다">원고 붙이기</button>
       <button data-act="format" class="ws-dock-btn primary" title="소제목·인용구·강조를 자동으로 넣습니다">자동 서식</button>
+      <button data-act="links" class="ws-dock-btn primary" title="내 블로그 글 중 관련 있는 것을 본문 끝에 붙입니다">함께보기</button>
       <button data-act="topic" class="ws-dock-btn" title="이 글이 이 블로그 주제에 맞는지">주제</button>
       <button data-act="audit" class="ws-dock-btn" title="문제가 될 만한 표현 찾기">표현 검사</button>
       <button data-act="keyword" class="ws-dock-btn" title="지금 누가 상위에 있는지">키워드</button>
@@ -291,6 +292,142 @@
       throw new Error(data.message || data.error || `서버 오류 ${res.status}`);
     }
     return data;
+  }
+
+  // ── 함께 보면 좋은 글 ─────────────────────────────────
+  //
+  // ⚠️ AI를 안 부릅니다. 값이 0원입니다.
+  // 내 블로그 글 목록을 받아서 제목에 겹치는 낱말이 많은 순으로 보여드립니다.
+  //
+  // ⚠️ 실측: 상위 블로그는 자기 글 링크가 중앙값 2개, 하위는 0개였습니다.
+  // 다만 **협찬 글은 예외**입니다 — 광고주가 다른 글로 보내는 링크를
+  // 허락하지 않는 경우가 많습니다. 사장님이 알려주신 것입니다.
+  // 그래서 협찬으로 보이면 미리 골라두지 않고 먼저 여쭙니다.
+
+  /** 협찬 글로 보이는가. 확실히 아는 게 아니라 **여쭤보려고** 보는 것입니다. */
+  const SPONSOR = /협찬|제공\s*받아|제공받았|원고료|소정의\s*(수수료|대가)|대가를\s*받아|업체로부터|체험단|서포터즈|무상\s*제공/;
+  function looksSponsored(body) {
+    const m = String(body || "").match(SPONSOR);
+    return m ? m[0].replace(/\s+/g, " ") : null;
+  }
+
+  /** 내 블로그 아이디. 설정에 넣어두신 게 먼저, 없으면 주소에서 찾습니다. */
+  async function myBlogId() {
+    const { blogId } = await chrome.storage.sync.get(["blogId"]);
+    if (blogId && String(blogId).trim()) return String(blogId).trim();
+    const q = new URLSearchParams(location.search).get("blogId");
+    if (q) return q;
+    const seg = location.pathname.split("/").filter(Boolean)[0];
+    if (seg && !/^(PostWriteForm|postwrite)/i.test(seg)) return seg;
+    return "";
+  }
+
+  let linkPicks = [];   // 화면에서 고른 것
+
+  async function relatedLinks() {
+    const title = getTitle();
+    const body = getBodyText();
+    if (!title.trim() && body.length < 30)
+      return showPanel(`<p>제목이나 본문을 조금 쓰신 뒤에 눌러주세요. 무슨 글인지 알아야 관련 글을 고를 수 있습니다.</p>`);
+
+    const id = await myBlogId();
+    if (!id)
+      return showPanel(
+        `<p><b>블로그 아이디를 모릅니다.</b></p>
+         <p class="ws-dim">확장 프로그램 설정에서 블로그 아이디를 한 번 넣어주시면 계속 씁니다.</p>`
+      );
+
+    showPanel(`<p>내 글 목록을 받는 중…</p>`);
+    let d;
+    try {
+      d = await server("/api/my-posts", { blogId: id, title });
+    } catch (e) {
+      return showPanel(`<p class="ws-err">${esc(e.message)}</p>`);
+    }
+
+    const list = (d.related && d.related.length ? d.related : d.recent) || [];
+    const byRelevance = !!(d.related && d.related.length);
+    if (!list.length)
+      return showPanel(`<p>붙일 만한 글을 못 찾았습니다. (<b>${esc(id)}</b>에서 ${d.total || 0}편을 봤습니다)</p>`);
+
+    const spon = looksSponsored(body);
+
+    // ⚠️ 협찬 글이면 **아무것도 미리 안 고릅니다.** 사장님이 정하실 일입니다.
+    linkPicks = spon ? [] : list.slice(0, 2).map((p) => p.logNo);
+
+    showPanel(`
+      <h4>함께 보면 좋은 글</h4>
+      ${
+        spon
+          ? `<p class="ws-warn">이 글에 <b>"${esc(spon)}"</b>가 있습니다. 협찬 글로 보입니다.<br>
+             <span class="ws-dim">협찬 글은 광고주가 다른 글로 보내는 링크를 막는 경우가 많아서, 미리 고르지 않았습니다.
+             넣으실 거면 직접 골라주세요.</span></p>`
+          : `<p class="ws-dim">상위 블로그는 자기 글 링크가 중앙값 <b>2개</b>였습니다. 하위는 0개였습니다.
+             ${byRelevance ? "제목에 겹치는 낱말이 많은 순입니다." : "겹치는 낱말이 없어서 <b>최근 글</b>을 보여드립니다."}</p>`
+      }
+      <ul class="ws-links">
+        ${list
+          .map(
+            (p) => `<li>
+              <label>
+                <input type="checkbox" value="${esc(p.logNo)}" ${linkPicks.includes(p.logNo) ? "checked" : ""}>
+                <span>${esc(p.title)}</span>
+                ${p.score ? `<em class="ws-dim">겹치는 낱말 ${p.score}개</em>` : ""}
+              </label>
+            </li>`
+          )
+          .join("")}
+      </ul>
+      <div class="ws-btnrow">
+        <button id="ws-link-add" class="ws-dock-btn primary">고른 것 본문 끝에 넣기</button>
+        <button id="ws-link-copy" class="ws-dock-btn">복사만 하기</button>
+      </div>
+      <p class="ws-dim" id="ws-link-msg">주소를 한 줄에 하나씩 넣습니다. 그래야 네이버가 링크 카드로 바꿔줍니다.</p>
+    `);
+
+    const boxes = [...panel.querySelectorAll(".ws-links input")];
+    const sync = () => { linkPicks = boxes.filter((b) => b.checked).map((b) => b.value); };
+    boxes.forEach((b) => (b.onchange = sync));
+
+    const block = () => {
+      const chosen = list.filter((p) => linkPicks.includes(p.logNo));
+      if (!chosen.length) return "";
+      return ["함께 보면 좋은 글", ...chosen.map((p) => `${p.title}\n${p.url}`)].join("\n\n");
+    };
+    const msg = (t, cls = "ws-dim") => {
+      const el = panel.querySelector("#ws-link-msg");
+      if (el) { el.className = cls; el.innerHTML = t; }
+    };
+
+    panel.querySelector("#ws-link-add").onclick = async (e) => {
+      sync();
+      const text = block();
+      if (!text) return msg("고른 글이 없습니다.", "ws-warn");
+      const I = window.__wsInsert;
+      if (!I || !I.appendBlock) return msg("넣기 도구를 못 불러왔습니다. 확장을 다시 설치해 보세요.", "ws-err");
+      e.target.disabled = true;
+      msg("본문 끝에 넣는 중…");
+      const r = await I.appendBlock(text);
+      e.target.disabled = false;
+      if (r.ok) { msg(`✅ ${linkPicks.length}개를 본문 끝에 넣었습니다.`); updateCounts(); }
+      else msg(`${esc(r.why)}`, r.copied ? "ws-warn" : "ws-err");
+    };
+
+    panel.querySelector("#ws-link-copy").onclick = async () => {
+      sync();
+      const text = block();
+      if (!text) return msg("고른 글이 없습니다.", "ws-warn");
+      try {
+        await Promise.race([
+          navigator.clipboard.writeText(text),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
+        ]);
+        msg("✅ 복사했습니다. 본문 맨 끝을 누르고 Ctrl+V 하세요.");
+      } catch {
+        // ⚠️ 다른 창을 보고 계시면 클립보드 쓰기가 영영 안 끝납니다. 되는 척하지 않습니다.
+        msg("복사를 못 했습니다. 이 창을 한 번 누르시고 다시 해주세요.", "ws-warn");
+      }
+    };
   }
 
   // ── 표현 검사 ─────────────────────────────────────────
@@ -2010,6 +2147,7 @@
       else if (act === "homebody") homeBody();
       else if (act === "paste") pasteDraft();
       else if (act === "format") runFormat();
+      else if (act === "links") relatedLinks();
       else if (act === "topic") checkTopic();
       else if (act === "font") applyFont();
       else if (act === "image") resizeImages();
