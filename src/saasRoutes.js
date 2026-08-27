@@ -23,6 +23,7 @@ const suggestTopics = require("./suggestTopics");
 const research = require("./research");
 const thumbnail = require("./thumbnail");
 const lineBreak = require("./lineBreak");
+const spellCheck = require("./spellCheck");
 
 // 썸네일용 사진 받기.
 // ⚠️ 디스크에 안 씁니다(memoryStorage). 만들어서 바로 돌려주면 끝인 사진을
@@ -671,6 +672,24 @@ module.exports = function attachSaas(app) {
     const r = lineBreak.rebreak(body, { blankLines: blankLines !== false });
     if (!r.ok) return res.status(400).json({ error: r.why, lost: r.lost });
     res.json(r);
+  });
+
+  // ── 맞춤법 ─────────────────────────────────────────────
+  //
+  // ⚠️ AI도 안 쓰고 남의 검사기도 안 부릅니다. 그래서 사용량을 안 셉니다.
+  // 규칙으로 잡으니 즉시 나오고, 사장님 글이 밖으로 안 나갑니다.
+  app.post("/api/spellcheck", (req, res) => {
+    const { text, body } = req.body || {};
+    const t = String(text || body || "");
+    if (!t.trim()) return res.status(400).json({ error: "검사할 글을 넣어주세요." });
+    res.json(spellCheck.check(t));
+  });
+
+  // 어떤 규칙이 있는지 — 화면에서 "무엇을 잡아주나" 보여줄 때 씁니다.
+  app.get("/api/spellcheck/rules", (req, res) => {
+    res.json({
+      rules: spellCheck.RULES.map((r) => ({ id: r.id, why: r.why, sure: !!r.sure })),
+    });
   });
 
   // ── 사용량 ─────────────────────────────────────────────

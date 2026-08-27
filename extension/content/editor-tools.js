@@ -190,6 +190,7 @@
       <button data-act="font" class="ws-dock-btn" title="글꼴·크기를 본문 전체에 한 번에">폰트</button>
       <button data-act="image" class="ws-dock-btn" title="사진 너비를 한 번에 맞춥니다">사진</button>
       <button data-act="linebreak" class="ws-dock-btn" title="긴 문단을 45자 이하로 자릅니다">줄바꿈</button>
+      <button data-act="spell" class="ws-dock-btn" title="블로그에서 자주 틀리는 말 찾기">맞춤법</button>
       <button data-act="thumb" class="ws-dock-btn" title="홈판용 썸네일 만들기">썸네일</button>
       <button data-act="table" class="ws-dock-btn" title="표 넣기">표</button>
       <button data-act="word" class="ws-dock-btn" title="워드로 내려받기">워드</button>
@@ -1075,6 +1076,105 @@
     });
   }
 
+  // ── 맞춤법 ─────────────────────────────────────────────
+  //
+  // ⚠️ 줄바꿈은 규칙을 여기에도 복사해뒀지만, 맞춤법은 **서버를 부릅니다.**
+  // 줄바꿈 규칙은 20줄이라 복사해도 대조가 되는데, 맞춤법은 규칙이 계속 늘어납니다.
+  // 두 벌을 두면 언젠가 반드시 어긋납니다. 줄바꿈에서 이미 56개가 어긋났습니다.
+  // 맞춤법은 인터넷이 끊기면 못 쓰는 대신, 규칙이 한 군데만 있습니다.
+  async function runSpell() {
+    const body = getBodyText();
+    if (!body.trim()) {
+      return showPanel(`<h4>맞춤법</h4><div class="ws-row warn">본문이 비어 있습니다.</div>`);
+    }
+    showPanel(`<h4>맞춤법</h4><p>${body.length.toLocaleString()}자를 살펴보는 중입니다…</p>`);
+    try {
+      const r = await server("/api/spellcheck", { text: body });
+      if (!r.issues.length) {
+        return showPanel(`<h4>맞춤법</h4>
+          <div class="ws-row good">틀린 데를 못 찾았습니다. 규칙 ${r.ruleCount}가지로 봤습니다.</div>
+          <p class="ws-note">블로그에서 실제로 자주 나오는 틀린 말만 봅니다.
+          모든 오류를 잡지는 못합니다.</p>`);
+      }
+
+      const sure = r.issues.filter((i) => i.sure);
+      const maybe = r.issues.filter((i) => !i.sure);
+      const card = (i, n) => `
+        <div class="ws-row ${i.sure ? "bad" : "warn"}">
+          <div style="margin-bottom:5px">
+            <span style="opacity:.6">${esc(i.around.before)}</span><b
+              style="color:#f87171;text-decoration:line-through">${esc(i.found)}</b><span
+              style="opacity:.6">${esc(i.around.after)}</span>
+          </div>
+          <div style="margin-bottom:5px"><b style="color:#4ade80">${esc(i.suggest)}</b></div>
+          <div style="font-size:11.5px;opacity:.75">${i.why}</div>
+          ${i.sure ? `<button class="ws-mini" data-sp="${n}" style="margin-top:6px">이것만 고치기</button>` : ""}
+        </div>`;
+
+      showPanel(`<h4>맞춤법 — ${r.issues.length}건</h4>
+        ${sure.length ? `<p class="ws-note"><b>확실한 것 ${sure.length}건</b> · 참고 ${maybe.length}건</p>` : ""}
+        ${r.issues.map((i, n) => card(i, n)).join("")}
+        ${sure.length ? `<button class="ws-mini" id="ws-sp-all" style="margin-top:10px">확실한 것 ${sure.length}건 전부 고치기</button>` : ""}
+        <p class="ws-note" style="margin-top:10px">
+          빨간 것은 어떤 문장에서도 틀린 말이라 바로 고쳐도 됩니다.
+          노란 것은 <b>앞뒤를 봐야</b> 압니다 — 읽어보고 직접 정하세요.
+        </p>`);
+
+      // ⚠️ 문단 하나씩 바꿉니다. 편집기 전체를 갈아끼우면 사진·링크가 다 날아갑니다.
+      // 그리고 실패하면 그 문단만 원래대로 돌려놓습니다.
+      function applyFix(found, suggest) {
+        const root = getEditorRoot();
+        if (!root) return false;
+        const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
+        const nodes = [...root.querySelectorAll(".se-text-paragraph")].filter(
+          (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") && !n.closest(".se-placeholder")
+        );
+        let done = false;
+        for (const n of nodes) {
+          const t = n.innerText || "";
+          if (!t.includes(found)) continue;
+          const original = n.innerHTML;
+          try {
+            const range = document.createRange();
+            range.selectNodeContents(n);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            n.focus && n.focus();
+            const want = t.replace(/​/g, "").split(found).join(suggest);
+            let put = false;
+            try { put = document.execCommand("insertText", false, want); } catch {}
+            if (put && (n.innerText || "").includes(suggest)) { done = true; continue; }
+            n.innerHTML = original;
+          } catch {
+            n.innerHTML = original;
+          }
+        }
+        return done;
+      }
+
+      panel.querySelectorAll("[data-sp]").forEach((b) => {
+        b.addEventListener("click", () => {
+          const i = r.issues[+b.dataset.sp];
+          b.disabled = true;
+          b.textContent = applyFix(i.found, i.suggest) ? "고쳤습니다" : "편집기가 안 받네요 — 원문 그대로";
+          scheduleCount();
+        });
+      });
+
+      const allBtn = panel.querySelector("#ws-sp-all");
+      if (allBtn) allBtn.addEventListener("click", () => {
+        let done = 0, failed = 0;
+        for (const i of sure) (applyFix(i.found, i.suggest) ? done++ : failed++);
+        allBtn.disabled = true;
+        allBtn.textContent = failed ? `${done}건 고쳤습니다 · ${failed}건 실패` : `${done}건 전부 고쳤습니다`;
+        scheduleCount();
+      });
+    } catch (e) {
+      showPanel(`<h4>맞춤법</h4><div class="ws-row bad">${esc(e.message)}</div>`);
+    }
+  }
+
   // ── 홈판 썸네일 ───────────────────────────────────────
   //
   // ⚠️ 여기서 썸네일까지 만들지는 않습니다. 사진을 골라야 하는데, 글쓰기 창에
@@ -1109,6 +1209,7 @@
       else if (act === "audit") runAudit();
       else if (act === "keyword") runKeyword();
       else if (act === "linebreak") runLineBreak();
+      else if (act === "spell") runSpell();
       else if (act === "thumb") openThumb();
       else if (act === "table") insertTable();
       else if (act === "word") downloadWord();

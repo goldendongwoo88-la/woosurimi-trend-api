@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>블로그 맞춤법</title>
+<meta name="description" content="블로그에서 실제로 자주 틀리는 말을 잡습니다. AI를 안 쓰고 남의 검사기도 안 부릅니다. 글이 밖으로 나가지 않습니다." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="블로그 맞춤법 — 우수리미" />
+<meta property="og:description" content="됬/됐, 몇일/며칠, 왠/웬처럼 블로그에서 자주 틀리는 말을 잡습니다. 확실한 것만 고치고 애매한 것은 알려만 드립니다." />
+<meta property="og:url" content="https://woosurimi-trend-api.onrender.com/spell.html" />
+<link rel="canonical" href="https://woosurimi-trend-api.onrender.com/spell.html" />
+<link rel="stylesheet" href="/assets/ws.css" />
+<style>
+  textarea { width: 100%; padding: 12px 14px; font-size: 14px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--bg); color: var(--ink); font-family: inherit;
+    resize: vertical; line-height: 1.7; }
+  .hit { border-left: 3px solid var(--danger); padding: 12px 14px; border-radius: 0 9px 9px 0;
+    background: var(--bg-2); margin-bottom: 10px; }
+  .hit.maybe { border-left-color: #d9a441; }
+  .hit .ctx { font-size: 14px; line-height: 1.7; margin-bottom: 6px; }
+  .hit .ctx .dim { color: var(--ink-3); }
+  .hit .ctx .bad { color: var(--danger); font-weight: 700; text-decoration: line-through; }
+  .hit .to { font-size: 15px; font-weight: 700; color: var(--brand); margin-bottom: 6px; }
+  .hit .why { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px; margin-bottom: 7px; }
+  .tag.sure { background: var(--danger); color: #fff; }
+  .tag.maybe { background: #d9a441; color: #17181c; }
+  .rules { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rules span { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--ink-2); }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+</div></div>
+
+<div class="wrap">
+  <h1>맞춤법</h1>
+  <p class="lede">
+    블로그에서 <b>실제로 자주 틀리는 말</b>만 봅니다.
+    AI를 안 쓰고, 남의 검사기도 안 부릅니다. 사장님 글이 밖으로 나가지 않습니다.
+  </p>
+
+  <div class="card">
+    <label for="src">글</label>
+    <textarea id="src" rows="10" placeholder="제목이든 본문이든 붙여넣으세요."></textarea>
+    <div style="height:14px"></div>
+    <button id="go">검사</button>
+    <span class="muted" id="note" style="margin-left:10px"></span>
+  </div>
+
+  <div id="out" style="display:none"></div>
+
+  <div class="card">
+    <h3 style="margin-top:0">확실한 것만 고칩니다</h3>
+    <p style="font-size:14px;color:var(--ink-2);margin:0 0 10px">
+      <span class="tag sure">확실</span>
+      어떤 문장에서도 틀린 말입니다. 바로 고쳐도 됩니다. (됬 → 됐)
+    </p>
+    <p style="font-size:14px;color:var(--ink-2);margin:0">
+      <span class="tag maybe">참고</span>
+      앞뒤를 봐야 압니다. <b>알려만 드리고 고치지 않습니다.</b> (되요 / 돼요)
+      애매한 걸 자동으로 고치면 맞는 문장을 틀리게 만듭니다.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">무엇을 잡나</h3>
+    <div class="rules" id="ruleList"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">왜 네이버 검사기를 안 부르나</h3>
+    <p style="font-size:14px;color:var(--ink-2);margin:0">
+      몇몇 도구는 네이버 맞춤법 검사기의 내부 주소를 대신 부릅니다. 더 정확하기는 합니다.
+      다만 (1) 문서에 없는 주소라 네이버가 언제든 막을 수 있고, 그날 기능이 통째로 죽습니다.
+      (2) <b>아직 발행 안 한 글 전체를 남의 서버로 보내게 됩니다.</b>
+      그래서 규칙으로 잡습니다. 모든 오류를 잡지는 못하는 대신, 잡는 것은 확실하고 즉시 나옵니다.
+    </p>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+fetch("/api/spellcheck/rules").then((r) => r.json()).then((d) => {
+  $("#ruleList").innerHTML = (d.rules || [])
+    .map((r) => `<span title="${esc(r.why).replace(/<[^>]+>/g, "")}">${esc(r.id)}</span>`).join("");
+}).catch(() => {});
+
+$("#go").onclick = async () => {
+  const text = $("#src").value;
+  if (!text.trim()) { alert("글을 넣어주세요."); return; }
+  const btn = $("#go");
+  btn.disabled = true; btn.textContent = "보는 중…";
+  try {
+    const r = await fetch("/api/spellcheck", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).then((x) => x.json());
+
+    if (r.error) { alert(r.error); return; }
+
+    if (!r.issues.length) {
+      $("#out").innerHTML = `<div class="card">
+        <div class="msg good">틀린 데를 못 찾았습니다. 규칙 ${r.ruleCount}가지로 봤습니다.</div>
+        <p class="muted" style="font-size:13px;margin:12px 0 0">
+          블로그에서 자주 나오는 틀린 말만 봅니다. 모든 오류를 잡지는 못합니다.</p>
+      </div>`;
+      $("#out").style.display = "";
+      return;
+    }
+
+    const card = (i) => `
+      <div class="hit ${i.sure ? "" : "maybe"}">
+        <span class="tag ${i.sure ? "sure" : "maybe"}">${i.sure ? "확실" : "참고"}</span>
+        <div class="ctx"><span class="dim">${esc(i.around.before)}</span><span
+          class="bad">${esc(i.found)}</span><span class="dim">${esc(i.around.after)}</span></div>
+        <div class="to">${esc(i.suggest)}</div>
+        <div class="why">${i.why}</div>
+      </div>`;
+
+    $("#out").innerHTML = `<div class="card">
+      <h3 style="margin-top:0">${r.issues.length}건 찾았습니다</h3>
+      <p class="muted" style="font-size:13.5px;margin:0 0 14px">
+        확실한 것 <b>${r.sureCount}건</b> · 앞뒤를 봐야 하는 것 <b>${r.maybeCount}건</b></p>
+      ${r.issues.map(card).join("")}
+      ${r.changed ? `<div style="height:8px"></div>
+        <button id="copyFixed">확실한 것만 고친 글 복사</button>
+        <span class="muted" style="margin-left:10px">참고 항목은 그대로 뒀습니다</span>` : ""}
+    </div>`;
+    $("#out").style.display = "";
+
+    const cf = $("#copyFixed");
+    if (cf) cf.onclick = () => navigator.clipboard.writeText(r.fixed).then(() => {
+      cf.textContent = "복사됐습니다";
+      setTimeout(() => (cf.textContent = "확실한 것만 고친 글 복사"), 1600);
+    });
+    $("#out").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch {
+    alert("서버에 닿지 못했습니다. 잠시 뒤에 다시 해주세요.");
+  } finally {
+    btn.disabled = false; btn.textContent = "검사";
+  }
+};
+
+fetch("/api/auth/me").then((r) => r.json()).then((d) => {
+  $("#who").innerHTML = d && d.user
+    ? `${d.user.email} <a href="/boss.html">내 계정</a>`
+    : `<a href="/join.html">로그인</a>`;
+}).catch(() => {});
+</script>
+</body>
+</html>
