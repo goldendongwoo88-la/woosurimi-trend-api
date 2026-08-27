@@ -184,6 +184,7 @@
     <div class="ws-dock-acts">
       <button data-act="hometitle" class="ws-dock-btn primary" title="제목을 홈판용으로 고칩니다">홈판 제목</button>
       <button data-act="homebody" class="ws-dock-btn primary" title="본문을 소제목 6개로 나눕니다">홈판 본문</button>
+      <button data-act="format" class="ws-dock-btn primary" title="소제목·인용구·강조를 자동으로 넣습니다">자동 서식</button>
       <button data-act="topic" class="ws-dock-btn" title="이 글이 이 블로그 주제에 맞는지">주제</button>
       <button data-act="audit" class="ws-dock-btn" title="문제가 될 만한 표현 찾기">표현 검사</button>
       <button data-act="keyword" class="ws-dock-btn" title="지금 누가 상위에 있는지">키워드</button>
@@ -1482,6 +1483,195 @@
     }
   }
 
+  // ── 자동 서식 (소제목·인용구·강조) ─────────────────────
+  //
+  // ⚠️ 이 기능은 **사장님 글에 직접 손을 댑니다.** 그래서 두 가지를 지킵니다.
+  //   1) 무엇을 할지 먼저 보여드리고, 누르셔야 넣습니다. 몰래 안 바꿉니다.
+  //   2) 하나가 실패해도 나머지는 넣습니다. 그리고 뭐가 안 됐는지 말합니다.
+  //
+  // ⚠️ 소제목은 글자 크기가 아니라 **문단 스타일**입니다.
+  // 클로드 원고를 붙여넣으면 "■ 소제목"이 그냥 본문으로 들어갑니다.
+  // 편집기 왼쪽 위 드롭다운에서 골라야 진짜 소제목이 됩니다. 그걸 대신 눌러줍니다.
+  async function runFormat() {
+    const F = window.__wsFormat;
+    if (!F) {
+      return showPanel(`<h4>자동 서식</h4><div class="ws-row bad">
+        서식 도구를 못 불러왔습니다. 확장을 다시 설치해 보세요.</div>`);
+    }
+
+    const body = getBodyText();
+    const title = getTitle();
+    if (body.replace(/\s/g, "").length < 150) {
+      return showPanel(`<h4>자동 서식</h4><div class="ws-row warn">
+        본문이 짧습니다. 150자 이상 쓰신 뒤에 눌러주세요.</div>`);
+    }
+
+    // 글이 그대로면 아까 것을 씁니다 (제목·본문과 같은 이유).
+    const key = cacheKey("fmt", title, body);
+    const hit = CACHE.get(key);
+    if (hit) return renderFormat(hit, true);
+
+    showPanel(`<h4>자동 서식</h4><p>본문 ${body.length.toLocaleString()}자를 읽고
+      강조할 자리를 고르는 중입니다… 10초쯤 걸립니다.</p>`);
+    try {
+      const d = await server("/api/emphasis", { title, body });
+      CACHE.set(key, d);
+      renderFormat(d, false);
+    } catch (e) {
+      showPanel(`<h4>자동 서식</h4><div class="ws-row bad">${esc(e.message)}</div>`);
+    }
+  }
+
+  function renderFormat(d, cached) {
+    const kindColor = { bold: "#17181c", underline: "#1a4ba0", highlight: "#8a5a10", color: "#b0201f" };
+    const total = d.marks.length + d.quotes.length + d.subheads.length;
+
+    showPanel(`
+      <h4>자동 서식 — ${total}군데</h4>
+      ${cached ? `<div class="ws-row" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+        <span style="font-size:11.5px;opacity:.8">아까 골라둔 것입니다. 글이 그대로라 다시 안 돌렸습니다.</span>
+        <button class="ws-mini" id="ws-fmt-again">새로 고르기</button>
+      </div>` : ""}
+
+      <div class="ws-stats">
+        <span>소제목 <b class="ws-up">${d.subheads.length}</b></span>
+        <span>인용구 <b class="ws-up">${d.quotes.length}</b></span>
+        <span>강조 <b class="ws-up">${d.marks.length}</b></span>
+        <span>본문 <b>${d.chars.toLocaleString()}</b>자</span>
+      </div>
+
+      <button class="ws-apply" id="ws-fmt-go" style="margin:10px 0 4px;font-size:13px;padding:8px 14px">
+        전부 넣기 (${total}군데)
+      </button>
+      <p class="ws-dim" style="margin:0 0 14px">
+        하나씩 넣습니다. 실패한 것은 건너뛰고 뭐가 안 됐는지 알려드립니다.
+      </p>
+
+      ${d.subheads.length ? `
+      <div class="ws-sec">
+        <div class="ws-sec-h">1 · 소제목 ${d.subheads.length}개
+          <span class="ws-sec-tag auto">문단 스타일</span></div>
+        <p class="ws-sec-p">원고의 <b>■ 표시</b>가 붙은 줄입니다. 붙여넣기만 하면 그냥 본문이라,
+          편집기 드롭다운에서 <b>소제목</b>으로 바꿔줍니다. 글자 크기 ${d.subheadSize}로 나옵니다.</p>
+        <div class="ws-subheads">
+          ${d.subheads.map((s, i) => `<div><b>${i + 1}</b> ${esc(s.text)}</div>`).join("")}
+        </div>
+      </div>` : ""}
+
+      ${d.quotes.length ? `
+      <div class="ws-sec">
+        <div class="ws-sec-h">2 · 인용구 ${d.quotes.length}개
+          <span class="ws-sec-tag auto">문단 스타일</span></div>
+        <p class="ws-sec-p">스크롤하다 눈이 멈추는 자리입니다. 글에서 딱 기억할 한 줄만 씁니다.</p>
+        ${d.quotes.map((q) => `<div style="padding:7px 0;border-bottom:1px solid #f0f1f4">
+          <div style="font-size:13px;font-weight:600">${esc(q.text)}</div>
+          <div style="font-size:11.5px;opacity:.7;margin-top:2px">${esc(q.why)}</div>
+        </div>`).join("")}
+      </div>` : ""}
+
+      ${d.marks.length ? `
+      <div class="ws-sec">
+        <div class="ws-sec-h">3 · 강조 ${d.marks.length}군데</div>
+        <p class="ws-sec-p">잘 되는 블로그를 세어보니 1,000자에
+          굵게 ${d.measured.winner.bold} · 밑줄 ${d.measured.winner.underline} ·
+          배경색 ${d.measured.winner.highlight} · 글자색 ${d.measured.winner.color}번입니다.
+          그 비율로 맞췄습니다.</p>
+        ${d.marks.map((m) => `<div style="padding:6px 0;border-bottom:1px solid #f0f1f4">
+          <span style="font-size:10.5px;font-weight:700;color:${kindColor[m.kind]};
+            border:1px solid ${kindColor[m.kind]};border-radius:4px;padding:1px 5px">${esc(m.label)}</span>
+          <b style="margin-left:6px">${esc(m.text)}</b>
+          <div style="font-size:11.5px;opacity:.7;margin-top:2px">${esc(m.why)}</div>
+        </div>`).join("")}
+      </div>` : ""}
+
+      ${d.dropped && d.dropped.length ? `
+      <details style="margin-top:10px">
+        <summary class="ws-dim" style="cursor:pointer;font-size:12px">
+          AI가 줬지만 뺀 것 ${d.dropped.length}개</summary>
+        <div style="font-size:11.5px;line-height:1.8;margin-top:6px;opacity:.8">
+          ${d.dropped.slice(0, 8).map((x) => `· "${esc(x.phrase)}" — ${esc(x.why)}`).join("<br>")}
+        </div>
+      </details>` : ""}
+
+      <div id="ws-fmt-out"></div>
+    `);
+
+    const again = panel.querySelector("#ws-fmt-again");
+    if (again) again.addEventListener("click", () => { CACHE.delete(cacheKey("fmt", getTitle(), getBodyText())); runFormat(); });
+
+    panel.querySelector("#ws-fmt-go").addEventListener("click", (e) => applyFormat(d, e.target));
+  }
+
+  /** 실제로 넣습니다. 하나씩, 확인하면서. */
+  async function applyFormat(d, btn) {
+    const F = window.__wsFormat;
+    const out = panel.querySelector("#ws-fmt-out");
+    btn.disabled = true;
+
+    const root = getEditorRoot();
+    if (!root) { out.innerHTML = `<div class="ws-row bad">본문을 못 찾았습니다.</div>`; return; }
+
+    const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
+    const paras = () => [...root.querySelectorAll(".se-text-paragraph")].filter(
+      (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") && !n.closest(".se-placeholder")
+    );
+
+    const done = [];
+    const failed = [];
+    let step = 0;
+    const totalSteps = d.subheads.length + d.quotes.length + d.marks.length;
+    const tick = (what) => {
+      step++;
+      btn.textContent = `넣는 중… ${step}/${totalSteps}`;
+      out.innerHTML = `<div class="ws-row">${esc(what)}</div>`;
+    };
+
+    // ── 1. 소제목 ──
+    // ⚠️ 문단 스타일을 바꾸면 화면 구조가 바뀝니다. 그래서 매번 다시 찾습니다.
+    for (const s of d.subheads) {
+      tick(`소제목: ${s.text}`);
+      const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(s.text)));
+      if (!p) { failed.push({ what: `소제목 "${s.text}"`, why: "본문에서 그 줄을 못 찾았습니다" }); continue; }
+      const okk = await F.setParagraphStyle(p, "소제목");
+      okk ? done.push(`소제목: ${s.text}`) : failed.push({ what: `소제목 "${s.text}"`, why: "편집기가 안 바꿔줬습니다" });
+    }
+
+    // ── 2. 인용구 ──
+    for (const q of d.quotes) {
+      tick(`인용구: ${q.text.slice(0, 20)}…`);
+      const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(q.text)));
+      if (!p) { failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: "본문에서 그 문장을 못 찾았습니다" }); continue; }
+      const okk = await F.setParagraphStyle(p, "인용구");
+      okk ? done.push(`인용구: ${q.text.slice(0, 20)}…`) : failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: "편집기가 안 바꿔줬습니다" });
+    }
+
+    // ── 3. 강조 ──
+    for (const m of d.marks) {
+      tick(`${m.label}: ${m.text}`);
+      const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(m.text)));
+      if (!p) { failed.push({ what: `${m.label} "${m.text}"`, why: "본문에서 그 글자를 못 찾았습니다" }); continue; }
+      const r = await F.applyMark(p, m.text, m.kind);
+      r.ok ? done.push(`${m.label}: ${m.text}`) : failed.push({ what: `${m.label} "${m.text}"`, why: r.why });
+    }
+
+    btn.textContent = `${done.length}군데 넣었습니다`;
+    scheduleCount();
+
+    out.innerHTML = `
+      <div class="ws-row ${failed.length ? "warn" : "good"}">
+        <b>${done.length}군데 넣었습니다.</b>
+        ${failed.length ? ` ${failed.length}군데는 못 넣었습니다.` : ""}
+      </div>
+      ${failed.length ? `
+        <div class="ws-sec warn-sec">
+          <div class="ws-sec-h">못 넣은 것</div>
+          <p class="ws-sec-p">이건 <b>직접 넣으셔야</b> 합니다. 되는 척하지 않겠습니다.</p>
+          <div style="font-size:12px;line-height:1.8">
+            ${failed.map((f) => `· ${esc(f.what)}<br><span style="opacity:.7">&nbsp;&nbsp;${esc(f.why)}</span>`).join("<br>")}
+          </div>
+        </div>` : ""}`;
+  }
+
   // ── 홈판 썸네일 ───────────────────────────────────────
   //
   // ⚠️ 여기서 썸네일까지 만들지는 않습니다. 사진을 골라야 하는데, 글쓰기 창에
@@ -1764,6 +1954,7 @@
       if (!act) return;
       if (act === "hometitle") homeTitle();
       else if (act === "homebody") homeBody();
+      else if (act === "format") runFormat();
       else if (act === "topic") checkTopic();
       else if (act === "font") applyFont();
       else if (act === "image") resizeImages();

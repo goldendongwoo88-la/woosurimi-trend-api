@@ -25,6 +25,7 @@ const thumbnail = require("./thumbnail");
 const lineBreak = require("./lineBreak");
 const spellCheck = require("./spellCheck");
 const thumbAuto = require("./thumbAuto");
+const emphasis = require("./emphasis");
 
 // 썸네일용 사진 받기.
 // ⚠️ 디스크에 안 씁니다(memoryStorage). 만들어서 바로 돌려주면 끝인 사진을
@@ -750,6 +751,36 @@ module.exports = function attachSaas(app) {
   app.post("/api/thumb/mode", (req, res) => {
     const { title, body } = req.body || {};
     res.json({ ok: true, ...thumbAuto.looksBeforeAfter(title || "", body || "") });
+  });
+
+  // ── 자동 강조·인용구·소제목 ─────────────────────────────
+  //
+  // ⚠️ AI가 본문을 읽고 어디를 강조할지 정합니다. 크레딧이 나갑니다.
+  // 다만 **성공한 뒤에** 깎습니다 (자동 썸네일에서 배운 것).
+  app.post(
+    "/api/emphasis",
+    usage.creditGate("emphasis", accounts, { consumeOnPass: false }),
+    async (req, res) => {
+      const { title, body } = req.body || {};
+      try {
+        const r = await emphasis.plan({ title, body });
+        if (!r.ok) return res.status(400).json({ error: r.why, ...r });
+        usage.chargeCredits(req, "emphasis");
+        res.json({ ...r, usage: req.usage });
+      } catch (e) {
+        res.status(502).json({ error: e.message || "강조할 자리를 못 골랐습니다." });
+      }
+    }
+  );
+
+  // 실측 근거 — 화면에서 "왜 이 개수인가"를 보여줄 때 씁니다. AI를 안 써서 공짜입니다.
+  app.get("/api/emphasis/rules", (req, res) => {
+    res.json({
+      measured: emphasis.MEASURED,
+      per1000: emphasis.PER_1000,
+      kinds: emphasis.KINDS,
+      subheadSize: emphasis.SUBHEAD_SIZE,
+    });
   });
 
   // ── 줄바꿈 ─────────────────────────────────────────────
