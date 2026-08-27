@@ -116,6 +116,23 @@ app.use("/bgm", express.static(path.join(__dirname, "..", "assets", "bgm"))); //
 // 라우트가 많아 index.js가 더 길어지지 않게 별도 파일로 뺐습니다.
 require("./saasRoutes")(app);
 
+// ── 메이트 벤치마킹 (2026-08-28) ─────────────────────────
+// 지금 뜨는 연예 소재 — 네이트 랭킹·뉴스1·구글트렌드. 제목·링크만, AI 0원.
+const hotIssues = require("./hotIssues");
+app.get("/api/hot-issues", async (req, res) => {
+  try { res.json(await hotIssues.collect()); }
+  catch (e) { res.status(502).json({ error: "hot_failed", message: e.message }); }
+});
+
+// 메이트식 제목 추천 — 실측 1,281개 제목의 문법 + 키워드 은행 + 오늘 소재.
+const mateTitles = require("./mateTitles");
+app.get("/api/mate-titles", async (req, res) => {
+  const area = req.query.area === "fashion" ? "fashion" : "beauty";
+  let hot = null;
+  try { hot = await hotIssues.collect(); } catch {}
+  res.json(mateTitles.suggest(area, hot, Math.min(20, Number(req.query.n) || 10)));
+});
+
 app.get("/api/trends", (req, res) => {
   const data = cache.getLatest();
   if (!data) {
