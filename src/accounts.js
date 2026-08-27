@@ -203,13 +203,73 @@ function login({ email, password, ip }) {
   return { ok: true, token: sign({ e: u.email, t: Date.now() }), user: publicUser(u) };
 }
 
-/** 쿠키의 토큰으로 사용자를 찾습니다. 없으면 null (= 비회원). */
+/**
+ * 쿠키의 토큰으로 사용자를 찾습니다. 없으면 null (= 비회원).
+ *
+ * ⚠️ 여기서 사장님을 계속 로그아웃시키고 있었습니다. 원인을 남깁니다.
+ *
+ * 무료 서버는 **배포할 때마다 디스크가 비워집니다.** data/accounts.json 은
+ * git 에 안 올라가니까(비밀번호 해시가 들어 있어서 올리면 안 됩니다) 배포 직후엔
+ * 계정이 하나도 없습니다.
+ *
+ * 그런데 **쿠키는 멀쩡합니다.** AUTH_SECRET 이 환경변수로 고정이라 서명이 그대로거든요.
+ * 그래서 이런 일이 벌어졌습니다:
+ *
+ *   쿠키    : 정상 (서명 맞음, 90일 안 지남)
+ *   계정 기록: 없음 (배포가 지웠음)
+ *   결과    : store.users[이메일] → undefined → null → "로그인이 필요합니다"
+ *
+ * 제가 하루에 57번 커밋했으니 그때마다 사장님이 로그아웃되셨습니다.
+ * 사장님이 뭘 잘못하신 게 아니라 **제가 배포할 때마다 쫓아낸 것**입니다.
+ *
+ * ⚠️ 고치는 방법 — **서명이 맞는 토큰은 그 자체가 증거입니다.**
+ * 그 토큰은 우리 서버만 만들 수 있습니다(HMAC). 갖고 있다는 건 예전에
+ * 제대로 로그인했다는 뜻입니다. 그러니 주인 계정이면 환경변수로 되살립니다.
+ * 비밀번호를 다시 묻지 않아도 안전합니다 — 이미 통과한 사람이니까요.
+ *
+ * ⚠️ **손님 계정은 이걸로 못 살립니다.** 비밀번호 해시가 환경변수에 없으니까요.
+ * 손님을 받기 전에는 진짜 저장소(디스크나 DB)를 붙여야 합니다. 아직 안 풀린 문제입니다.
+ */
 function userFromToken(token) {
   const p = unsign(token);
   if (!p || !p.e) return null;
   // 90일이 지난 토큰은 버립니다.
   if (p.t && Date.now() - p.t > COOKIE_DAYS * 86400000) return null;
-  return store.users[p.e] || null;
+
+  const found = store.users[p.e];
+  if (found) return found;
+
+  // 기록이 없는데 서명은 맞습니다 → 배포가 지운 것입니다. 주인이면 되살립니다.
+  return restoreOwner(p.e);
+}
+
+/**
+ * 주인 계정을 환경변수로 되살립니다. 비밀번호를 안 묻습니다.
+ *
+ * ⚠️ 부르는 쪽에서 **서명이 맞는 토큰을 이미 확인했을 때만** 부르세요.
+ * 아무 데서나 부르면 이메일만 알면 남의 계정이 되는 셈입니다.
+ */
+function restoreOwner(email) {
+  const e = normEmail(email);
+  if (!isOwner(e)) return null;          // 주인이 아니면 못 살립니다
+  if (!process.env.OWNER_PASSWORD) return null;   // 되살릴 근거가 없습니다
+
+  store.users[e] = {
+    email: e,
+    name: (process.env.OWNER_NAME || e.split("@")[0]).slice(0, 40),
+    password: hashPassword(process.env.OWNER_PASSWORD),
+    blogId: process.env.OWNER_BLOG_ID || null,
+    plan: "biz",
+    planUntil: null,
+    createdAt: new Date().toISOString(),
+    points: 0,
+    streak: 0,
+    lastSeenDate: null,
+    licenses: [],
+  };
+  save();
+  console.log(`[accounts] 배포로 지워진 주인 계정을 쿠키로 되살렸습니다: ${e}`);
+  return store.users[e];
 }
 
 function publicUser(u) {
