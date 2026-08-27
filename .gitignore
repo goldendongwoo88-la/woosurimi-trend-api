@@ -4,3 +4,6 @@ node_modules/
 public/renders/*.mp4
 public/uploads/*
 data/*.json
+
+# 시험용 임시 파일 — 커밋하면 안 됩니다
+scratch-*
