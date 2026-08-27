@@ -790,6 +790,50 @@ module.exports = function attachSaas(app) {
     });
   });
 
+  // ── 고객용 성과 보고서 ─────────────────────────────────
+  //
+  // ⚠️ 브랜드 블로그 대행 파일럿용입니다. 업주에게 링크 하나로 성적표를 보냅니다.
+  // 실측만 씁니다 — 순위는 그 시각에 실제로 검색한 값, 방문자는 공개값.
+  //
+  // ⚠️ 만들기는 **주인만** 됩니다. 아무나 만들 수 있으면 남의 블로그로
+  // 보고서를 찍어 사칭 영업을 할 수 있습니다. 보기는 링크를 아는 사람 누구나.
+  const clientReport = require("./clientReport");
+
+  const OWNER_SET = new Set(
+    String(process.env.OWNER_EMAIL || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)
+  );
+  const isOwnerReq = (req) => !!(req.user && OWNER_SET.has(String(req.user.email).toLowerCase()));
+
+  app.post("/api/report/client", async (req, res) => {
+    if (!isOwnerReq(req)) return res.status(403).json({ error: "주인 계정만 보고서를 만들 수 있습니다." });
+    const { blogId, storeName, note, posts, demo } = req.body || {};
+    try {
+      const data = demo ? clientReport.demoData() : await clientReport.collect(blogId, {
+        posts: Math.max(3, Math.min(10, Number(posts) || 6)),
+        storeName, note,
+      });
+      const id = clientReport.create(data, { owner: req.user.email });
+      res.json({ ok: true, id, url: `/cr/${id}`, measured: !demo });
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.get("/cr/:id", (req, res) => {
+    const item = clientReport.get(req.params.id);
+    if (!item) {
+      // 무료 서버는 배포마다 디스크가 지워집니다. 보고서도 사라질 수 있습니다.
+      // 업주가 죽은 링크를 보게 하느니, 무슨 일인지 말해줍니다.
+      return res.status(404).send(
+        `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>보고서를 찾을 수 없습니다</title></head>` +
+        `<body style="font-family:sans-serif;max-width:480px;margin:80px auto;padding:0 20px;line-height:1.8;color:#333">` +
+        `<h2>이 보고서는 기간이 지나 정리되었습니다</h2>` +
+        `<p>담당자에게 새 보고서 링크를 요청해 주세요. 수치는 전부 실측이라 언제든 다시 만들 수 있습니다.</p></body></html>`
+      );
+    }
+    res.type("html").send(clientReport.render(item));
+  });
+
   // ── 브랜드 설정 ────────────────────────────────────────
   //
   // ⚠️ 경쟁 서비스(adport.kr)의 "셋업 완성도 79% · 15/19 완료" 화면에서 가져온 생각입니다.
