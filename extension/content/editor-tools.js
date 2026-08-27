@@ -80,13 +80,49 @@
     return (el.value ?? el.innerText ?? "").trim();
   }
 
+  /**
+   * 본문에 **실제로 입력된 글자**만 모읍니다.
+   *
+   * ⚠️ 원래는 편집기 전체(.se-main-container)의 innerText를 그대로 셌습니다.
+   * 그랬더니 17자 쓴 글이 **102자**로 나왔습니다. 늑대플은 17자로 맞게 셌고요.
+   *
+   * 무엇이 더 세어졌냐면:
+   *   - 안내 문구(placeholder) — "나를 돌아보는 회고, 뜻밖의 발견을 기다립니다. #모두의회고"
+   *   - "애드포스트 노출 영역" 같은 편집기 안내 표시가 두 줄
+   *   - 제목 칸의 "제목" 안내 문구
+   * 전부 사장님이 쓴 글이 아닙니다. 글자 수는 발행 분량을 가늠하는 숫자인데
+   * 안 쓴 글자가 섞이면 그 판단이 통째로 어긋납니다.
+   *
+   * 그래서 **글 문단(se-text-paragraph)만** 골라서, 안내 문구는 빼고 셉니다.
+   */
   function getBodyText() {
     const root = getEditorRoot();
     if (!root) return "";
-    // 제목 영역은 본문에서 뺍니다. 안 그러면 글자 수가 부풀려집니다.
-    const clone = root.cloneNode(true);
-    clone.querySelectorAll(".se-documentTitle").forEach((n) => n.remove());
-    return (clone.innerText || "").replace(/​/g, "").trim();
+
+    // 글 컴포넌트 안의 문단만. 사진 설명·인용구도 본문이라 함께 셉니다.
+    let nodes = [...root.querySelectorAll(".se-text-paragraph")];
+
+    // 문단을 못 찾으면(구조가 바뀌었으면) 예전 방식으로 물러섭니다.
+    if (!nodes.length) {
+      const clone = root.cloneNode(true);
+      clone.querySelectorAll(".se-documentTitle, .se-placeholder").forEach((n) => n.remove());
+      return (clone.innerText || "").replace(/​/g, "").trim();
+    }
+
+    const parts = [];
+    for (const n of nodes) {
+      // 제목 칸은 본문이 아닙니다.
+      if (n.closest(".se-documentTitle")) continue;
+      // 안내 문구 자체이거나 안내 문구를 품고 있으면 건너뜁니다.
+      if (n.classList.contains("se-placeholder") || n.closest(".se-placeholder")) continue;
+
+      const clone = n.cloneNode(true);
+      clone.querySelectorAll(".se-placeholder").forEach((x) => x.remove());
+      // 네이버는 빈 문단에 보이지 않는 글자(U+200B)를 넣어둡니다. 그것도 빼야 합니다.
+      const t = (clone.innerText || "").replace(/​/g, "");
+      if (t.trim()) parts.push(t);
+    }
+    return parts.join("\n").trim();
   }
 
   function countMedia() {

@@ -4,8 +4,12 @@
 
 .ws-panel {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  /* ⚠️ 원래 오른쪽 아래(bottom:20px)에 뒀는데, 그 자리에 도구 막대가 생기면서
+     서로 겹쳤습니다. 막대는 화면 아래 가운데를 쓰니, 이 창은 위로 올립니다.
+     늑대플 세로 줄(오른쪽 끝)과도 안 부딪히게 오른쪽 여백을 조금 더 줍니다. */
+  right: 84px;
+  top: 84px;
+  bottom: auto;
   width: 320px;
   z-index: 2147483000;
   background: #fff;
