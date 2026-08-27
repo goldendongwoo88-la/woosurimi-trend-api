@@ -113,11 +113,34 @@ const CACHE_MIN_CHARS = 800;
 const LONG_TTL_HEADER = "extended-cache-ttl-2025-04-11";
 let longTtlWorks = true;   // 한 번 거절당하면 끕니다
 
-function buildSystem(system, useLongTtl) {
+/**
+ * ⚠️ 1시간 캐시가 늘 이득인 게 아닙니다. 계산해봤습니다.
+ * (55,000토큰 프롬프트, 입력 쪽만, 1달러 1,380원)
+ *
+ *   부르는 횟수   캐시없음    5분캐시    1시간캐시
+ *      1번          228원      285원       455원   ← 5분이 171원 쌈
+ *      7번        1,594원      421원       592원   ← 5분이 171원 쌈
+ *
+ * 1시간 캐시는 **넣는 값이 2배**(5분은 1.25배)라 항상 171원을 더 냅니다.
+ *
+ * 그런데 5분 캐시는 **5분 안에 다 불러야** 저 값입니다.
+ * 7단계를 30분에 걸쳐 밟으면 5분 캐시는 계속 죽습니다:
+ *   5분캐시가 매번 죽으면  1,992원
+ *   1시간캐시로 살아있으면   592원   ← 1,400원 차이
+ *
+ * 그래서 **부르는 방식으로 골라야** 합니다.
+ *   한 번 부르고 마는 것 (제목 뽑기, 자동 서식, 썸네일) → 5분
+ *   사람이 천천히 밟는 것 (스킬 7단계)                → 1시간
+ *
+ * ⚠️ 다른 대화창(증권사 에이전트)이 짚어준 것입니다.
+ * 거기는 2~3분 간격 배치라 5분이 맞고, 여기는 손님이 띄엄띄엄 불러서 다릅니다.
+ * 같은 캐시라도 쓰는 방식이 다르면 답이 다릅니다.
+ */
+function buildSystem(system, cacheMode) {
   if (!system) return {};
   const text = String(system);
   if (text.length < CACHE_MIN_CHARS) return { system: text };
-  const cc = useLongTtl && longTtlWorks
+  const cc = cacheMode === "long" && longTtlWorks
     ? { type: "ephemeral", ttl: "1h" }
     : { type: "ephemeral" };
   return { system: [{ type: "text", text, cache_control: cc }] };
@@ -127,7 +150,7 @@ function buildSystem(system, useLongTtl) {
 let lastUsage = null;
 function getLastUsage() { return lastUsage; }
 
-async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8, timeoutMs } = {}) {
+async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8, timeoutMs, cache } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("서버에 ANTHROPIC_API_KEY가 설정되어 있지 않습니다.");
   if (!Array.isArray(messages) || !messages.length) throw new Error("messages가 비어 있습니다.");
@@ -138,18 +161,27 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
       "content-type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      // 1시간 캐시는 베타라 머리글이 필요합니다. 5분짜리는 안 붙입니다.
+      ...(cache === "long" && longTtlWorks ? { "anthropic-beta": LONG_TTL_HEADER } : {}),
     },
     body: JSON.stringify({
       model: DEFAULT_MODEL,
       max_tokens: maxTokens,
       temperature,
-      ...buildSystem(system),
+      ...buildSystem(system, cache),
       messages,
     }),
   }, timeoutMs);
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
+    // ⚠️ 1시간 캐시가 거절당하면 **한 번만** 5분짜리로 다시 해봅니다.
+    // 여기서 그냥 죽으면 AI 기능이 통째로 멈춥니다. 베타 기능 하나 때문에요.
+    if (cache === "long" && longTtlWorks && /ttl|beta|cache_control/i.test(errText)) {
+      longTtlWorks = false;
+      console.warn("[claude] 1시간 캐시를 못 써서 5분짜리로 물러섭니다.");
+      return callClaude({ system, messages, maxTokens, temperature, timeoutMs, cache: "short" });
+    }
     throw new Error(explain(res.status, errText));
   }
   const data = await res.json();

@@ -30,9 +30,10 @@ const SYSTEM =
   const ok = (c, l, e = "") => { console.log(`  ${c ? "✓" : "✗"} ${l}${e ? "  " + e : ""}`); c ? pass++ : fail++; };
 
   // ── 첫 번째: 캐시에 씁니다 ──
-  console.log("━━ 첫 번째 (캐시에 넣기) ━━");
+  // ⚠️ 스킬처럼 사람이 천천히 밟는 경우를 흉내 냅니다 → 1시간 캐시
+  console.log("━━ 첫 번째 (1시간 캐시에 넣기) ━━");
   try {
-    await C.callClaude({ system: SYSTEM, messages: [{ role: "user", content: "안녕" }], maxTokens: 10 });
+    await C.callClaude({ system: SYSTEM, messages: [{ role: "user", content: "안녕" }], maxTokens: 10, cache: "long" });
   } catch (e) {
     console.log("  ✗ 실패:", e.message);
     process.exit(1);
@@ -45,7 +46,7 @@ const SYSTEM =
   console.log("\n━━ 두 번째 (캐시 읽기) ━━");
   await new Promise((r) => setTimeout(r, 1500));
   try {
-    await C.callClaude({ system: SYSTEM, messages: [{ role: "user", content: "반가워" }], maxTokens: 10 });
+    await C.callClaude({ system: SYSTEM, messages: [{ role: "user", content: "반가워" }], maxTokens: 10, cache: "long" });
   } catch (e) {
     console.log("  ✗ 실패:", e.message);
     process.exit(1);
