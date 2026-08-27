@@ -264,3 +264,13 @@
 
 /* 가로 스크롤 막대는 숨깁니다 — 있으면 막대가 두꺼워 보입니다 */
 #ws-tools-dock::-webkit-scrollbar { height: 0; }
+
+/* 찾은 사실 고르기 */
+#ws-tools-panel .ws-fact-row {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 8px 0; border-bottom: 1px solid #f0f1f4; font-size: 13px; line-height: 1.6;
+  cursor: pointer;
+}
+#ws-tools-panel .ws-fact-row:last-of-type { border-bottom: none; }
+#ws-tools-panel .ws-fact-row input { margin-top: 3px; flex: none; }
+#ws-tools-panel .ws-fact-row em { font-style: normal; color: #8b909c; font-size: 11px; }

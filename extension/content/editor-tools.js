@@ -99,8 +99,17 @@
     const root = getEditorRoot();
     if (!root) return "";
 
-    // 글 컴포넌트 안의 문단만. 사진 설명·인용구도 본문이라 함께 셉니다.
-    let nodes = [...root.querySelectorAll(".se-text-paragraph")];
+    // ⚠️ 여기서 한 번 더 좁혔습니다.
+    // 사진 15장·링크 4개가 있는 글에서 1,435자로 나왔는데 늑대플은 779자였습니다.
+    // 사진 캡션과 링크카드(oglink) 안의 제목·설명까지 세고 있었기 때문입니다.
+    // 그건 네이버가 자동으로 채워 넣은 글자지 사장님이 쓴 글이 아닙니다.
+    // 사진 4장만 넣어도 수백 자가 부풀려집니다.
+    //
+    // 글 컴포넌트와 인용구만 셉니다. 인용구는 소제목 역할이라 본문이 맞습니다.
+    const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
+    let nodes = [...root.querySelectorAll(".se-text-paragraph")].filter(
+      (n) => !n.closest(SKIP)
+    );
 
     // 문단을 못 찾으면(구조가 바뀌었으면) 예전 방식으로 물러섭니다.
     if (!nodes.length) {
@@ -332,7 +341,11 @@
             <div class="ws-title-text">${esc(x.text)}</div>
             <div class="ws-dim">${esc(x.why)}</div>
             ${x.invented && x.invented.length ? `<div class="ws-row bad" style="margin:5px 0 0">
-              ⚠ 본문에 없는 말: <b>${esc(x.invented.join(", "))}</b></div>` : ""}
+              ⚠ 본문에 없는 말: <b>${esc(x.invented.join(", "))}</b>
+              <button class="ws-apply" data-fill="${esc(x.invented.join(", "))}" data-for="${esc(x.text)}">본문에 넣기</button></div>` : ""}
+            ${x.repeats && x.repeats.length ? `<div class="ws-row warn" style="margin:5px 0 0">
+              같은 말이 두 번: <b>${esc(x.repeats.map((r) => r.word + " ×" + r.times).join(", "))}</b>
+              <span class="ws-dim">— 저품질 사유는 아니지만 자리가 아깝습니다</span></div>` : ""}
             <button class="ws-apply" data-apply="${esc(x.text)}">이걸로 바꾸기</button>
           </div>`).join("")}
         <p class="ws-dim">제목이 약속한 내용은 본문에 반드시 있어야 합니다.
@@ -341,6 +354,12 @@
 
       panel.querySelectorAll("[data-apply]").forEach((b) =>
         b.addEventListener("click", () => applyTitle(b.dataset.apply))
+      );
+      panel.querySelectorAll("[data-fill]").forEach((b) =>
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          askToFill(b.dataset.fill, b.dataset.for);
+        })
       );
     } catch (e) {
       showPanel(`<h4>홈판 제목</h4><div class="ws-row bad">${esc(e.message)}</div>
@@ -436,6 +455,111 @@
       <div class="ws-row warn">제목을 자동으로 바꾸지 못했습니다.
         <b>복사해 뒀으니</b> 제목 칸을 클릭하고 전체 선택(Ctrl+A) 후 Ctrl+V를 눌러주세요.</div>
       <div class="ws-preview"><pre>${esc(want)}</pre></div>`);
+  }
+
+  // ── 제목이 약속한 내용을 본문에 채우기 ────────────────
+  //
+  // ⚠️ 제목에 "4방향"이 있는데 본문에 없으면, 들어온 사람이 그 대목을 못 찾고 나갑니다.
+  // 그렇다고 AI가 "4방향으로 그렸습니다"를 지어내면 **글 전체가 거짓**이 됩니다.
+  // 제목만 낚시였던 것보다 나쁩니다.
+  //
+  // 그래서 길을 셋으로 엽니다. 사실은 반드시 밖에서 들어옵니다.
+  //   1) 사장님이 아신다  → 적어주시면 본문 알맞은 자리에 엮음
+  //   2) 모르신다        → 자료를 찾아와서 출처와 함께 보여주고, 고르시면 엮음
+  //   3) 자료도 없다      → 본문은 그대로 두고 그 말이 빠진 제목을 쓰시게 안내
+  function askToFill(missing, forTitle) {
+    showPanel(`
+      <h4>본문에 넣기</h4>
+      <p class="ws-dim">제목이 약속한 <b>${esc(missing)}</b>가 본문에 없습니다.
+        들어온 사람이 그 대목을 못 찾으면 바로 나갑니다.</p>
+      <div class="ws-row warn" style="margin:6px 0">
+        <b>지어내지 않습니다.</b> 아시는 내용을 적어주시거나, 모르시면 찾아드립니다.
+      </div>
+      <textarea id="ws-fact" rows="3" placeholder="예: 아이라인을 눈꼬리·앞머리·아래·위 네 방향으로 얇게 그렸다"
+        style="width:100%;padding:9px;font:inherit;font-size:13px;border:1px solid #e6e8ed;border-radius:8px;resize:vertical"></textarea>
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+        <button class="ws-apply" id="ws-fact-go" style="margin-top:0">이 내용으로 채우기</button>
+        <button class="ws-apply" id="ws-fact-find" style="margin-top:0">모르겠어요 · 찾아보기</button>
+      </div>
+      <p class="ws-dim">찾아보기는 뉴스와 상위 블로그를 읽어 출처와 함께 보여드립니다.</p>
+    `);
+
+    panel.querySelector("#ws-fact-go").onclick = () =>
+      doFill(missing, panel.querySelector("#ws-fact").value.trim());
+    panel.querySelector("#ws-fact-find").onclick = () => findFacts(missing, forTitle);
+  }
+
+  /** 자료를 찾아옵니다. 출처를 그대로 보여줘야 사장님이 확인하실 수 있습니다. */
+  async function findFacts(missing, forTitle) {
+    const topic = (getTitle() || forTitle || "").slice(0, 40);
+    showPanel(`<h4>자료 찾는 중</h4><p>뉴스와 상위 블로그를 읽고 있습니다… 30초쯤 걸립니다.</p>`);
+    try {
+      const d = await server("/api/research", { topic, angle: missing });
+      showPanel(`
+        <h4>찾은 것</h4>
+        ${d.facts && d.facts.length ? `
+          <p class="ws-dim">자료에서 확인된 사실입니다. 쓸 것을 고르세요.</p>
+          ${d.facts.map((f, i) => `
+            <label class="ws-fact-row">
+              <input type="checkbox" data-fact="${esc(f.text)}" ${i < 3 ? "checked" : ""}>
+              <span>${esc(f.text)} <em>[${f.source}]</em></span>
+            </label>`).join("")}
+        ` : `<div class="ws-row warn">확인된 사실을 못 찾았습니다.</div>`}
+        ${d.missing && d.missing.length ? `<div class="ws-row warn">
+          자료에도 없어서 사장님이 확인하셔야 하는 것: ${esc(d.missing.join(", "))}</div>` : ""}
+        <div style="margin-top:9px">
+          <button class="ws-apply" id="ws-fact-use">고른 것으로 본문 채우기</button>
+        </div>
+        <details class="ws-preview" style="margin-top:9px"><summary>출처 ${(d.sources || []).length}건 보기</summary>
+          <div style="font-size:12px;line-height:1.8">
+            ${(d.sources || []).map((s) => `[${s.n}] (${esc(s.kind)}) ${s.url
+              ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>`
+              : esc(s.title)}`).join("<br>")}
+          </div></details>
+        <p class="ws-dim">${esc(d.note || "")}</p>
+      `);
+      const use = panel.querySelector("#ws-fact-use");
+      if (use) use.onclick = () => {
+        const picked = [...panel.querySelectorAll("[data-fact]:checked")].map((c) => c.dataset.fact);
+        if (!picked.length) return alert("넣을 것을 하나 이상 고르세요.");
+        doFill(missing, picked.join("\n"));
+      };
+    } catch (e) {
+      showPanel(`<h4>자료 찾기</h4><div class="ws-row bad">${esc(e.message)}</div>
+        <p class="ws-dim">자료를 못 찾으면 본문은 그대로 두고, 그 말이 빠진 제목을 고르시는 편이 안전합니다.</p>`);
+    }
+  }
+
+  async function doFill(missing, facts) {
+    if (!facts) return alert("넣을 내용을 적거나 골라주세요.");
+    showPanel(`<h4>본문에 넣는 중</h4><p>알맞은 자리를 찾고 있습니다… 30초쯤 걸립니다.</p>`);
+    try {
+      const d = await server("/api/body-fill", {
+        body: getBodyText(),
+        title: getTitle(),
+        missing: [missing],
+        facts,
+      });
+      lastBody = d.body;
+      showPanel(`
+        <h4>본문에 넣었습니다</h4>
+        <div class="ws-stats">
+          <span>분량 <b>${d.before.chars.toLocaleString()}</b> → <b class="ws-up">${d.after.chars.toLocaleString()}</b>자</span>
+        </div>
+        ${d.where ? `<p class="ws-dim">넣은 자리: ${esc(d.where)}</p>` : ""}
+        ${d.added && d.added.length ? `<div class="ws-subheads">
+          ${d.added.map((a) => `<div>${esc(a)}</div>`).join("")}</div>` : ""}
+        ${d.invented && d.invented.length ? `<div class="ws-row bad">
+          ⚠ 주신 내용에도 없던 말이 섞였습니다: <b>${esc(d.invented.join(", "))}</b> — 꼭 확인하세요.</div>` : ""}
+        <button class="ws-apply" id="ws-copy-body">채운 본문 복사</button>
+        <details class="ws-preview"><summary>전체 보기</summary><pre>${esc(d.body)}</pre></details>
+        <p class="ws-dim">${esc(d.note)}</p>
+      `);
+      const btn = panel.querySelector("#ws-copy-body");
+      if (btn) btn.onclick = () => navigator.clipboard.writeText(lastBody).then(() => (btn.textContent = "복사됐습니다"));
+    } catch (e) {
+      showPanel(`<h4>본문에 넣기</h4><div class="ws-row bad">${esc(e.message)}</div>`);
+    }
   }
 
   // ── 홈판 본문으로 보완 ────────────────────────────────

@@ -68,7 +68,10 @@ function homefeedPatch() {
       .map((d) => `- ${d.label}: 잘 되는 쪽 ${d.winner}% / 덜 되는 쪽 ${d.baseline}%. ${d.why}`)
       .join("\n") +
     `\n\n### 절대 하지 말 것\n` +
-    r.AVOID.map((a) => `- ${a.what} — ${a.why}`).join("\n") + "\n"
+    r.AVOID.map((a) => `- ${a.what} — ${a.why}`).join("\n") + "\n" +
+    // ⚠️ 결론을 어디 둘지는 글 성격마다 다릅니다. 스킬 파일에는 이 구분이 없어서
+    // 여기서 덧댑니다. 후기는 판정을 위로, 연예인 정보성은 반전을 아래로.
+    r.placementBlock() + "\n"
   );
 }
 

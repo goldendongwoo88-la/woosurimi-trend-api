@@ -86,6 +86,10 @@ async function rewrite({ title, body = "", count = 5 }) {
     `\n${count}개 각각에 아래 방식을 **반드시** 적용하세요. 순서대로 하나씩입니다:\n` +
     recipes.map((r, i) => `${i + 1}) ${r}`).join("\n") +
     `\n\n말줄임표는 반드시 … 또는 ... 형태로 실제로 넣으세요.\n` +
+    // ⚠️ 같은 낱말을 두 번 쓰지 말라고 못 박습니다. 안 그러면 이렇게 나옵니다:
+    //   "카리나 메이크업 핵심은 이것" 메이크업 아티스트가 알려준 비법
+    `제목 안에서 같은 낱말을 두 번 쓰지 마세요. 핵심 키워드도 한 번만 씁니다.\n` +
+    `제목은 40자 남짓뿐이라 같은 말을 반복하면 다른 정보를 넣을 자리가 없어집니다.\n` +
     `제목 길이는 35~45자가 적당합니다.\n\n` +
     `JSON만 답하세요:\n` +
     `{"titles":[{"text":"제목","why":"이 제목이 왜 눈을 멈추게 하는지 한 문장"}]}`;
@@ -128,13 +132,47 @@ async function rewrite({ title, body = "", count = 5 }) {
     return [...new Set(out)];
   };
 
+  /**
+   * 같은 낱말이 제목 안에서 반복되는지 봅니다.
+   *
+   * ⚠️ 사장님이 물으셨습니다 — "메이크업이 두 번 들어갔는데 저품질 아니냐"고.
+   * 두 번은 저품질 사유가 아닙니다. 네이버가 문제 삼는 건 같은 키워드를
+   * 여러 번 욱여넣는 스터핑이고, 제목 한 줄에 두 번은 그 수준이 아닙니다.
+   *
+   * 그래도 고치는 게 낫습니다. 이유는 두 가지입니다.
+   *   1) 어색합니다. 사람이 쓴 것 같지 않게 읽힙니다.
+   *   2) 자리가 아깝습니다. 제목은 40자 남짓인데 같은 말을 두 번 쓰면
+   *      다른 정보(숫자·반전·대상)를 넣을 칸이 줄어듭니다.
+   * 세 번부터는 확실히 문제라 따로 표시합니다.
+   */
+  const findRepeats = (text) => {
+    const words = String(text)
+      .replace(/[^가-힣a-zA-Z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 2);
+    const count = new Map();
+    for (const w of words) count.set(w, (count.get(w) || 0) + 1);
+    return [...count.entries()]
+      .filter(([, n]) => n >= 2)
+      .map(([w, n]) => ({ word: w, times: n }))
+      .sort((a, b) => b.times - a.times);
+  };
+
   const titles = list
     .map((x) => {
       const text = String(x.text || x.title || "").trim();
       if (!text) return null;
       const a = analyze(text);
       const invented = findInvented(text);
-      return { text, why: String(x.why || "").trim(), devices: a, score: score(a), invented };
+      const repeats = findRepeats(text);
+      return {
+        text,
+        why: String(x.why || "").trim(),
+        devices: a,
+        score: score(a),
+        invented,
+        repeats,
+      };
     })
     .filter(Boolean)
     // 장치를 많이 쓴 것부터

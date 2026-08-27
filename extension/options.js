@@ -45,3 +45,25 @@ $("#test").onclick = async () => {
     }
   });
 };
+
+// 토큰 자동으로 받기
+//
+// ⚠️ 확장을 지우고 다시 넣으면 크롬이 다른 확장으로 취급해서 저장해둔 설정이
+// 통째로 사라집니다. 버전을 올릴 때마다 사장님이 토큰을 다시 넣어야 했습니다.
+// 확장은 우리 도메인 권한이 있어서, 배경에서 부르면 로그인 쿠키가 함께 실립니다.
+// 사이트에 로그인만 돼 있으면 손으로 옮길 필요가 없습니다.
+$("#synctoken").onclick = () => {
+  say("우수리미에서 토큰을 받아오는 중입니다…", "wait");
+  chrome.runtime.sendMessage({ type: "syncToken" }, (res) => {
+    if (res && res.ok) {
+      $("#token").value = res.data.token;
+      say("토큰을 받아 저장했습니다. 이제 글쓰기 창에서 AI 기능을 쓰실 수 있습니다.", "good");
+    } else {
+      say(
+        `받지 못했습니다.<br><small>${(res && res.message) || "알 수 없는 문제"}</small>` +
+          `<br><small><a href="https://woosurimi-trend-api.onrender.com/join.html" target="_blank">우수리미에서 먼저 로그인하기</a></small>`,
+        "bad"
+      );
+    }
+  });
+};

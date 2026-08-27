@@ -20,6 +20,7 @@ const notify = require("./notify");
 const bodyRewrite = require("./bodyRewrite");
 const topicFit = require("./topicFit");
 const suggestTopics = require("./suggestTopics");
+const research = require("./research");
 
 // ── 쿠키 ──────────────────────────────────────────────────
 // cookie-parser를 새로 깔지 않고 직접 읽습니다. 쿠키 하나만 쓰면 이걸로 충분합니다.
@@ -440,6 +441,40 @@ module.exports = function attachSaas(app) {
   app.get("/api/suggest-topics/seeds", (req, res) =>
     res.json({ seeds: suggestTopics.SEEDS })
   );
+
+  // 자료 조사 — 내가 모르는 것을 찾아서 글 뼈대로
+  // ⚠️ 뉴스·블로그를 여러 번 읽고 AI까지 부르는 무거운 기능입니다.
+  app.post("/api/research", usage.creditGate("draft", accounts), async (req, res) => {
+    const { topic, angle } = req.body || {};
+    if (!String(topic || "").trim())
+      return res.status(400).json({ error: "무엇을 찾을지 알려주세요." });
+    const planId = req.user ? req.user.plan : "free";
+    const newsCount = planId === "biz" ? 12 : 8;
+    const blogCount = planId === "free" ? 2 : 3;
+    try {
+      const r = await research.research({ topic, angle, newsCount, blogCount });
+      if (!r.ok) return res.status(400).json({ error: r.why, warnings: r.warnings });
+      res.json({ ...r, usage: req.usage });
+    } catch (e) {
+      console.error("[research]", e.message);
+      res.status(502).json({ error: "자료를 모으지 못했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
+
+  // 제목이 약속한 내용을 본문에 채워 넣기
+  // ⚠️ 사실은 밖에서 들어와야 합니다(사장님이 적어주시거나 자료 조사로 찾아온 것).
+  // 이 라우트는 받은 사실을 본문에 엮는 일만 합니다.
+  app.post("/api/body-fill", usage.creditGate("rewrite", accounts), async (req, res) => {
+    const { body, title, missing, facts } = req.body || {};
+    try {
+      const r = await bodyRewrite.fillMissing({ body, title, missing, facts });
+      if (!r.ok)
+        return res.status(400).json({ error: r.why, needFacts: !!r.needFacts, shrunk: !!r.shrunk });
+      res.json({ ...r, usage: req.usage });
+    } catch (e) {
+      res.status(502).json({ error: "채워 넣지 못했습니다. 잠시 뒤에 다시 해주세요." });
+    }
+  });
 
   // ── 연예인 소재 찾기 ───────────────────────────────────
   app.post("/api/celeb/mine", usage.gate("keyword"), async (req, res) => {

@@ -70,12 +70,55 @@ const HANDLERS = {
   ping: () => call("/api/ext/ping", {}, { timeout: 120000 }),
 };
 
+/**
+ * 이용권 토큰을 알아서 받아옵니다.
+ *
+ * ⚠️ 왜 필요한가 — 사장님이 "왜 자꾸 로그인이 풀리냐"고 물으셨습니다.
+ * 풀린 게 아닙니다. 확장을 지우고 다시 넣으면 크롬이 **다른 확장으로 취급**해서
+ * 저장해둔 설정(토큰 포함)이 통째로 사라집니다. 제가 버전을 올릴 때마다
+ * 사장님은 토큰을 다시 넣어야 했습니다.
+ *
+ * 확장은 우리 도메인에 대한 권한이 있어서, 배경 스크립트에서 부르면
+ * **브라우저에 남아 있는 로그인 쿠키가 함께 실립니다.**
+ * 그래서 사이트에 로그인만 돼 있으면 토큰을 손으로 옮길 필요가 없습니다.
+ *
+ * 손으로 넣은 토큰이 있으면 그걸 먼저 씁니다. 사모님 PC처럼 다른 계정을
+ * 쓰시는 경우를 덮어쓰면 안 되니까요.
+ */
+async function fetchTokenFromSession() {
+  const { server } = await chrome.storage.sync.get(["server"]);
+  const base = (server || DEFAULT_SERVER).replace(/\/+$/, "");
+  const res = await fetch(base + "/api/auth/token", {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.token) {
+    throw new Error(
+      res.status === 401
+        ? "우수리미에 로그인돼 있지 않습니다. 사이트에서 로그인한 뒤 다시 눌러주세요."
+        : data.error || `토큰을 못 받았습니다 (${res.status})`
+    );
+  }
+  await chrome.storage.sync.set({ wsToken: data.token });
+  return { token: data.token };
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || !msg.type) return;
 
   if (msg.type === "openOptions") {
     chrome.runtime.openOptionsPage();
     return;
+  }
+
+  if (msg.type === "syncToken") {
+    fetchTokenFromSession()
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((err) => sendResponse({ ok: false, message: err.message }));
+    return true;
   }
 
   const fn = HANDLERS[msg.type];

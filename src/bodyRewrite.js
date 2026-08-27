@@ -87,8 +87,13 @@ async function rewrite({ body, title = "" }) {
   if (src.length > 6000)
     return { ok: false, why: "본문이 6,000자를 넘습니다. 나눠서 해주세요. 잘린 글을 돌려드릴 수는 없습니다." };
 
+  // ⚠️ 결론을 위에 둘지 아래에 둘지는 글 성격마다 다릅니다.
+  // 후기는 판정을 맨 위에(검색으로 오니까), 연예인 정보성은 반전을 아래에(홈피드로 오니까).
+  const placement = rules.placementBlock(title, src);
+
   const prompt =
     (title ? `제목: ${title}\n\n` : "") +
+    placement + "\n\n" +
     `아래 본문을 홈판용으로 다듬어 주세요.\n\n` +
     `--- 본문 시작 ---\n${src}\n--- 본문 끝 ---\n\n` +
     `JSON만 답하세요:\n` +
@@ -159,4 +164,96 @@ async function rewrite({ body, title = "" }) {
   };
 }
 
-module.exports = { rewrite, findInvented, countSubheads, countPhotoSlots };
+/**
+ * 제목이 약속했는데 본문에 없는 내용을 채워 넣습니다.
+ *
+ * ⚠️ 여기가 지어내기와 가장 가까운 자리라 선을 분명히 긋습니다.
+ *
+ * 제목이 "눈 4방향 연 메이크업"인데 본문에 4방향 이야기가 없을 때,
+ * AI가 "4방향으로 그렸습니다"를 지어내면 **제목만 낚시였던 게 글 전체가 거짓**이 됩니다.
+ * 그건 안 하느니만 못합니다.
+ *
+ * 그래서 **사실은 밖에서 들어와야** 합니다. 두 곳 중 하나입니다.
+ *   1) 사장님이 아시는 것을 적어주신다
+ *   2) 자료 조사(research.js)로 찾아온 것을 넘겨받는다
+ * 이 함수는 받은 사실을 **본문 알맞은 자리에 자연스럽게 엮는 일만** 합니다.
+ * 사실을 만들지 않습니다.
+ */
+async function fillMissing({ body, title = "", missing = [], facts = "" }) {
+  const src = String(body || "").trim();
+  const fact = String(facts || "").trim();
+  if (src.length < 100) return { ok: false, why: "본문이 너무 짧습니다." };
+  if (!fact) {
+    return {
+      ok: false,
+      why: "넣을 내용을 알려주세요. 모르시면 '찾아보기'로 자료를 먼저 모으세요.",
+      needFacts: true,
+    };
+  }
+
+  const want = (Array.isArray(missing) ? missing : [missing]).filter(Boolean);
+
+  const system =
+    `당신은 블로그 원고에 빠진 내용을 채워 넣는 편집자입니다.\n\n` +
+    `**아래 '넣을 내용'에 있는 것만 쓰세요.** 거기 없는 사실을 보태면 안 됩니다.\n` +
+    `숫자·제품명·날짜를 새로 만들지 마세요. 넣을 내용에 없으면 그대로 비워두세요.\n\n` +
+    `**원문의 문장은 지우지 마세요.** 끼워 넣는 것이지 다시 쓰는 게 아닙니다.\n` +
+    `결과물은 원문보다 길어야 정상입니다. 짧아졌다면 당신이 뭔가를 지운 겁니다.\n\n` +
+    `**말투를 맞추세요.** 글쓴이가 쓰던 어투 그대로 이어 쓰세요.\n` +
+    `새로 넣은 문장이 튀면 읽는 사람이 바로 알아챕니다.\n\n` +
+    rules.promptBlock();
+
+  const prompt =
+    (title ? `제목: ${title}\n` : "") +
+    (want.length ? `제목이 약속했는데 본문에 없는 말: ${want.join(", ")}\n` : "") +
+    `\n[넣을 내용 — 이 안에 있는 것만 쓰세요]\n${fact}\n\n` +
+    `--- 본문 시작 ---\n${src}\n--- 본문 끝 ---\n\n` +
+    `이 내용을 본문에서 가장 자연스러운 자리에 끼워 넣어 주세요.\n` +
+    `맨 앞이나 맨 뒤에 덧붙이지 말고, 흐름이 이어지는 곳을 찾아 넣으세요.\n\n` +
+    `JSON만 답하세요:\n` +
+    `{"body":"채워 넣은 본문 전체","added":["새로 넣은 문장"],"where":"어느 대목에 넣었는지 한 줄"}`;
+
+  let parsed;
+  try {
+    const text = await claudeClient.callClaude({
+      system,
+      messages: [{ role: "user", content: prompt }],
+      maxTokens: Math.min(8000, Math.max(3000, Math.round(src.length * 2.4))),
+      temperature: 0.4,
+      timeoutMs: 150000,
+    });
+    parsed = claudeClient.extractJson(text);
+  } catch (e) {
+    return { ok: false, why: `채워 넣지 못했습니다: ${e.message}` };
+  }
+
+  const after = String((parsed && parsed.body) || "").trim();
+  if (!after) return { ok: false, why: "응답 형식이 예상과 달랐습니다." };
+
+  // ⚠️ 채워 넣는 일인데 글이 짧아졌다면 원문을 지운 겁니다.
+  if (after.length < src.length * 0.95) {
+    return {
+      ok: false,
+      why: `채운 글이 원문보다 짧습니다(${Math.round((after.length / src.length) * 100)}%). 내용이 지워진 것이라 돌려드리지 않습니다.`,
+      shrunk: true,
+    };
+  }
+
+  // 넣을 내용에도 원문에도 없는 숫자가 새로 생겼는지 봅니다.
+  const invented = findInvented(src + " " + fact, after);
+
+  return {
+    ok: true,
+    before: { chars: src.length },
+    after: { chars: after.length },
+    body: after,
+    added: Array.isArray(parsed.added) ? parsed.added : [],
+    where: parsed.where || "",
+    invented,
+    note:
+      "넣어드린 내용은 사장님이 주신 것과 찾아온 자료에서만 왔습니다. " +
+      "그래도 붙여넣기 전에 새로 들어간 문장을 한 번 읽어보세요.",
+  };
+}
+
+module.exports = { rewrite, fillMissing, findInvented, countSubheads, countPhotoSlots };
