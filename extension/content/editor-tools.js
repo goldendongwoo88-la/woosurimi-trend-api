@@ -249,24 +249,48 @@
     } catch {}
   }
 
+  /**
+   * ⚠️ 처음 버전은 마우스를 떼도 패널이 계속 따라다녔습니다. 사장님이 겪으셨습니다.
+   *
+   * 원인 — 네이버 편집기는 **iframe** 입니다. 마우스를 편집기 위에서 떼면
+   * "뗐다(mouseup)"는 신호가 iframe 안으로 들어가고, 제 코드가 듣고 있던
+   * 바깥 창에는 영영 안 옵니다. 신호를 못 받았으니 계속 끌고 있는 줄 압니다.
+   *
+   * 고침 두 겹:
+   *   1) 포인터 캡처 — 손잡이가 포인터를 붙잡으면, 커서가 어느 프레임 위에
+   *      있든 move/up 신호가 전부 손잡이로 옵니다. iframe 문제가 사라집니다.
+   *   2) 그래도 놓치면 — 움직임 신호에 buttons(지금 눌린 버튼)가 실려 옵니다.
+   *      0이면 이미 뗀 것이니 그 자리에서 멈춥니다. 두 번째 안전핀입니다.
+   */
   function startDrag(e) {
     // 버튼·입력칸을 누른 거면 옮기지 않습니다. 안 그러면 체크박스를 못 누릅니다.
     if (e.target.closest("button, input, textarea, select, a, label")) return;
+    const grip = e.currentTarget;
     const r = panel.getBoundingClientRect();
     const dx = e.clientX - r.left;
     const dy = e.clientY - r.top;
     panel.classList.add("ws-dragging");
 
-    const move = (ev) => placePanel(ev.clientX - dx, ev.clientY - dy);
-    const up = (ev) => {
-      const p = placePanel(ev.clientX - dx, ev.clientY - dy);
+    const finish = (x, y) => {
+      const p = placePanel(x - dx, y - dy);
       panel.classList.remove("ws-dragging");
-      document.removeEventListener("mousemove", move, true);
-      document.removeEventListener("mouseup", up, true);
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", up);
+      try { grip.releasePointerCapture(e.pointerId); } catch {}
       try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch {}
     };
-    document.addEventListener("mousemove", move, true);
-    document.addEventListener("mouseup", up, true);
+    const move = (ev) => {
+      // ⚠️ 버튼을 뗐는데 move 가 오면(신호를 놓친 경우) 여기서 멈춥니다.
+      if (ev.buttons === 0) return finish(ev.clientX, ev.clientY);
+      placePanel(ev.clientX - dx, ev.clientY - dy);
+    };
+    const up = (ev) => finish(ev.clientX, ev.clientY);
+
+    try { grip.setPointerCapture(e.pointerId); } catch {}
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", up);
     e.preventDefault();
   }
 
@@ -276,7 +300,10 @@
       `<button class="ws-panel-close" title="닫기">✕</button>${html}`;
     panel.hidden = false;
     panel.querySelector(".ws-panel-close").onclick = () => (panel.hidden = true);
-    panel.querySelector(".ws-panel-grip").onmousedown = startDrag;
+    // ⚠️ mousedown 이 아니라 pointerdown 이어야 합니다. 포인터 캡처는 포인터 계열
+    // 신호에서만 됩니다. mousedown 으로 잡으면 pointerId 가 없어서 캡처가 안 걸리고,
+    // iframe 위에서 떼면 또 계속 따라다닙니다.
+    panel.querySelector(".ws-panel-grip").onpointerdown = startDrag;
     restorePos();
   }
 
