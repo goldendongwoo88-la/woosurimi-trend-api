@@ -500,15 +500,23 @@
       return showPanel(`<p class="ws-err">${esc(e.message)}</p>`);
     }
 
-    const list = (d.related && d.related.length ? d.related : d.recent) || [];
-    const byRelevance = !!(d.related && d.related.length);
+    /**
+     * ⚠️ 같은 갈래가 최우선입니다 — 사장님 규칙:
+     * "연예인 뷰티 글엔 뷰티 4개, 패션 글엔 패션 4개, 최근 발행 순, 모바일 링크."
+     * 서버가 갈래를 못 가리면(sameCategory 없음) 예전처럼 관련/최신으로 갑니다.
+     */
+    const bySame = !!(d.sameCategory && d.sameCategory.length);
+    const list = bySame ? d.sameCategory
+               : (d.related && d.related.length ? d.related : d.recent) || [];
+    const byRelevance = !bySame && !!(d.related && d.related.length);
     if (!list.length)
       return showPanel(`<p>붙일 만한 글을 못 찾았습니다. (<b>${esc(id)}</b>에서 ${d.total || 0}편을 봤습니다)</p>`);
 
     const spon = looksSponsored(body);
 
     // ⚠️ 협찬 글이면 **아무것도 미리 안 고릅니다.** 사장님이 정하실 일입니다.
-    linkPicks = spon ? [] : list.slice(0, 2).map((p) => p.logNo);
+    // 같은 갈래로 왔으면 4개(사장님 지정), 아니면 실측 중앙값대로 2개를 미리 고릅니다.
+    linkPicks = spon ? [] : list.slice(0, bySame ? 4 : 2).map((p) => p.logNo);
 
     showPanel(`
       <h4>함께 보면 좋은 글</h4>
@@ -517,6 +525,9 @@
           ? `<p class="ws-warn">이 글에 <b>"${esc(spon)}"</b>가 있습니다. 협찬 글로 보입니다.<br>
              <span class="ws-dim">협찬 글은 광고주가 다른 글로 보내는 링크를 막는 경우가 많아서, 미리 고르지 않았습니다.
              넣으실 거면 직접 골라주세요.</span></p>`
+          : bySame
+          ? `<p class="ws-dim">이 글을 <b>${esc(d.category && d.category.id)}</b> 갈래로 봤습니다.
+             같은 갈래의 <b>최근 글 ${list.length}개</b>(모바일 링크)를 골라뒀습니다 — 갈래가 다르면 체크를 바꿔주세요.</p>`
           : `<p class="ws-dim">상위 블로그는 자기 글 링크가 중앙값 <b>2개</b>였습니다. 하위는 0개였습니다.
              ${byRelevance ? "제목에 겹치는 낱말이 많은 순입니다." : "겹치는 낱말이 없어서 <b>최근 글</b>을 보여드립니다."}</p>`
       }
@@ -564,7 +575,18 @@
       msg("본문 끝에 넣는 중…");
       const r = await I.appendBlock(text);
       e.target.disabled = false;
-      if (r.ok) { msg(`✅ ${linkPicks.length}개를 본문 끝에 넣었습니다.`); updateCounts(); }
+      if (r.ok) {
+        // 머리말("함께 보면 좋은 글")을 인용구로 — 사장님 지정 모양입니다.
+        // 실패해도 링크는 이미 들어갔으니 조용히 넘어갑니다 (모양만 수동으로 바꾸시면 됨).
+        try {
+          const F = window.__wsFormat;
+          const head = [...document.querySelectorAll(".se-text-paragraph")]
+            .reverse().find((p) => (p.innerText || "").trim() === "함께 보면 좋은 글");
+          if (F && F.setParagraphStyle && head) await F.setParagraphStyle(head, "인용구");
+        } catch {}
+        msg(`✅ ${linkPicks.length}개를 본문 끝에 넣었습니다 (머리말은 인용구로).`);
+        updateCounts();
+      }
       else msg(`${esc(r.why)}`, r.copied ? "ws-warn" : "ws-err");
     };
 

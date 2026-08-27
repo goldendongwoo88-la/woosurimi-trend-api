@@ -145,5 +145,30 @@ console.log("\n━━ 진짜 Ctrl+V 통로가 안전한가 ━━");
   ok(mf.permissions.includes("debugger"), "manifest에 debugger 권한이 있다");
 }
 
+console.log("\n━━ 같은 갈래 4개가 진짜로 이어졌는가 ━━");
+// ⚠️ 분류기(postCategory)만 만들어두고 파이프라인에 연결 안 된 채 며칠 있었습니다.
+// "만들었다"와 "연결됐다"는 다릅니다. 연결 지점을 글자로 확인합니다.
+{
+  const pc = require("../src/postCategory");
+  const c = (t) => pc.classify(t).id;
+  ok(c("카리나 무대 메이크업 달라진 점") === "연예인 뷰티", "카리나 메이크업 → 연예인 뷰티");
+  ok(c("장원영 가을 코트 코디 정리") === "연예인 패션", "장원영 코트 → 연예인 패션");
+  ok(c("카리나 열애설 입장문 정리") === "연예인 가십", "열애설 → 연예인 가십");
+  ok(c("삼성전자 주가 오늘 왜 올랐나") === "경제", "주가 → 경제");
+  ok(c("오늘 하늘이 예뻤다") === null, "모르면 모른다고 한다 (억지로 안 넣음)");
+
+  const sr = fs.readFileSync(require("path").join(__dirname, "..", "src", "saasRoutes.js"), "utf8");
+  const mp = sr.slice(sr.indexOf('"/api/my-posts"'));
+  ok(/pickSameCategory\(/.test(mp), "my-posts가 같은 갈래 고르기를 부른다");
+  ok(/mobileUrl\(/.test(mp), "같은 갈래 링크는 모바일 주소다");
+  ok(/sameCategory/.test(mp.slice(0, 3000)), "응답에 sameCategory가 실린다");
+
+  const et = fs.readFileSync(require("path").join(__dirname, "..", "extension", "content", "editor-tools.js"), "utf8");
+  const rl = et.slice(et.indexOf("async function relatedLinks"));
+  ok(/d\.sameCategory/.test(rl), "확장이 같은 갈래를 최우선으로 쓴다");
+  ok(/bySame \? 4 : 2/.test(rl), "같은 갈래면 4개를 미리 고른다 (아니면 실측 중앙값 2개)");
+  ok(/인용구/.test(rl.slice(0, rl.indexOf("runFormat"))), "머리말을 인용구로 바꾸는 단계가 있다");
+}
+
 console.log(`\n통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);

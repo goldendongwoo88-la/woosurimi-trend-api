@@ -10,6 +10,7 @@ const plans = require("./plans");
 const usage = require("./usage");
 const blogIndex = require("./blogIndex");
 const rankTracker = require("./rankTracker");
+const postCategory = require("./postCategory");
 const naverData = require("./naverBlogData");
 const competitorCompare = require("./competitorCompare");
 const celebFinder = require("./celebFinder");
@@ -928,6 +929,20 @@ module.exports = function attachSaas(app) {
       const skip = new Set(String(exclude || "").split(",").map((x) => x.trim()).filter(Boolean));
       const rest = posts.filter((p) => !skip.has(p.logNo));
 
+      /**
+       * 같은 갈래 4개 — 사장님 요청의 원형입니다:
+       * "연예인 뷰티 글엔 뷰티 4개, 패션 글엔 패션 4개, 최근 발행 순서, 모바일 링크".
+       * 갈래를 못 가리면(모름) 억지로 안 넣고, 아래 관련/최신으로 내려갑니다.
+       * 순서 주의: rest는 곧 관련도순으로 재정렬되므로 **그 전에** 최근순으로 고릅니다.
+       */
+      const cat = postCategory.classify(title);
+      const sameCategory = cat.id
+        ? postCategory.pickSameCategory(rest, cat.id, { limit: 4 }).map((p) => ({
+            ...p,
+            url: postCategory.mobileUrl(id, p.logNo),   // 모바일 링크로 — 사장님 지정
+          }))
+        : [];
+
       // 낱말이 겹치는 만큼 점수를 줍니다. 간단하지만 아무 글이나 붙이는 것보단 훨씬 낫습니다.
       const words = String(title || "")
         .replace(/[""''"'.,!?…\-~\[\]()]/g, " ")
@@ -942,6 +957,9 @@ module.exports = function attachSaas(app) {
         ok: true,
         blogId: id,
         total: posts.length,
+        // 같은 갈래가 최우선 — 뷰티 글 밑엔 뷰티, 패션 글 밑엔 패션 (최근순, 모바일 링크).
+        category: cat.id ? { id: cat.id, why: cat.why } : null,
+        sameCategory,
         // 겹치는 게 있는 것만 "관련"으로 봅니다. 없으면 최신 글을 줍니다.
         related: rest.filter((p) => p.score > 0).slice(0, 6),
         recent: rest.slice(0, 6),
