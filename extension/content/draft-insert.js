@@ -45,8 +45,23 @@
     ".se-placeholder, [class*='placeholder'], [class*='Placeholder'], " +
     "[data-placeholder], [aria-hidden='true'], .se-drop-guide, .se-guide";
 
+  /**
+   * ⚠️ 글자 무늬로도 거릅니다. 클래스만 믿었다가 실제 네이버에서 뚫렸습니다.
+   *
+   * 1.22.0 에서 placeholder 계열 클래스를 걸렀는데, 사장님 화면에서
+   * "나를 돌아보는 회고, 뜻밖의 발견을 기다립니다. #모두의회고" 가
+   * **여전히 27자로 세어졌습니다.** 네이버가 그 안내 문구엔 제가 모르는
+   * 이름을 씁니다. 이름은 저쪽 마음이라 언제든 또 바뀝니다.
+   *
+   * 그런데 글감 안내 문구는 **생김새가 일정합니다**:
+   * "…기다립니다/남겨보세요/기록해 보세요" 로 권하고 끝에 #태그 하나.
+   * 사람이 본문 첫 줄을 이렇게 쓸 일은 없습니다.
+   */
+  const GUIDE_TEXT = /(기다립니다|남겨보세요|남겨\s*보세요|기록해\s*보세요|들려주세요|적어보세요)\.?\s*#[가-힣A-Za-z0-9]+\s*$/;
+
   function isPlaceholder(el) {
     if (!el) return false;
+    if (GUIDE_TEXT.test((el.innerText || "").trim())) return true;
     if (el.closest(PLACEHOLDER)) return true;
     // 네이버가 클래스 대신 속성으로 표시하는 경우도 있습니다.
     for (let n = el; n && n !== document.body; n = n.parentElement) {
@@ -84,7 +99,12 @@
      * 보여줄 때는 **원래 글자 그대로** 보여드립니다.
      */
     const rows = paras
-      .map((p) => ({ raw: (p.innerText || "").trim(), norm: norm(p.innerText || "") }))
+      .map((p) => ({
+        raw: (p.innerText || "").trim(),
+        norm: norm(p.innerText || ""),
+        // 또 잘못 세면 화면의 이 이름만 보고 무엇을 걸러야 할지 알 수 있습니다.
+        cls: String(p.className || "").slice(0, 60),
+      }))
       .filter((r) => r.norm);
     const chars = rows.reduce((n, r) => n + r.norm.length, 0);
     const root = editorRoot();
@@ -94,7 +114,7 @@
       chars,
       media,
       // 무엇을 글이라고 봤는지. 안내 문구를 또 잘못 세면 이걸로 바로 압니다.
-      sample: rows.slice(0, 3).map((r) => r.raw.slice(0, 40)),
+      sample: rows.slice(0, 3).map((r) => r.raw.slice(0, 40) + "  〔" + r.cls + "〕"),
     };
   }
 
@@ -121,11 +141,12 @@
    *
    * 남겨둔 자동 시도는 **붙여넣기 흉내 하나뿐**입니다. 되면 좋고 안 되면 바로 넘어갑니다.
    */
-  async function pasteBody(text) {
+  async function pasteBody(text, { overwrite = false } = {}) {
     const root = editorRoot();
     if (!root) return { ok: false, why: "본문을 찾지 못했습니다." };
 
-    const first = bodyParagraphs()[0];
+    const paras = bodyParagraphs();
+    const first = paras[0];
     if (!first) return { ok: false, why: "본문 문단을 찾지 못했습니다." };
 
     const check = () => {
@@ -138,7 +159,17 @@
     try {
       first.focus();
       const range = document.createRange();
-      range.selectNodeContents(first);
+      /**
+       * ⚠️ 덮어쓰기("그래도 넣기")면 **본문 전체**를 골라서 그 위에 붙입니다.
+       * 처음엔 첫 문단만 갈아치웠습니다 — 그러면 옛 글 나머지가 새 글 아래에
+       * 그대로 남습니다. 덮어쓰겠다고 하신 건데 반만 덮는 셈이었습니다.
+       */
+      if (overwrite && paras.length > 1) {
+        range.setStartBefore(first);
+        range.setEndAfter(paras[paras.length - 1]);
+      } else {
+        range.selectNodeContents(first);
+      }
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
@@ -180,7 +211,43 @@
 
     // ⚠️ force 는 **사장님이 화면에서 직접 "그래도 넣기"를 누르셨을 때만** 옵니다.
     // 제 판정이 틀릴 수 있어서 둔 탈출구입니다. 코드가 스스로 켜면 안 됩니다.
-    const state = isEmpty();
+    let state = isEmpty();
+
+    /**
+     * 덮어쓰기 — **옛 글을 먼저 지웁니다.**
+     *
+     * ⚠️ 처음엔 옛 글 위에 그대로 붙이려 했는데, 진짜 편집기는 합성 붙여넣기를
+     * 무시합니다(이미 확인한 사실). 그러면 복사→Ctrl+V 안내로 넘어가는데,
+     * 옛 글이 그대로 남은 채라 사장님이 직접 지우셔야 했습니다.
+     * 지우는 것부터 우리가 합니다 — execCommand("delete")는 진짜 편집기에서
+     * 먹히는 방식입니다(제목 넣기가 이걸로 돕니다).
+     */
+    if (!state.empty && force) {
+      const all = bodyParagraphs();
+      if (all.length) {
+        try {
+          all[0].focus();
+          const range = document.createRange();
+          range.setStartBefore(all[0]);
+          range.setEndAfter(all[all.length - 1]);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.execCommand("delete");
+          await settle(300);
+        } catch {}
+      }
+      state = isEmpty();
+      // ⚠️ 지웠는데도 남아 있으면 멈춥니다. 반쯤 지워진 위에 붙이면 뒤죽박죽이 됩니다.
+      if (!state.empty) {
+        return {
+          ok: false,
+          why: `옛 글을 지우려 했는데 ${state.chars}자가 남았습니다. ` +
+               `본문을 전체 선택(Ctrl+A)해서 지우신 뒤 다시 눌러주세요.`,
+        };
+      }
+    }
+
     if (!state.empty && !force) {
       return {
         ok: false,

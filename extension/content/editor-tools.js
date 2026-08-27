@@ -2139,6 +2139,13 @@
         ` : `<div class="ws-row bad">${esc(r.why)}</div>`;
         go.textContent = "다시";
         go.disabled = false;
+        /**
+         * ⚠️ 여기가 사장님을 가뒀던 버그입니다.
+         * 시작할 때 두 버튼을 다 잠그는데, 실패하면 **넣기만 다시 살렸습니다.**
+         * "그래도 넣기"는 회색인 채로 죽어 있었습니다 — 탈출구를 만들어놓고
+         * 문을 잠근 셈입니다. 거절된 다음이야말로 그 버튼이 필요한 순간인데요.
+         */
+        if (forceBtn) forceBtn.disabled = false;
         const fb = out.querySelector("#ws-pd-fmt");
         if (fb) fb.addEventListener("click", () => runFormat());
         return;
