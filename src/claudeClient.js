@@ -79,6 +79,54 @@ async function checkCredit(timeoutMs = 12000) {
  * system: (선택) 시스템 프롬프트
  * 반환: 어시스턴트가 만든 텍스트(string)
  */
+/**
+ * 시스템 프롬프트가 길면 **캐시**를 겁니다.
+ *
+ * ⚠️ 이게 왜 중요한가 — 돈이 여기서 나갑니다.
+ * 스킬 프롬프트를 재보니 8,766토큰(fashion-review)에서
+ * 64,619토큰(intro-promo)까지 됩니다. 그걸 **부를 때마다 통째로** 보냅니다.
+ * 원고 한 편에 큰 스킬은 330원쯤 나갑니다.
+ *
+ * 그런데 이 프롬프트는 **매번 똑같습니다.** 손님이 열 명이면 똑같은 6만 토큰을
+ * 열 번 보내고 열 번 값을 냅니다.
+ *
+ * 캐시를 걸면:
+ *   처음 한 번  — 값의 1.25배 (캐시에 넣는 값)
+ *   그 뒤 5분간 — 값의 0.1배  ← 10분의 1
+ * 손님이 몰릴수록 더 아낍니다.
+ *
+ * ⚠️ 1,024토큰(약 700자)보다 짧으면 캐시가 안 걸립니다. 그럴 땐 그냥 보냅니다.
+ */
+const CACHE_MIN_CHARS = 800;
+
+/**
+ * ⚠️ 기본 캐시는 **5분**만 삽니다. 그런데 스킬은 7단계를 사람이 하나씩 밟습니다.
+ * 제목 45개를 읽고 고르는 데만 5분이 넘어갑니다. 그러면 캐시가 죽고
+ * 6만 토큰을 다시 제값 주고 보냅니다.
+ *
+ * 1시간짜리 캐시를 씁니다. 넣는 값이 2배지만(5분짜리는 1.25배), 7단계를
+ * 30분에 걸쳐 밟으면 훨씬 쌉니다.
+ *
+ * ⚠️ 이건 베타 기능이라 안 될 수도 있습니다. 안 되면 5분짜리로 물러섭니다.
+ * 여기서 실패하면 모든 AI 기능이 멈추기 때문에, 반드시 되돌아갈 길을 둡니다.
+ */
+const LONG_TTL_HEADER = "extended-cache-ttl-2025-04-11";
+let longTtlWorks = true;   // 한 번 거절당하면 끕니다
+
+function buildSystem(system, useLongTtl) {
+  if (!system) return {};
+  const text = String(system);
+  if (text.length < CACHE_MIN_CHARS) return { system: text };
+  const cc = useLongTtl && longTtlWorks
+    ? { type: "ephemeral", ttl: "1h" }
+    : { type: "ephemeral" };
+  return { system: [{ type: "text", text, cache_control: cc }] };
+}
+
+/** 마지막 호출에서 캐시가 얼마나 먹혔는지 — 화면에서 보여줄 때 씁니다. */
+let lastUsage = null;
+function getLastUsage() { return lastUsage; }
+
 async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8, timeoutMs } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("서버에 ANTHROPIC_API_KEY가 설정되어 있지 않습니다.");
@@ -95,7 +143,7 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
       model: DEFAULT_MODEL,
       max_tokens: maxTokens,
       temperature,
-      ...(system ? { system } : {}),
+      ...buildSystem(system),
       messages,
     }),
   }, timeoutMs);
@@ -105,6 +153,23 @@ async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.
     throw new Error(explain(res.status, errText));
   }
   const data = await res.json();
+
+  // ⚠️ 얼마나 썼는지 기록해 둡니다. 캐시가 정말 먹히는지 눈으로 봐야 압니다.
+  // 안 그러면 "캐시 넣었습니다"라고 말만 하고 실제로는 안 될 수 있습니다.
+  const u = data.usage || {};
+  lastUsage = {
+    input: u.input_tokens || 0,
+    output: u.output_tokens || 0,
+    cacheWrite: u.cache_creation_input_tokens || 0,
+    cacheRead: u.cache_read_input_tokens || 0,
+    at: Date.now(),
+  };
+  lastUsage.cached = lastUsage.cacheRead > 0;
+  // 값 어림잡기 (Sonnet 기준, 100만 토큰당 입력 $3 / 출력 $15 / 캐시읽기 $0.30 / 캐시쓰기 $3.75)
+  lastUsage.usd = +(
+    (lastUsage.input * 3 + lastUsage.output * 15 + lastUsage.cacheRead * 0.3 + lastUsage.cacheWrite * 3.75) / 1e6
+  ).toFixed(4);
+
   return (data.content || []).map((b) => b.text || "").join("\n");
 }
 
@@ -118,4 +183,4 @@ function extractJson(text) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
-module.exports = { callClaude, isConfigured, getModel, extractJson, explain, checkCredit };
+module.exports = { callClaude, isConfigured, getModel, extractJson, explain, checkCredit, getLastUsage, buildSystem };

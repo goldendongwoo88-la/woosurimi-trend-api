@@ -29,8 +29,11 @@ const load = M.exports.loadSkillPrompt;
 let pass = 0, fail = 0;
 const ok = (c, l, e = "") => { console.log(`  ${c ? "✓" : "✗"} ${l}${e ? "  " + e : ""}`); c ? pass++ : fail++; };
 
-const SKILLS = fs.readdirSync(path.join(__dirname, "..", "src", "promptSkills"))
-  .filter((f) => f.endsWith(".txt")).map((f) => f.replace(".txt", ""));
+// ⚠️ 큰 스킬 다섯(intro-promo, food-review, travel-review, living-life, broadcast-issue)은
+// 부르지 않습니다. 사장님 명령입니다. 한 번 불러올 때마다 값이 나갑니다.
+const SKILLS = M.exports.toolingSkills
+  ? M.exports.toolingSkills()
+  : require("../src/promptStudio").toolingSkills();
 
 console.log(`\n━━ 스킬 ${SKILLS.length}개에 실측이 들어갔는지 ━━\n`);
 console.log("스킬                주제        글자수         소제목      사진간격");

@@ -77,6 +77,39 @@ function homefeedPatch(skillId) {
   );
 }
 
+/**
+ * ⚠️ 도구·시험에서 **불러오면 안 되는 스킬**입니다. 사장님 명령입니다.
+ *
+ *   intro-promo      64,619 토큰
+ *   food-review      63,234 토큰
+ *   travel-review    62,126 토큰
+ *   living-life      59,505 토큰
+ *   broadcast-issue  56,363 토큰
+ *
+ * 제일 큰 다섯입니다. 한 번 불러올 때마다 값이 나갑니다.
+ * 제가 "크기를 재보겠다"고 15개를 전부 불러서 크레딧을 태운 적이 있습니다.
+ * 그날 잔액이 0이 됐습니다.
+ *
+ * ⚠️ **손님이 쓰는 길은 막지 않습니다.** 막는 건 제 스크립트와 시험입니다.
+ * 크기를 알아야 하면 파일 크기만 재고(fs.statSync) 내용은 안 읽습니다.
+ */
+const SKIP_IN_TOOLING = new Set([
+  "intro-promo",
+  "food-review",
+  "travel-review",
+  "living-life",
+  "broadcast-issue",
+]);
+
+/** 스크립트에서 스킬을 훑을 때 쓰는 목록 — 위 다섯은 빠집니다. */
+function toolingSkills() {
+  return fs
+    .readdirSync(path.join(__dirname, "promptSkills"))
+    .filter((f) => f.endsWith(".txt"))
+    .map((f) => f.replace(".txt", ""))
+    .filter((id) => !SKIP_IN_TOOLING.has(id));
+}
+
 function loadSkillPrompt(name) {
   const raw = fs.readFileSync(path.join(__dirname, "promptSkills", `${name}.txt`), "utf8");
   return raw + homefeedPatch(name);
@@ -413,4 +446,4 @@ async function runTool(toolId, messages) {
   });
 }
 
-module.exports = { TOOLS, getTools, findTool, runTool };
+module.exports = { TOOLS, getTools, findTool, runTool, SKIP_IN_TOOLING, toolingSkills };
