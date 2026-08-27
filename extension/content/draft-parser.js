@@ -144,10 +144,34 @@
     while (blocks.length && blocks[0].kind === "gap") blocks.shift();
     while (blocks.length && blocks[blocks.length - 1].kind === "gap") blocks.pop();
 
-    // 제목을 못 찾았으면 첫 글 문단을 제목으로 씁니다.
-    if (!title) {
-      const first = blocks.find((b) => b.kind === "text" && vis(b.text) >= 8 && vis(b.text) <= 60);
-      if (first) { title = first.text; blocks.splice(blocks.indexOf(first), 1); }
+    /**
+     * 제목 표시가 없을 때 — 첫 줄이 **제목처럼 생겼을 때만** 제목으로 씁니다.
+     *
+     * ⚠️ 예전에는 "글 문단 중 8~60자짜리 아무거나" 집어서 제목으로 썼습니다.
+     * 그러다 이런 일이 났습니다 (흉내 편집기 시험에서 잡았습니다):
+     *
+     *   원고: "택배 상자를 열자마자 색이 눈에 들어왔습니다." 로 시작
+     *   결과: 그 문장이 **제목 칸에 들어가고 본문에서는 사라졌습니다.**
+     *         사장님이 이미 써두신 제목도 덮어썼습니다.
+     *
+     * 두 가지가 겹쳐 나쁩니다 — 글 한 줄이 없어지고, 제목이 바뀝니다.
+     * 둘 다 사장님이 눈치채기 어렵습니다.
+     *
+     * 그래서 조건을 좁힙니다:
+     *   1) **맨 첫 덩이**여야 합니다. 중간 문장은 절대 제목이 아닙니다.
+     *   2) 마침표·물음표로 끝나면 안 됩니다. 그건 문장이지 제목이 아닙니다.
+     *   3) 8~45자.
+     *
+     * 애매하면 **그냥 둡니다.** 제목을 못 넣는 건 사장님이 바로 아시지만,
+     * 멋대로 바꾼 건 모르고 지나갑니다. 모르고 지나가는 쪽이 더 나쁩니다.
+     */
+    if (!title && blocks[0] && blocks[0].kind === "text") {
+      const t = blocks[0].text;
+      const looksLikeSentence = /[.!?…。]$/.test(t);
+      if (!looksLikeSentence && vis(t) >= 8 && vis(t) <= 45) {
+        title = t;
+        blocks.shift();
+      }
     }
 
     return { title, blocks, stats: summarize(blocks) };
