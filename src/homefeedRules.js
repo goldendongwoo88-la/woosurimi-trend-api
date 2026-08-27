@@ -124,51 +124,88 @@ const PLACEMENT = {
       "판정만 주고 근거는 아래에서 풉니다. 위에서 다 설명해버리면 읽을 게 없어집니다.",
   },
 
-  // 연예인 정보성 — 홈피드로 옵니다(안 찾던 사람에게 밀어줌)
+  // 연예인 정보성·가십·방송 — 홈피드로 옵니다(안 찾던 사람에게 밀어줌)
   curiosity: {
-    label: "연예인 뷰티·패션 정보성",
-    examples: ["제니가 착용한 티셔츠 정체", "카리나 아이라인 비밀", "숏컷 따라하기"],
+    label: "연예인 정보성·가십·방송 이슈",
+    examples: ["제니가 착용한 티셔츠 정체", "카리나 아이라인 비밀", "예능에서 화제된 장면"],
     lead: "아래",
     why:
       "이 글은 찾아서 온 게 아니라 넘기다 멈춘 겁니다. 궁금해서 눌렀는데 " +
       "첫 줄에 답이 있으면 그대로 나갑니다. 답은 아껴야 합니다.",
+    // ⚠️ '답을 아래로'가 '위를 비워두라'는 뜻이 아닙니다. 정반대입니다.
+    // 첫 두세 줄이 홈피드 미리보기로 보입니다. 거기가 밋밋하면 아예 안 눌립니다.
+    // 답 대신 **장면**을 놓습니다. 요약이 아니라 그림이 그려지는 한 순간을요.
     shape: [
-      "도입 — 무엇이 화제가 됐는지, 어떤 장면이었는지",
-      "사람들 반응 — 왜 궁금해하는지 (여기서 궁금증을 더 키웁니다)",
-      "디테일 — 눈에 보이는 것부터 하나씩 짚기",
+      "맨 위 2~3줄 — **상황 포착**. 언제 어디서 무슨 일이 있었는지를 장면으로. " +
+        "'시상식 레드카펫에서 카메라가 멈춘 순간이 있었습니다' 같은 식. " +
+        "요약하지 말고 그 장면 하나만 보여주세요.",
+      "그다음 — 왜 사람들이 이걸 두고 말이 많은지. 반응을 그대로 옮기며 궁금증을 키웁니다",
+      "중간 앞 — 눈에 보이는 것부터 하나씩. 아직 답은 안 줍니다",
       "중간 — 그제야 답(브랜드·제품명·가격·기법)을 공개",
       "끝 — 일반인이 따라 하는 법. 이 부분이 체류시간을 만듭니다",
     ],
+    opener:
+      "첫 문장은 **장면**이어야 합니다. 이런 것들이 잘 먹힙니다:\n" +
+      "  - 한 순간을 집어서: '무대가 끝나고 카메라가 한 번 더 잡은 얼굴이 있었습니다'\n" +
+      "  - 반응을 먼저: '댓글이 하루 만에 3천 개 넘게 달렸습니다'\n" +
+      "  - 대비를 세워서: '분명 화장은 옅어졌는데, 존재감은 그대로였습니다'\n" +
+      "쓰면 안 되는 첫 문장: '오늘은 ○○에 대해 알아보겠습니다' — 아무도 안 읽습니다.",
     caution:
-      "아끼는 것과 감추는 것은 다릅니다. 끝까지 안 알려주면 속았다고 느낍니다. " +
-      "중간에는 반드시 답을 주고, 나머지는 '따라 하는 법'으로 채웁니다.",
-  },
-
-  // 방송·이슈 — 사실 전달이라 앞에서 알려주고 뒤에서 넓힙니다
-  news: {
-    label: "방송·이슈",
-    examples: ["예능 결과", "출연진 근황", "시청률"],
-    lead: "위",
-    why: "무슨 일이 있었는지를 알려는 사람입니다. 사실을 먼저 주는 게 맞습니다.",
-    shape: [
-      "맨 위 — 무슨 일이 있었는지 두세 줄로",
-      "그다음 — 어떻게 그렇게 됐는지 순서대로",
-      "끝 — 반응과 앞으로",
-    ],
-    caution: "보도된 범위를 넘지 마세요. 추측을 사실처럼 쓰면 명예훼손이 됩니다.",
+      "아끼는 것과 감추는 것은 다릅니다. 끝까지 안 알려주면 속았다고 느끼고 다시 안 옵니다. " +
+      "중간에는 반드시 답을 주고, 나머지는 '따라 하는 법'으로 채웁니다. " +
+      "그리고 장면을 지어내지 마세요. 자료에 있는 장면만 씁니다.",
   },
 };
 
-/** 글 성격을 짐작합니다. 확실하지 않으면 null을 돌려줍니다. */
-function placementFor(title = "", body = "") {
+/**
+ * 스킬마다 어느 배치를 쓸지 못 박습니다.
+ *
+ * ⚠️ 제목으로 짐작하던 것을 여기서 없앱니다.
+ * 스킬은 이미 무슨 글인지 알고 있습니다. "패션 착용 후기 스킬"이면 후기지
+ * 제목에 무슨 말이 들어갔는지 볼 이유가 없습니다. 짐작은 틀릴 수 있고,
+ * 틀리면 결론이 엉뚱한 자리에 갑니다.
+ */
+const SKILL_PLACEMENT = {
+  // 내가 직접 써보고 쓰는 글 — 판정을 맨 위에
+  "fashion-review": "review",
+  "beauty-review": "review",
+  "food-review": "review",
+  "travel-review": "review",
+  "shopping-connect": "review",
+  "it-auto": "review",
+
+  // 연예·방송 — 상단에 장면, 답은 중간에
+  "celeb-fashion": "curiosity",
+  "celeb-beauty": "curiosity",
+  "celebrity-gossip": "curiosity",
+  "broadcast-issue": "curiosity",
+  "drama-profile": "curiosity",
+  "sports-issue": "curiosity",
+
+  // 정보·지식 — 답을 먼저 주는 게 맞습니다
+  "wealth-life": "review",
+  "health-info": "review",
+  "knowledge-culture": "review",
+  "living-life": "review",
+};
+
+/**
+ * 글 성격을 정합니다.
+ *
+ * skillId를 알면 그걸 씁니다 — 확실하니까요.
+ * 모를 때만(확장에서 부를 때처럼) 제목으로 짐작합니다.
+ */
+function placementFor(title = "", body = "", skillId = null) {
+  if (skillId && SKILL_PLACEMENT[skillId]) {
+    const key = SKILL_PLACEMENT[skillId];
+    return { key, ...PLACEMENT[key] };
+  }
   const t = `${title} ${String(body).slice(0, 400)}`;
   // 직접 써본 흔적이 있으면 후기입니다.
   if (/내돈내산|직접 써|직접 사용|착용해|입어봤|발라봤|다녀왔|재구매|비추|추천합니다|후기/.test(t))
     return { key: "review", ...PLACEMENT.review };
-  if (/정체|비밀|어디 거|어디꺼|따라하기|따라 하기|비결|기법|알고보니/.test(t))
+  if (/정체|비밀|어디 거|어디꺼|따라하기|따라 하기|비결|기법|알고보니|화제|논란|근황|반응/.test(t))
     return { key: "curiosity", ...PLACEMENT.curiosity };
-  if (/방송|예능|드라마|시청률|출연|하차|화제/.test(t))
-    return { key: "news", ...PLACEMENT.news };
   return null;
 }
 
@@ -210,27 +247,31 @@ function promptBlock() {
   );
 }
 
-/** 배치 지침을 프롬프트에 넣을 형태로. 글 성격을 알면 그것만, 모르면 셋 다 줍니다. */
-function placementBlock(title = "", body = "") {
-  const p = placementFor(title, body);
+/** 배치 지침을 프롬프트에 넣을 형태로. 성격을 알면 그것만, 모르면 둘 다 줍니다. */
+function placementBlock(title = "", body = "", skillId = null) {
+  const p = placementFor(title, body, skillId);
   const one = (x) =>
-    `[${x.label}] 결론을 ${x.lead}에 둡니다.\n` +
-    `${x.why}\n` +
+    `[${x.label}]\n` +
+    `${x.why}\n\n` +
+    `이 순서로 씁니다:\n` +
     x.shape.map((s, i) => `  ${i + 1}. ${s}`).join("\n") +
-    `\n주의: ${x.caution}`;
+    (x.opener ? `\n\n${x.opener}` : "") +
+    `\n\n주의: ${x.caution}`;
 
   const head =
-    `\n[결론을 어디에 둘 것인가]\n` +
+    `\n[글의 순서 — 무엇을 위에 두고 무엇을 아래에 둘 것인가]\n` +
     `두 조언이 부딪히는 것처럼 보이지만 아닙니다. 갈라서 보세요.\n` +
-    `- 판정(살까 말까, 좋다 나쁘다)은 **항상 맨 위**. 검색해서 온 사람은 답을 원하고 왔고,\n` +
+    `- 판정(살까 말까, 좋다 나쁘다)은 **맨 위**. 검색해서 온 사람은 답을 원하고 왔고,\n` +
     `  네이버 AI도 인용할 한 문장을 첫 문단에서 찾습니다.\n` +
     `- 반전(그 제품의 정체, 비결)은 **아래**. 홈피드로 온 사람은 궁금해서 눌렀는데\n` +
-    `  첫 줄에 답이 있으면 바로 나갑니다.\n`;
+    `  첫 줄에 답이 있으면 바로 나갑니다.\n` +
+    `- 다만 답을 아래로 미룬다고 **위를 비워두면 안 됩니다.** 첫 두세 줄이\n` +
+    `  홈피드 미리보기로 보입니다. 답 대신 장면을 놓으세요.\n`;
 
   return head + "\n" + (p ? one(p) : Object.values(PLACEMENT).map(one).join("\n\n"));
 }
 
 module.exports = {
-  EVIDENCE, DEVICES, BODY, AVOID, PLACEMENT,
+  EVIDENCE, DEVICES, BODY, AVOID, PLACEMENT, SKILL_PLACEMENT,
   measure, promptBlock, placementFor, placementBlock,
 };

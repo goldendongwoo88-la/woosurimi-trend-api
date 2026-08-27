@@ -41,7 +41,7 @@ const rules = require("./homefeedRules");
  * 덮어쓰지 않고 "아래를 우선한다"고만 적는 이유: 스킬 파일에는 주제별로 다듬어진
  * 맥락(예: 정보성 글은 짧게, 후기는 길게)이 들어 있어서 통째로 무시하면 오히려 나빠집니다.
  */
-function homefeedPatch() {
+function homefeedPatch(skillId) {
   const r = rules;
   return (
     `\n\n---\n\n## 홈판 실측 보정 (${r.EVIDENCE.measuredAt} 측정)\n\n` +
@@ -70,14 +70,16 @@ function homefeedPatch() {
     `\n\n### 절대 하지 말 것\n` +
     r.AVOID.map((a) => `- ${a.what} — ${a.why}`).join("\n") + "\n" +
     // ⚠️ 결론을 어디 둘지는 글 성격마다 다릅니다. 스킬 파일에는 이 구분이 없어서
-    // 여기서 덧댑니다. 후기는 판정을 위로, 연예인 정보성은 반전을 아래로.
-    r.placementBlock() + "\n"
+    // 여기서 덧댑니다. 스킬 이름을 넘기면 짐작하지 않고 정확히 골라 옵니다.
+    //   후기 스킬  → 판정을 맨 위 3줄에, 근거는 본문에서
+    //   연예 스킬  → 맨 위는 상황 포착(장면), 답은 중간에
+    r.placementBlock("", "", skillId) + "\n"
   );
 }
 
 function loadSkillPrompt(name) {
   const raw = fs.readFileSync(path.join(__dirname, "promptSkills", `${name}.txt`), "utf8");
-  return raw + homefeedPatch();
+  return raw + homefeedPatch(name);
 }
 
 const HONESTY_RULE =
