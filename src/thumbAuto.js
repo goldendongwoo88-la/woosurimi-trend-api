@@ -80,9 +80,31 @@ function looksBeforeAfter(title = "", body = "") {
   };
 }
 
-/** 주소로 사진을 받아옵니다. 네이버 주소만. */
-async function fetchImage(url, timeoutMs = 12000) {
-  if (!isAllowedUrl(url)) throw new Error("네이버에 올라간 사진만 받아올 수 있습니다.");
+/**
+ * 네이버 사진 주소에서 **더 큰 크기**를 달라고 바꿉니다.
+ *
+ * ⚠️ 네이버 사진 주소 뒤에는 ?type=w80 같은 크기 지시가 붙습니다.
+ * 처음에 "원본을 받자"고 그 부분을 떼어냈는데 **404가 났습니다.**
+ * 네이버는 크기 지시가 있어야 사진을 줍니다. 떼면 안 됩니다.
+ *
+ * 그리고 화면에 작게 보이는 사진은 주소도 작은 크기(w80)입니다. 그대로 받으면
+ * 썸네일이 뭉개집니다. 그래서 큰 크기를 달라고 바꿔서 받습니다.
+ * 원본이 그보다 작으면 네이버가 알아서 원본 크기로 줍니다.
+ */
+function biggerUrl(url) {
+  try {
+    const u = new URL(url);
+    if (!u.searchParams.has("type")) return null;
+    const cur = u.searchParams.get("type");
+    if (/^w\d+$/.test(cur) && parseInt(cur.slice(1), 10) >= 966) return null;
+    u.searchParams.set("type", "w966");
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function get(url, timeoutMs) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -90,6 +112,7 @@ async function fetchImage(url, timeoutMs = 12000) {
       signal: ctrl.signal,
       headers: {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        // ⚠️ Referer가 없으면 네이버가 막습니다.
         Referer: "https://blog.naver.com/",
       },
     });
@@ -100,6 +123,19 @@ async function fetchImage(url, timeoutMs = 12000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** 주소로 사진을 받아옵니다. 네이버 주소만. */
+async function fetchImage(url, timeoutMs = 12000) {
+  if (!isAllowedUrl(url)) throw new Error("네이버에 올라간 사진만 받아올 수 있습니다.");
+  // 큰 크기를 먼저 달라고 해보고, 안 주면 원래 주소로 받습니다.
+  const big = biggerUrl(url);
+  if (big) {
+    try {
+      return await get(big, timeoutMs);
+    } catch {}
+  }
+  return get(url, timeoutMs);
 }
 
 /**

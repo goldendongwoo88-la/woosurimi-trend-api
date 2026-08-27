@@ -182,7 +182,26 @@ function gate(feature, { consumeOnPass = true } = {}) {
  * AI 크레딧 — 이건 실제로 돈이 나가므로 계정에 기록합니다.
  * accounts.updateUser를 주입받아서 씁니다(순환 참조를 피하려고).
  */
-function creditGate(action, accounts) {
+/**
+ * 크레딧을 실제로 깎습니다. creditGate에서 consumeOnPass를 끈 경우,
+ * **일이 성공한 뒤에** 이걸 부릅니다.
+ *
+ * ⚠️ 이게 왜 필요하냐면 — creditGate는 통과하는 순간 바로 깎습니다.
+ * 그런데 그 뒤에 "사진을 올려주세요" 같은 400이 나면 사장님은 아무것도 못 받고
+ * 크레딧만 잃습니다. 사용량(gate) 쪽에서 같은 실수를 한 번 고쳤는데,
+ * 자동 썸네일 라우트를 만들면서 똑같이 또 했습니다.
+ */
+function chargeCredits(req, action) {
+  if (!req.user) return;
+  const cost = CREDIT_COST[action] || 1;
+  const key = `u:${req.user.email}:aiCredits:${todayStr()}`;
+  daily[key] = (daily[key] || 0) + cost;
+  save();
+  const perDay = (getPlan(req.user.plan).limits.aiCredits || {}).perDay || 0;
+  req.usage = { feature: "aiCredits", used: daily[key], limit: perDay, cost };
+}
+
+function creditGate(action, accounts, { consumeOnPass = true } = {}) {
   const cost = CREDIT_COST[action] || 1;
   return (req, res, next) => {
     if (!req.user) {
@@ -209,9 +228,11 @@ function creditGate(action, accounts) {
         upgrade: "/pricing.html",
       });
     }
-    daily[key] = used + cost;
-    save();
-    req.usage = { feature: "aiCredits", used: used + cost, limit: perDay, cost };
+    if (consumeOnPass) {
+      daily[key] = used + cost;
+      save();
+    }
+    req.usage = { feature: "aiCredits", used: used + (consumeOnPass ? cost : 0), limit: perDay, cost };
     next();
   };
 }
@@ -236,4 +257,4 @@ function summary(req) {
   return out;
 }
 
-module.exports = { gate, creditGate, check, consume, summary, identityOf, todayStr };
+module.exports = { gate, creditGate, chargeCredits, check, consume, summary, identityOf, todayStr };

@@ -680,7 +680,10 @@ module.exports = function attachSaas(app) {
   // ⚠️ AI를 쓰니 크레딧을 깎습니다. 사진 12장을 읽는 값이 나갑니다.
   app.post(
     "/api/thumb/auto",
-    usage.creditGate("thumbAuto", accounts),
+    // ⚠️ 크레딧을 미리 깎지 않습니다. 한도만 먼저 보고, **사진이 실제로 나온 뒤에**
+    // 깎습니다. 안 그러면 "사진을 올려주세요" 같은 오류에도 크레딧이 나갑니다.
+    // 사용량 쪽에서 같은 실수를 한 번 고쳤는데 여기서 또 했습니다.
+    usage.creditGate("thumbAuto", accounts, { consumeOnPass: false }),
     thumbAutoUpload.array("photos", 12),
     async (req, res) => {
       const b = req.body || {};
@@ -726,6 +729,8 @@ module.exports = function attachSaas(app) {
 
       try {
         const r = await thumbAuto.run(buffers, { title, body, size, theme, force });
+        // 여기까지 왔으면 썸네일이 실제로 나왔습니다. 이제 깎습니다.
+        usage.chargeCredits(req, "thumbAuto");
         res.json({
           ok: true,
           plan: r.plan,

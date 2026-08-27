@@ -241,6 +241,29 @@
     if (el) el.textContent = v;
   };
 
+  // ── 한 번 뽑은 건 다시 안 뽑습니다 ─────────────────────
+  //
+  // ⚠️ 사장님이 "홈판 제목을 두 번째 눌러도 또 분석한다"고 하셨습니다.
+  // 글이 그대로인데 10초를 또 기다리시고, AI 크레딧도 또 나갔습니다.
+  //
+  // 글 내용으로 열쇠를 만듭니다. 글자를 한 자라도 고치면 열쇠가 달라져서
+  // 새로 뽑습니다. 안 고쳤으면 아까 것을 그대로 보여드립니다.
+  // 새로 뽑고 싶으실 땐 "새로 뽑기" 버튼이 있습니다.
+  const CACHE = new Map();
+
+  /** 글 내용을 짧은 열쇠로 줄입니다. 전체를 열쇠로 쓰면 메모리가 아깝습니다. */
+  function cacheKey(kind, ...parts) {
+    const s = kind + " " + parts.join(" ");
+    // 간단한 해시 두 개를 붙여 씁니다. 하나만 쓰면 서로 다른 글이 같은 값이 되기 쉽습니다.
+    let a = 0x811c9dc5, b = 0x01000193;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      a = ((a ^ c) * 0x01000193) >>> 0;
+      b = ((b + c) * 31 + i) >>> 0;
+    }
+    return `${kind}:${s.length}:${a.toString(36)}:${b.toString(36)}`;
+  }
+
   // ── 서버 호출 ─────────────────────────────────────────
   async function server(pathname, body) {
     // ⚠️ 저장소 키 이름을 다른 파일과 맞춰야 합니다.
@@ -331,22 +354,44 @@
   //
   // ⚠️ 제목을 자동으로 바꾸지 않습니다. 후보를 보여주고 사장님이 고르십니다.
   // 제목은 글의 얼굴이라 마음대로 바꾸면 안 됩니다.
-  async function homeTitle() {
+  async function homeTitle(force) {
     const title = getTitle();
     if (!title) {
       return showPanel(`<h4>홈판 제목</h4><div class="ws-row warn">
         제목을 먼저 쓰신 뒤에 눌러주세요.</div>`);
     }
     const body = getBodyText();
+
+    // ⚠️ 사장님이 "두 번째 눌러도 또 분석한다"고 하셨습니다. 맞습니다.
+    // 글이 그대로인데 10초를 또 기다리게 하고, AI 크레딧도 또 나갑니다.
+    // 글이 안 바뀌었으면 아까 것을 그대로 보여드립니다.
+    const key = cacheKey("title", title, body);
+    const hit = !force && CACHE.get(key);
+    if (hit) return renderTitles(hit, true);
+
     showPanel(`<h4>홈판 제목</h4><p>본문 ${body.length.toLocaleString()}자를 읽고 만드는 중입니다… 10초쯤 걸립니다.</p>`);
     try {
       const d = await server("/api/title-rewrite", { title, body: body.slice(0, 1500), count: 5 });
+      CACHE.set(key, d);
+      renderTitles(d, false);
+    } catch (e) {
+      showPanel(`<h4>홈판 제목</h4><div class="ws-row bad">${esc(e.message)}</div>
+        <p class="ws-note">잠시 뒤에 다시 눌러주세요.</p>`);
+    }
+  }
+
+  function renderTitles(d, cached) {
+    {
       const dev = (o) =>
         [o.quoteStart && "따옴표", o.ellipsis && "말줄임표", o.curiosity && "궁금증", o.number && "숫자"]
           .filter(Boolean).map((x) => `<span class="ws-chip">${x}</span>`).join("") || `<span class="ws-chip dim">장치 없음</span>`;
 
       showPanel(`
         <h4>홈판 제목 후보</h4>
+        ${cached ? `<div class="ws-row" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+          <span style="font-size:11.5px;opacity:.8">아까 뽑아둔 것입니다. 글이 그대로라 다시 안 돌렸습니다.</span>
+          <button class="ws-mini" id="ws-title-again">새로 뽑기</button>
+        </div>` : ""}
         <div class="ws-dim" style="margin-bottom:8px">
           지금 제목 <b>${d.original.score}/4</b> ${dev(d.original.devices)}<br>${esc(d.original.text)}
         </div>
@@ -376,9 +421,8 @@
           askToFill(b.dataset.fill, b.dataset.for);
         })
       );
-    } catch (e) {
-      showPanel(`<h4>홈판 제목</h4><div class="ws-row bad">${esc(e.message)}</div>
-        <p class="ws-dim">우수리미에 로그인하고 이용권이 있어야 쓸 수 있는 기능입니다.</p>`);
+      const again = panel.querySelector("#ws-title-again");
+      if (again) again.addEventListener("click", () => homeTitle(true));
     }
   }
 
@@ -622,17 +666,31 @@
   // 한 번 덮어쓰면 되돌릴 수가 없어서, 편한 것보다 안전한 쪽을 골랐습니다.
   let lastBody = null;
 
-  async function homeBody() {
+  async function homeBody(force) {
     const body = getBodyText();
     if (body.length < 200) {
       return showPanel(`<h4>홈판 본문</h4><div class="ws-row warn">
         본문이 ${body.length}자입니다. 200자 이상 쓰신 뒤에 눌러주세요.</div>`);
     }
+    // 글이 그대로면 아까 것을 그대로 보여드립니다 (제목과 같은 이유).
+    const key = cacheKey("body", getTitle(), body);
+    const hit = !force && CACHE.get(key);
+    if (hit) { lastBody = hit.body; return renderBody(hit, true); }
+
     showPanel(`<h4>홈판 본문</h4><p>${body.length.toLocaleString()}자를 여섯 토막으로 나누는 중입니다…
       30초에서 1분쯤 걸립니다. 창을 닫지 마세요.</p>`);
     try {
       const d = await server("/api/body-rewrite", { body, title: getTitle() });
+      CACHE.set(key, d);
       lastBody = d.body;
+      renderBody(d, false);
+    } catch (e) {
+      showPanel(`<h4>홈판 본문</h4><div class="ws-row bad">${esc(e.message)}</div>`);
+    }
+  }
+
+  function renderBody(d, cached) {
+    {
       const keep = Math.round((d.after.chars / d.before.chars) * 100);
 
       /**
@@ -661,6 +719,10 @@
 
       showPanel(`
         <h4>홈판 본문 — 다 됐습니다</h4>
+        ${cached ? `<div class="ws-row" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+          <span style="font-size:11.5px;opacity:.8">아까 다듬어둔 것입니다. 글이 그대로라 다시 안 돌렸습니다.</span>
+          <button class="ws-mini" id="ws-body-again">새로 다듬기</button>
+        </div>` : ""}
 
         <div class="ws-stats">
           <span>소제목 <b>${d.before.subheads}</b> → <b class="ws-up">${d.after.subheads}</b>개</span>
@@ -725,8 +787,8 @@
           setTimeout(() => (btn.textContent = "다듬은 본문 복사하기"), 2600);
         }).catch(() => { btn.textContent = "복사에 실패했습니다"; });
       });
-    } catch (e) {
-      showPanel(`<h4>홈판 본문</h4><div class="ws-row bad">${esc(e.message)}</div>`);
+      const again = panel.querySelector("#ws-body-again");
+      if (again) again.addEventListener("click", () => homeBody(true));
     }
   }
 
@@ -1238,8 +1300,10 @@
       // 아직 올라가는 중이면 blob: 이나 data: 입니다. 그건 우리가 못 받습니다.
       const src = img.getAttribute("data-src") || img.src || "";
       if (!/^https:\/\//i.test(src)) continue;
-      // 네이버가 붙이는 크기 지시(?type=w80)를 떼야 원본이 옵니다.
-      const clean = src.split("?")[0];
+      // ⚠️ 크기 지시(?type=w80)를 떼면 안 됩니다. 실제로 받아보니 **404**가 났습니다.
+      // 네이버는 그 부분이 있어야 사진을 줍니다. 서버가 받을 때 더 큰 크기로
+      // 바꿔서 요청합니다(thumbAuto.biggerUrl). 여기서는 주소를 그대로 넘깁니다.
+      const clean = src;
       // 화면에서 너무 작게 나오는 건 아이콘일 가능성이 큽니다.
       if (img.naturalWidth && img.naturalWidth < 200) continue;
       if (!out.includes(clean)) out.push(clean);
