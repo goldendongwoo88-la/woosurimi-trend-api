@@ -189,6 +189,7 @@
       <button data-act="keyword" class="ws-dock-btn" title="지금 누가 상위에 있는지">키워드</button>
       <button data-act="font" class="ws-dock-btn" title="글꼴·크기를 본문 전체에 한 번에">폰트</button>
       <button data-act="image" class="ws-dock-btn" title="사진 너비를 한 번에 맞춥니다">사진</button>
+      <button data-act="linebreak" class="ws-dock-btn" title="긴 문단을 45자 이하로 자릅니다">줄바꿈</button>
       <button data-act="thumb" class="ws-dock-btn" title="홈판용 썸네일 만들기">썸네일</button>
       <button data-act="table" class="ws-dock-btn" title="표 넣기">표</button>
       <button data-act="word" class="ws-dock-btn" title="워드로 내려받기">워드</button>
@@ -898,6 +899,182 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   }
 
+  // ── 줄바꿈 ─────────────────────────────────────────────
+  //
+  // ⚠️ 서버를 안 부릅니다. 자를 자리는 국어 문법으로 정해져 있어서
+  // 물어볼 필요가 없습니다. 인터넷이 끊겨도 됩니다.
+  //
+  // ⚠️ 기준은 실제로 세어본 값입니다.
+  // 일 74,094명 오는 블로그는 60자 넘는 문단을 아예 안 씁니다(0%).
+  // 사장님 블로그는 26%가 60자를 넘습니다. 45자를 한계로 잡았습니다.
+  const BREAK_LIMIT = 45;
+  const BREAK_TARGET = 22;
+  const INVIS = /[\s​-‍⁠﻿]/g;
+  const visLen = (s) => String(s || "").replace(INVIS, "").length;
+
+  const HARD_END = [
+    /([.!?]|\.{2,}|…)(\s+)/g,
+    /((?:습니다|입니다|합니다|됩니다|했어요|해요|예요|이에요|에요|네요|더라고요|거든요|잖아요|세요|겠어요|았어요|었어요)[.!?]?)(\s+)/g,
+  ];
+  // ⚠️ 이 목록은 src/lineBreak.js의 SOFT와 **글자 하나까지 같아야** 합니다.
+  // 다르면 확장에서 본 결과와 화면에서 본 결과가 달라집니다. 사장님은 어느 쪽을
+  // 믿어야 할지 모르게 됩니다. scripts/test-linebreak-parity.js가 매번 대조합니다.
+  const SOFT_END = [
+    [/((?:는데|은데|ㄴ데|지만|아서|어서|여서|니까|으니까|면서|거나|든지|더니|길래|는지|던데|테니|라서|다가|자마자)[,]?)(\s+)/g, 8],
+    [/(,)(\s+)/g, 6],
+    [/((?:에서|으로|에게|한테|부터|까지|보다|처럼|만큼|대신|위해|통해)[,]?)(\s+)/g, 5],
+    [/((?:하고|되고|이고|보며|하며|되며|하면|되면|이면)[,]?)(\s+)/g, 3],
+  ];
+
+  /** 문단 하나를 45자 이하 조각들로 자릅니다. 글자는 하나도 안 바꿉니다. */
+  function breakOne(text) {
+    const t = String(text || "").replace(INVIS, " ").replace(/\s+/g, " ").trim();
+    if (!t || t.length <= BREAK_LIMIT) return t ? [t] : [];
+
+    const hard = new Set();
+    for (const re of HARD_END) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(t))) hard.add(m.index + m[1].length);
+    }
+    const soft = new Map();
+    for (const [re, sc] of SOFT_END) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(t))) {
+        const p = m.index + m[1].length;
+        if (!soft.has(p) || soft.get(p) < sc) soft.set(p, sc);
+      }
+    }
+    let m;
+    const sp = /(\S)(\s+)/g;
+    while ((m = sp.exec(t))) {
+      const p = m.index + 1;
+      if (!soft.has(p)) soft.set(p, 1);
+    }
+
+    const out = [];
+    let start = 0;
+    while (start < t.length) {
+      if (t.length - start <= BREAK_LIMIT) { out.push(t.slice(start).trim()); break; }
+      const near = (p) => Math.abs(p - start - BREAK_TARGET);
+      const inRange = (p) => p > start + 8 && p - start <= BREAK_LIMIT;
+      let pick = null;
+      const h = [...hard].filter(inRange);
+      if (h.length) pick = h.reduce((a, b) => (near(b) < near(a) ? b : a));
+      else {
+        const s = [...soft.entries()].filter(([p]) => inRange(p));
+        if (s.length) {
+          pick = s.reduce((a, b) => (b[1] !== a[1] ? (b[1] > a[1] ? b : a) : near(b[0]) < near(a[0]) ? b : a))[0];
+        } else pick = start + BREAK_LIMIT;
+      }
+      const piece = t.slice(start, pick).trim();
+      if (piece) out.push(piece);
+      start = pick;
+      while (start < t.length && /\s/.test(t[start])) start++;
+    }
+    return out.filter(Boolean);
+  }
+
+  function runLineBreak() {
+    const root = getEditorRoot();
+    if (!root) return showPanel(`<h4>줄바꿈</h4><div class="ws-row warn">본문을 찾지 못했습니다.</div>`);
+
+    const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
+    const nodes = [...root.querySelectorAll(".se-text-paragraph")].filter(
+      (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") && !n.closest(".se-placeholder")
+    );
+
+    const long = [];
+    for (const n of nodes) {
+      const t = (n.innerText || "").replace(/​/g, "").trim();
+      if (visLen(t) <= BREAK_LIMIT) continue;
+      const pieces = breakOne(t);
+      if (pieces.length > 1) long.push({ node: n, text: t, pieces });
+    }
+
+    const total = nodes.filter((n) => visLen((n.innerText || "")) >= 2).length;
+    if (!long.length) {
+      return showPanel(`<h4>줄바꿈</h4>
+        <div class="ws-row good">고칠 게 없습니다. 문단 ${total}개가 전부 ${BREAK_LIMIT}자 이하입니다.</div>
+        <p class="ws-note">일 74,094명 오는 블로그(니들의연애가중계)를 12편 세어보니
+        60자 넘는 문단이 <b>0%</b>였습니다. 지금 사장님 글도 그 모양입니다.</p>`);
+    }
+
+    const pct = Math.round((long.length / Math.max(1, total)) * 100);
+    showPanel(`<h4>줄바꿈 — 긴 문단 ${long.length}개</h4>
+      <p class="ws-note">문단 ${total}개 중 <b>${pct}%</b>가 ${BREAK_LIMIT}자를 넘습니다.
+      일 74,094명 오는 블로그는 이 비율이 <b>1%</b>입니다(실제로 12편 세어본 값입니다).</p>
+      <div id="ws-lb-list">${long.map((L, i) => `
+        <div class="ws-row" data-lb="${i}">
+          <div style="font-size:11px;opacity:.6;margin-bottom:4px">${visLen(L.text)}자 → ${L.pieces.length}줄</div>
+          <div style="opacity:.55;text-decoration:line-through;margin-bottom:6px">${esc(L.text)}</div>
+          <div>${L.pieces.map((p) => `<div>${esc(p)}</div>`).join("")}</div>
+          <button class="ws-mini" data-lbfix="${i}" style="margin-top:6px">이 문단만 고치기</button>
+        </div>`).join("")}</div>
+      <button class="ws-mini" id="ws-lb-all" style="margin-top:10px">전부 고치기 (${long.length}개)</button>
+      <button class="ws-mini" id="ws-lb-copy" style="margin-top:10px">고친 본문 복사</button>`);
+
+    // ⚠️ 한 문단이 실패해도 나머지는 살아야 합니다. 그리고 실패한 문단은
+    // **원래대로 되돌려야** 합니다. 제목에서 이걸 안 해서 사장님 제목을 날렸습니다.
+    function fixOne(L) {
+      const el = L.node;
+      const original = el.innerHTML;
+      const want = L.pieces.join("\n");
+      const sel = window.getSelection();
+      const range = document.createRange();
+      try {
+        range.selectNodeContents(el);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        el.focus && el.focus();
+        let done = false;
+        try { done = document.execCommand("insertText", false, want); } catch {}
+        // 넣은 뒤에 정말 나뉘었는지, 글자가 안 사라졌는지 확인합니다.
+        const after = (getEditorRoot().innerText || "");
+        const okChars = after.replace(INVIS, "").includes(L.pieces[0].replace(INVIS, ""));
+        if (done && okChars) return true;
+        el.innerHTML = original;
+        return false;
+      } catch {
+        el.innerHTML = original;
+        return false;
+      }
+    }
+
+    panel.querySelectorAll("[data-lbfix]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const L = long[+b.dataset.lbfix];
+        if (fixOne(L)) {
+          b.textContent = "고쳤습니다";
+          b.disabled = true;
+          scheduleCount();
+        } else {
+          b.textContent = "편집기가 안 받네요 — 원문 그대로 뒀습니다";
+          b.disabled = true;
+        }
+      });
+    });
+
+    panel.querySelector("#ws-lb-all").addEventListener("click", (e) => {
+      // 뒤에서부터 고칩니다. 앞에서 고치면 뒤 문단의 자리가 밀립니다.
+      let done = 0, failed = 0;
+      for (let i = long.length - 1; i >= 0; i--) (fixOne(long[i]) ? done++ : failed++);
+      e.target.disabled = true;
+      e.target.textContent = failed
+        ? `${done}개 고쳤습니다 · ${failed}개는 원문 그대로 뒀습니다`
+        : `${done}개 전부 고쳤습니다`;
+      scheduleCount();
+    });
+
+    panel.querySelector("#ws-lb-copy").addEventListener("click", (e) => {
+      const text = getBodyParts()
+        .flatMap((p) => (visLen(p) > BREAK_LIMIT ? breakOne(p) : [p]))
+        .join("\n");
+      navigator.clipboard.writeText(text).then(() => (e.target.textContent = "복사됐습니다"));
+    });
+  }
+
   // ── 홈판 썸네일 ───────────────────────────────────────
   //
   // ⚠️ 여기서 썸네일까지 만들지는 않습니다. 사진을 골라야 하는데, 글쓰기 창에
@@ -931,6 +1108,7 @@
       else if (act === "image") resizeImages();
       else if (act === "audit") runAudit();
       else if (act === "keyword") runKeyword();
+      else if (act === "linebreak") runLineBreak();
       else if (act === "thumb") openThumb();
       else if (act === "table") insertTable();
       else if (act === "word") downloadWord();

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>블로그 줄바꿈</title>
+<meta name="description" content="긴 문단을 45자 이하로 자릅니다. 일 7만명 오는 블로그의 문단 길이를 실제로 세어서 기준을 잡았습니다. 글자는 하나도 바꾸지 않습니다." />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="블로그 줄바꿈 — 우수리미" />
+<meta property="og:description" content="일 74,094명 오는 블로그는 60자 넘는 문단을 아예 안 씁니다. 실제로 세어본 값으로 문단을 자릅니다." />
+<meta property="og:url" content="https://woosurimi-trend-api.onrender.com/linebreak.html" />
+<link rel="canonical" href="https://woosurimi-trend-api.onrender.com/linebreak.html" />
+<link rel="stylesheet" href="/assets/ws.css" />
+<style>
+  textarea { width: 100%; padding: 12px 14px; font-size: 14px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--bg); color: var(--ink); font-family: inherit;
+    resize: vertical; line-height: 1.7; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .stat { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: baseline;
+    padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .stat:last-child { border-bottom: none; }
+  .stat .k { color: var(--ink-2); }
+  .stat b { font-variant-numeric: tabular-nums; font-size: 16px; }
+  .stat .to { color: var(--brand); font-weight: 700; }
+  .stat .from { color: var(--ink-3); text-decoration: line-through; }
+  .out { white-space: pre-wrap; line-height: 1.75; font-size: 14.5px; padding: 14px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); max-height: 460px;
+    overflow-y: auto; }
+  .out .cut { display: block; }
+  .out .gap { display: block; height: 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who" id="who"></div>
+</div></div>
+
+<div class="wrap">
+  <h1>줄바꿈</h1>
+  <p class="lede">
+    긴 문단은 모바일에서 벽처럼 보입니다. 읽기 전에 넘겨버립니다.
+    <b>글자는 하나도 바꾸지 않고</b> 자르기만 합니다.
+  </p>
+
+  <div class="card">
+    <h3 style="margin-top:0">기준은 세어본 값입니다</h3>
+    <p style="font-size:14px;color:var(--ink-2);margin:0 0 12px">
+      두 블로그의 최근 글 12편씩, 문단 1,508개를 실제로 세었습니다.
+    </p>
+    <div class="stat"><span class="k">문단 길이 중앙값</span><b>19자</b><span class="muted">/ 38자</span></div>
+    <div class="stat"><span class="k">45자 넘는 문단</span><b>1%</b><span class="muted">/ 39%</span></div>
+    <div class="stat"><span class="k">60자 넘는 문단</span><b>0%</b><span class="muted">/ 26%</span></div>
+    <div class="stat"><span class="k">제일 긴 문단</span><b>87자</b><span class="muted">/ 200자</span></div>
+    <p class="muted" style="font-size:13px;margin:12px 0 0">
+      앞쪽이 <b>일 74,094명</b> 오는 블로그, 뒤쪽이 <b>일 21,018명</b> 오는 블로그입니다.
+      잘 되는 쪽은 <b>60자 넘는 문단을 아예 안 씁니다.</b> 0%입니다.
+      그래서 45자를 한계로 잡았습니다.
+    </p>
+  </div>
+
+  <div class="card">
+    <label for="src">본문</label>
+    <textarea id="src" rows="10" placeholder="블로그 본문을 붙여넣으세요."></textarea>
+    <div style="height:12px"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:400;font-size:14px">
+      <input type="checkbox" id="blank" checked style="width:auto" />
+      문단 사이에 빈 줄 넣기
+    </label>
+    <div style="height:14px"></div>
+    <button id="go">줄바꿈</button>
+  </div>
+
+  <div id="out" style="display:none">
+    <div class="card">
+      <h3 style="margin-top:0">이렇게 바뀝니다</h3>
+      <div id="stats"></div>
+      <div style="height:14px"></div>
+      <div class="out" id="result"></div>
+      <div style="height:12px"></div>
+      <button id="copy">복사</button>
+      <span class="muted" id="note" style="margin-left:10px"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">AI를 안 씁니다</h3>
+    <p style="font-size:14px;color:var(--ink-2);margin:0">
+      자를 자리는 국어 문법으로 정해져 있습니다. 종결어미(–습니다, –했어요),
+      연결어미(–는데, –어서, –니까), 쉼표 순으로 봅니다.
+      AI에 물어보면 (1) 돈이 나가고 (2) 느리고 (3) 가끔 <b>문장을 고쳐서</b> 돌려줍니다.
+      자르라고 했는데 내용이 바뀌면 그건 줄바꿈이 아닙니다. 그래서 무료이고, 즉시 나옵니다.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">글 쓰면서 바로 쓰시려면</h3>
+    <p style="font-size:14px;color:var(--ink-2);margin:0 0 12px">
+      크롬 확장을 깔면 네이버 글쓰기 창 아래 막대에 <b>줄바꿈</b> 버튼이 생깁니다.
+      긴 문단만 골라서 보여주고, 한 문단씩 또는 한꺼번에 고칠 수 있습니다.
+    </p>
+    <a class="btn" href="/extension.html">크롬 확장 받기</a>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+let lastText = "";
+
+$("#go").onclick = async () => {
+  const body = $("#src").value;
+  if (!body.trim()) { alert("본문을 넣어주세요."); return; }
+  const btn = $("#go");
+  btn.disabled = true; btn.textContent = "자르는 중…";
+  try {
+    const r = await fetch("/api/linebreak", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body, blankLines: $("#blank").checked }),
+    }).then((x) => x.json());
+
+    if (r.error) { alert(r.error); return; }
+    lastText = r.text;
+
+    const row = (k, from, to, better) =>
+      `<div class="stat"><span class="k">${k}</span>` +
+      `<span class="from">${from}</span>` +
+      `<b class="${better ? "to" : ""}">${to}</b></div>`;
+
+    $("#stats").innerHTML =
+      row("문단 수", r.before.n + "개", r.after.n + "개", r.after.n > r.before.n) +
+      row("길이 중앙값", r.before.median + "자", r.after.median + "자", r.after.median < r.before.median) +
+      row("제일 긴 문단", r.before.max + "자", r.after.max + "자", r.after.max < r.before.max) +
+      row("45자 넘는 문단", r.before.over45 + "%", r.after.over45 + "%", r.after.over45 < r.before.over45) +
+      row("60자 넘는 문단", r.before.over60 + "%", r.after.over60 + "%", r.after.over60 <= r.before.over60);
+
+    // 자른 자리가 눈에 보이게 — 빈 줄과 새 줄을 구분해서 그립니다.
+    $("#result").innerHTML = r.text.split("\n").map((line) =>
+      line.trim()
+        ? `<span class="cut">${line.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</span>`
+        : `<span class="gap"></span>`
+    ).join("");
+
+    $("#note").textContent = r.changed
+      ? `문단 ${r.changed}개를 잘랐습니다. 글자는 그대로입니다.`
+      : "자를 만큼 긴 문단이 없었습니다.";
+    $("#out").style.display = "";
+    $("#out").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch {
+    alert("서버에 닿지 못했습니다. 잠시 뒤에 다시 해주세요.");
+  } finally {
+    btn.disabled = false; btn.textContent = "줄바꿈";
+  }
+};
+
+$("#copy").onclick = (e) => {
+  navigator.clipboard.writeText(lastText).then(() => {
+    e.target.textContent = "복사됐습니다";
+    setTimeout(() => (e.target.textContent = "복사"), 1600);
+  });
+};
+
+fetch("/api/auth/me").then((r) => r.json()).then((d) => {
+  $("#who").innerHTML = d && d.user
+    ? `${d.user.email} <a href="/boss.html">내 계정</a>`
+    : `<a href="/join.html">로그인</a>`;
+}).catch(() => {});
+</script>
+</body>
+</html>

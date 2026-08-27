@@ -22,6 +22,7 @@ const topicFit = require("./topicFit");
 const suggestTopics = require("./suggestTopics");
 const research = require("./research");
 const thumbnail = require("./thumbnail");
+const lineBreak = require("./lineBreak");
 
 // 썸네일용 사진 받기.
 // ⚠️ 디스크에 안 씁니다(memoryStorage). 만들어서 바로 돌려주면 끝인 사진을
@@ -657,6 +658,20 @@ module.exports = function attachSaas(app) {
       }
     }
   );
+
+  // ── 줄바꿈 ─────────────────────────────────────────────
+  //
+  // ⚠️ AI를 안 씁니다. 그래서 사용량도 안 세고 크레딧도 안 깎습니다.
+  // 자를 자리는 국어 문법으로 정해져 있어서 물어볼 필요가 없습니다.
+  // 늑대플은 이걸 "AI 줄바꿈"이라고 부르는데, AI를 태우면 가끔 문장을 고쳐서
+  // 돌려줍니다. 자르랬더니 내용이 바뀌면 그건 줄바꿈이 아닙니다.
+  app.post("/api/linebreak", (req, res) => {
+    const { body, blankLines } = req.body || {};
+    if (!String(body || "").trim()) return res.status(400).json({ error: "본문을 넣어주세요." });
+    const r = lineBreak.rebreak(body, { blankLines: blankLines !== false });
+    if (!r.ok) return res.status(400).json({ error: r.why, lost: r.lost });
+    res.json(r);
+  });
 
   // ── 사용량 ─────────────────────────────────────────────
   app.get("/api/usage", (req, res) => res.json(usage.summary(req)));
