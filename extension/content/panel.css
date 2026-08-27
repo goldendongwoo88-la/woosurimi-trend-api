@@ -226,6 +226,32 @@
 #ws-tools-panel .ws-sug { margin: 0; padding-left: 17px; font-size: 12.5px; line-height: 1.75; color: #5a5f6b; }
 #ws-tools-panel .ws-sug li { margin-bottom: 3px; }
 
+/* 세 갈래 고르기 — "어떻게 하시겠어요?"
+   ⚠️ 예전엔 버튼 두 개만 나란히 뒀습니다. 사장님이 "무슨 말인지 모르겠다"고
+   하셨습니다. 무엇을 고르는 건지, 고르면 어떻게 되는지가 안 적혀 있었습니다.
+   번호를 달고 각 갈래에 제목과 한 줄 설명을 붙입니다. */
+#ws-tools-panel .ws-choice {
+  display: grid; grid-template-columns: 22px 1fr; gap: 9px;
+  padding: 10px 0; border-top: 1px solid #f0f1f4;
+}
+#ws-tools-panel .ws-choice:first-of-type { border-top: none; padding-top: 4px; }
+#ws-tools-panel .ws-choice-n {
+  width: 21px; height: 21px; border-radius: 50%; background: #eef0f3; color: #5a5f6b;
+  font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+#ws-tools-panel .ws-choice-t { font-size: 13px; font-weight: 700; color: #17181c; margin-bottom: 2px; }
+#ws-tools-panel .ws-choice-d { font-size: 12px; color: #5a5f6b; line-height: 1.6; }
+#ws-tools-panel .ws-choice-d b { color: #17181c; }
+
+/* 골라 넣기 목록 */
+#ws-tools-panel .ws-fact-row {
+  display: grid; grid-template-columns: 16px 1fr; gap: 8px; align-items: start;
+  padding: 6px 0; font-size: 12.5px; line-height: 1.65; color: #17181c; cursor: pointer;
+}
+#ws-tools-panel .ws-fact-row input { margin: 3px 0 0; width: auto; }
+#ws-tools-panel .ws-fact-row em { font-style: normal; font-size: 11px; color: #8a8f9a; }
+#ws-tools-panel .ws-fact-row:hover { background: #fafbfc; }
+
 
 
 /* ── 글쓰기 창 아래 도구 막대 ─────────────────────────────

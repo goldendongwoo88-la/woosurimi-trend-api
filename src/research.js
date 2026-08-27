@@ -37,12 +37,56 @@ const OFF_LIMITS =
  * 주제에 대해 실제로 무엇이 보도됐는지 모읍니다.
  * 뉴스 + 블로그 상위 글을 함께 봅니다. 뉴스는 사실, 블로그는 사람들 관심사입니다.
  */
+/**
+ * 검색어를 만듭니다.
+ *
+ * ⚠️ 사장님이 "찾은 자료가 없다고 나온다"고 하셨습니다. 원인은 검색어였습니다.
+ * 블로그 **제목을 통째로** 검색어로 넣고 있었습니다.
+ *
+ * 실측 (search.naver.com):
+ *   "착해진 아이라인 눈매에 여전한 존재감" 카리나 메이크업 →  1건
+ *   카리나 메이크업                                      → 10건
+ *   카리나 아이라인                                      → 10건
+ *
+ * 제목은 사람이 읽으라고 쓴 문장이지 검색어가 아닙니다.
+ * 그래서 짧은 것부터 차례로 시도하고, 자료가 나오면 거기서 멈춥니다.
+ */
+function searchQueries(topic, angle = "") {
+  // 따옴표 안은 글맛을 내려고 쓴 말입니다. 검색어로는 방해만 됩니다.
+  const bare = String(topic || "")
+    .replace(/[""''"']/g, " ")
+    .replace(/[\[\]()<>·|]/g, " ")
+    .replace(/\.{2,}|…/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const words = bare.split(" ").filter(Boolean);
+  const out = [];
+  const add = (s) => {
+    const t = String(s || "").trim();
+    if (t.length >= 2 && !out.includes(t)) out.push(t);
+  };
+
+  // 뒤쪽 어절이 대개 무엇에 대한 글인지를 담습니다 ("… 카리나 메이크업").
+  if (words.length >= 2) add(words.slice(-2).join(" "));
+  if (words.length >= 3) add(words.slice(-3).join(" "));
+  // 앞쪽도 봅니다 — 제목에 따라 앞에 주어가 오기도 합니다.
+  if (words.length >= 2) add(words.slice(0, 2).join(" "));
+  // 찾으려는 것(angle)을 뒤쪽 어절과 붙여봅니다.
+  const a = String(angle || "").trim();
+  if (a && words.length >= 1) add(`${words[words.length - 1]} ${a}`.slice(0, 30));
+  // 마지막 수단 — 통째로. 거의 안 나오지만 아예 안 하는 것보단 낫습니다.
+  add(bare.slice(0, 40));
+  if (words.length) add(words[words.length - 1]);
+  return out.slice(0, 5);
+}
+
 async function collect(topic, { newsCount = 8, blogCount = 3 } = {}) {
   const q = String(topic || "").trim();
   if (!q) return { ok: false, why: "무엇을 찾을지 알려주세요." };
 
   const sources = [];
   const warnings = [];
+  let usedQuery = null;
 
   // 1) 뉴스 — 사실의 출처
   //
@@ -50,8 +94,17 @@ async function collect(topic, { newsCount = 8, blogCount = 3 } = {}) {
   // 처음에 개수인 줄 알고 8을 넘겼더니 "최근 8시간 뉴스"만 찾았습니다.
   // 연예 소재는 며칠 전 기사가 더 많아서 거의 아무것도 안 나옵니다.
   // 30일치를 받아서 최신순으로 필요한 만큼만 씁니다.
+  // ⚠️ 검색어를 짧은 것부터 차례로 시도합니다. 하나가 되면 거기서 멈춥니다.
+  // 제목을 통째로 넣으면 거의 아무것도 안 나옵니다(실측 1건 대 10건).
+  const tried = [];
   try {
-    const news = (await searchRecentNews(q, 24 * 30, { display: 50 })).slice(0, newsCount);
+    let news = [];
+    for (const cand of searchQueries(q)) {
+      news = (await searchRecentNews(cand, 24 * 30, { display: 50 })).slice(0, newsCount);
+      tried.push(`${cand} → ${news.length}건`);
+      if (news.length) { usedQuery = cand; break; }
+      await new Promise((s) => setTimeout(s, 300));
+    }
     for (const n of news || []) {
       sources.push({
         kind: "뉴스",
@@ -67,7 +120,14 @@ async function collect(topic, { newsCount = 8, blogCount = 3 } = {}) {
 
   // 2) 블로그 상위 글 — 사람들이 이 주제에서 무엇을 궁금해하는지
   try {
-    const r = await searchBlogRanking(q, { limit: blogCount * 3 });
+    // 뉴스에서 통한 검색어가 있으면 그걸 먼저 씁니다. 없으면 다시 차례로.
+    let r = { ok: false, results: [] };
+    for (const cand of usedQuery ? [usedQuery, ...searchQueries(q)] : searchQueries(q)) {
+      r = await searchBlogRanking(cand, { limit: blogCount * 3 });
+      tried.push(`(블로그) ${cand} → ${r.ok ? r.results.length : "X"}건`);
+      if (r.ok && r.results.length >= 2) { usedQuery = usedQuery || cand; break; }
+      await new Promise((s) => setTimeout(s, 700));
+    }
     if (r.ok) {
       let got = 0;
       for (const item of r.results) {
@@ -95,11 +155,14 @@ async function collect(topic, { newsCount = 8, blogCount = 3 } = {}) {
   if (!sources.length) {
     return {
       ok: false,
-      why: "이 주제로 찾은 자료가 없습니다. 더 알려진 이름이나 사건으로 바꿔보세요.",
+      // ⚠️ 무엇으로 찾아봤는지 보여드립니다. "없습니다"만 나오면
+      // 사장님이 무엇을 고쳐야 할지 알 수가 없습니다.
+      why: "자료를 못 찾았습니다.",
+      tried,
       warnings,
     };
   }
-  return { ok: true, topic: q, sources, warnings };
+  return { ok: true, topic: q, usedQuery, tried, sources, warnings };
 }
 
 const SYSTEM =
@@ -192,4 +255,5 @@ async function research({ topic, angle = "", newsCount = 8, blogCount = 3 }) {
   return { ...o, warnings: c.warnings };
 }
 
-module.exports = { research, collect, outline };
+module.exports = {
+  searchQueries, research, collect, outline };

@@ -253,7 +253,7 @@
 
   /** 글 내용을 짧은 열쇠로 줄입니다. 전체를 열쇠로 쓰면 메모리가 아깝습니다. */
   function cacheKey(kind, ...parts) {
-    const s = kind + " " + parts.join(" ");
+    const s = kind + "\u0000" + parts.join("\u0000");
     // 간단한 해시 두 개를 붙여 씁니다. 하나만 쓰면 서로 다른 글이 같은 값이 되기 쉽습니다.
     let a = 0x811c9dc5, b = 0x01000193;
     for (let i = 0; i < s.length; i++) {
@@ -564,48 +564,141 @@
   //   2) 모르신다        → 자료를 찾아와서 출처와 함께 보여주고, 고르시면 엮음
   //   3) 자료도 없다      → 본문은 그대로 두고 그 말이 빠진 제목을 쓰시게 안내
   function askToFill(missing, forTitle) {
+    /**
+     * ⚠️ 이 화면을 다시 만든 이유
+     * 사장님이 "무슨 말인지 이해가 잘 안 된다"고 하셨습니다. 맞는 말씀입니다.
+     *
+     * 화면에 "제목이 약속한 **4**가 본문에 없습니다"라고 떴습니다.
+     * '4'만 덩그러니 보여주니 그게 제목의 어느 부분인지 알 수가 없습니다.
+     * 이제 **제목을 통째로 보여주고 그 말에 표시**합니다. 눈으로 바로 찾힙니다.
+     * 그리고 무엇을 하라는 건지 한 줄로 먼저 적습니다.
+     */
+    const title = getTitle() || forTitle || "";
+    // 제목에서 그 말을 찾아 색칠합니다.
+    const marked = missing && title.includes(missing)
+      ? esc(title).split(esc(missing)).join(
+          `<b style="background:#fde9c8;color:#8a5a10;padding:1px 3px;border-radius:3px">${esc(missing)}</b>`)
+      : esc(title);
+
     showPanel(`
-      <h4>본문에 넣기</h4>
-      <p class="ws-dim">제목이 약속한 <b>${esc(missing)}</b>가 본문에 없습니다.
-        들어온 사람이 그 대목을 못 찾으면 바로 나갑니다.</p>
-      <div class="ws-row warn" style="margin:6px 0">
-        <b>지어내지 않습니다.</b> 아시는 내용을 적어주시거나, 모르시면 찾아드립니다.
+      <h4>제목에 쓴 말이 본문에 없습니다</h4>
+
+      <div class="ws-sec warn-sec">
+        <div class="ws-sec-h">지금 제목</div>
+        <div style="font-size:13.5px;line-height:1.7">${marked}</div>
+        <p class="ws-sec-p" style="margin:8px 0 0">
+          표시한 <b>"${esc(missing)}"</b>가 본문 어디에도 없습니다.
+          이 말을 보고 들어온 사람이 본문에서 그 대목을 못 찾으면 바로 나갑니다.
+          그건 클릭이 아니라 이탈이고, 홈피드는 그걸 봅니다.
+        </p>
       </div>
-      <textarea id="ws-fact" rows="3" placeholder="예: 아이라인을 눈꼬리·앞머리·아래·위 네 방향으로 얇게 그렸다"
-        style="width:100%;padding:9px;font:inherit;font-size:13px;border:1px solid #e6e8ed;border-radius:8px;resize:vertical"></textarea>
-      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-        <button class="ws-apply" id="ws-fact-go" style="margin-top:0">이 내용으로 채우기</button>
-        <button class="ws-apply" id="ws-fact-find" style="margin-top:0">모르겠어요 · 찾아보기</button>
+
+      <div class="ws-sec">
+        <div class="ws-sec-h">어떻게 하시겠어요?</div>
+        <p class="ws-sec-p"><b>지어내지 않습니다.</b> 사실은 사장님이 주시거나 제가 찾아옵니다.</p>
+
+        <div class="ws-choice">
+          <div class="ws-choice-n">1</div>
+          <div class="ws-choice-b">
+            <div class="ws-choice-t">내용을 알고 계세요</div>
+            <div class="ws-choice-d">아래에 적어주시면 본문 알맞은 자리에 넣어드립니다.</div>
+            <textarea id="ws-fact" rows="3"
+              placeholder="예) 아이라인을 눈꼬리·앞머리·아래·위 네 방향으로 얇게 그렸다"
+              style="width:100%;margin-top:7px;padding:9px;font:inherit;font-size:13px;border:1px solid #e6e8ed;border-radius:8px;resize:vertical"></textarea>
+            <button class="ws-apply" id="ws-fact-go" style="margin-top:7px">적은 내용으로 본문 채우기</button>
+          </div>
+        </div>
+
+        <div class="ws-choice">
+          <div class="ws-choice-n">2</div>
+          <div class="ws-choice-b">
+            <div class="ws-choice-t">모르시겠어요</div>
+            <div class="ws-choice-d">뉴스와 상위 블로그를 읽어서 <b>출처와 함께</b> 보여드립니다.
+              그중에서 고르시면 본문에 넣습니다. 30초쯤 걸립니다.</div>
+            <button class="ws-apply" id="ws-fact-find" style="margin-top:7px">자료 찾아보기</button>
+          </div>
+        </div>
+
+        <div class="ws-choice">
+          <div class="ws-choice-n">3</div>
+          <div class="ws-choice-b">
+            <div class="ws-choice-t">그 말을 뺀 제목을 쓰세요</div>
+            <div class="ws-choice-d">본문에 없는 걸 제목이 약속하는 것보다 낫습니다.
+              앞 화면에서 다른 제목 후보를 고르시면 됩니다.</div>
+            <button class="ws-apply" id="ws-fact-back" style="margin-top:7px">제목 후보로 돌아가기</button>
+          </div>
+        </div>
       </div>
-      <p class="ws-dim">찾아보기는 뉴스와 상위 블로그를 읽어 출처와 함께 보여드립니다.</p>
     `);
 
     panel.querySelector("#ws-fact-go").onclick = () =>
       doFill(missing, panel.querySelector("#ws-fact").value.trim());
     panel.querySelector("#ws-fact-find").onclick = () => findFacts(missing, forTitle);
+    panel.querySelector("#ws-fact-back").onclick = () => homeTitle();
   }
 
   /** 자료를 찾아옵니다. 출처를 그대로 보여줘야 사장님이 확인하실 수 있습니다. */
-  async function findFacts(missing, forTitle) {
-    const topic = (getTitle() || forTitle || "").slice(0, 40);
-    showPanel(`<h4>자료 찾는 중</h4><p>뉴스와 상위 블로그를 읽고 있습니다… 30초쯤 걸립니다.</p>`);
+  async function findFacts(missing, forTitle, customTopic) {
+    const topic = (customTopic || getTitle() || forTitle || "").slice(0, 40);
+    showPanel(`<h4>자료 찾는 중</h4>
+      <p>뉴스와 상위 블로그를 읽고 있습니다… 30초쯤 걸립니다.</p>
+      <p class="ws-note">찾는 말: <b>${esc(topic)}</b></p>`);
     try {
       const d = await server("/api/research", { topic, angle: missing });
+      const facts = d.facts || [];
+
+      // ⚠️ 자료를 못 찾았을 때 "없습니다"만 띄우면 사장님이 무엇을 고쳐야 할지
+      // 알 수가 없습니다. **무엇으로 찾아봤는지** 보여드리고, 직접 검색어를
+      // 바꿔볼 수 있게 칸을 둡니다.
+      if (!facts.length) {
+        return showPanel(`
+          <h4>쓸 만한 자료를 못 찾았습니다</h4>
+          <div class="ws-sec warn-sec">
+            <div class="ws-sec-h">이렇게 찾아봤습니다</div>
+            <div style="font-size:12.5px;line-height:1.9">
+              ${(d.tried || [esc(topic)]).map((t) => `· ${esc(t)}`).join("<br>")}
+            </div>
+          </div>
+          <div class="ws-sec">
+            <div class="ws-sec-h">검색어를 바꿔보시겠어요?</div>
+            <p class="ws-sec-p">제목 그대로는 잘 안 나옵니다.
+              <b>사람 이름이나 제품 이름</b>처럼 짧고 널리 쓰이는 말이 잘 나옵니다.</p>
+            <input id="ws-res-q" type="text" value="${esc(topic)}"
+              style="width:100%;padding:9px;font:inherit;font-size:13px;border:1px solid #e6e8ed;border-radius:8px" />
+            <button class="ws-apply" id="ws-res-again" style="margin-top:7px">이 말로 다시 찾기</button>
+          </div>
+          <div class="ws-sec">
+            <div class="ws-sec-h">아니면</div>
+            <p class="ws-sec-p">자료가 없으면 본문은 그대로 두고,
+              <b>"${esc(missing)}"가 빠진 제목</b>을 쓰시는 편이 안전합니다.</p>
+            <button class="ws-apply" id="ws-res-back">제목 후보로 돌아가기</button>
+          </div>
+        `), wire();
+      }
+
       showPanel(`
-        <h4>찾은 것</h4>
-        ${d.facts && d.facts.length ? `
-          <p class="ws-dim">자료에서 확인된 사실입니다. 쓸 것을 고르세요.</p>
-          ${d.facts.map((f, i) => `
+        <h4>찾았습니다 — ${facts.length}가지</h4>
+        <div class="ws-sec">
+          <div class="ws-sec-h">넣을 것을 고르세요
+            <span class="ws-sec-tag check">복수 선택</span></div>
+          <p class="ws-sec-p">자료에서 <b>실제로 확인된 것</b>만 있습니다. 지어낸 건 없습니다.
+            대괄호 숫자는 아래 출처 번호입니다.</p>
+          <label class="ws-fact-row" style="border-bottom:1px solid #eef0f3;padding-bottom:7px;margin-bottom:5px">
+            <input type="checkbox" id="ws-fact-all" checked>
+            <span><b>전부 고르기</b></span>
+          </label>
+          ${facts.map((f, i) => `
             <label class="ws-fact-row">
               <input type="checkbox" data-fact="${esc(f.text)}" ${i < 3 ? "checked" : ""}>
               <span>${esc(f.text)} <em>[${f.source}]</em></span>
             </label>`).join("")}
-        ` : `<div class="ws-row warn">확인된 사실을 못 찾았습니다.</div>`}
-        ${d.missing && d.missing.length ? `<div class="ws-row warn">
-          자료에도 없어서 사장님이 확인하셔야 하는 것: ${esc(d.missing.join(", "))}</div>` : ""}
-        <div style="margin-top:9px">
-          <button class="ws-apply" id="ws-fact-use">고른 것으로 본문 채우기</button>
         </div>
+        ${d.missing && d.missing.length ? `<div class="ws-sec warn-sec">
+          <div class="ws-sec-h">자료에도 없는 것 <span class="ws-sec-tag check">확인 필요</span></div>
+          <p class="ws-sec-p">이건 못 찾았습니다. 쓰시려면 사장님이 확인하셔야 합니다.</p>
+          <div style="font-size:12.5px;line-height:1.8">${d.missing.map((m) => `· ${esc(m)}`).join("<br>")}</div>
+        </div>` : ""}
+        <button class="ws-apply" id="ws-fact-use" style="margin-top:4px">고른 것으로 본문 채우기</button>
         <details class="ws-preview" style="margin-top:9px"><summary>출처 ${(d.sources || []).length}건 보기</summary>
           <div style="font-size:12px;line-height:1.8">
             ${(d.sources || []).map((s) => `[${s.n}] (${esc(s.kind)}) ${s.url
@@ -614,15 +707,31 @@
           </div></details>
         <p class="ws-dim">${esc(d.note || "")}</p>
       `);
-      const use = panel.querySelector("#ws-fact-use");
-      if (use) use.onclick = () => {
-        const picked = [...panel.querySelectorAll("[data-fact]:checked")].map((c) => c.dataset.fact);
+
+      // 전부 고르기 — 하나라도 끄면 같이 풀립니다.
+      const all = panel.querySelector("#ws-fact-all");
+      const boxes = [...panel.querySelectorAll("[data-fact]")];
+      const sync = () => { all.checked = boxes.every((b) => b.checked); };
+      all.onchange = () => boxes.forEach((b) => (b.checked = all.checked));
+      boxes.forEach((b) => b.addEventListener("change", sync));
+      sync();
+
+      panel.querySelector("#ws-fact-use").onclick = () => {
+        const picked = boxes.filter((b) => b.checked).map((b) => b.dataset.fact);
         if (!picked.length) return alert("넣을 것을 하나 이상 고르세요.");
         doFill(missing, picked.join("\n"));
       };
     } catch (e) {
       showPanel(`<h4>자료 찾기</h4><div class="ws-row bad">${esc(e.message)}</div>
         <p class="ws-dim">자료를 못 찾으면 본문은 그대로 두고, 그 말이 빠진 제목을 고르시는 편이 안전합니다.</p>`);
+    }
+
+    function wire() {
+      const again = panel.querySelector("#ws-res-again");
+      if (again) again.onclick = () =>
+        findFacts(missing, forTitle, panel.querySelector("#ws-res-q").value.trim());
+      const back = panel.querySelector("#ws-res-back");
+      if (back) back.onclick = () => homeTitle();
     }
   }
 
@@ -769,10 +878,21 @@
         ${d.suggestions && d.suggestions.length ? `
         <div class="ws-sec">
           <div class="ws-sec-h">3 · 더 쓰시면 좋을 것
-            <span class="ws-sec-tag note">안내만</span></div>
-          <p class="ws-sec-p"><b>자동으로 안 들어갑니다.</b> 아래는 "이런 내용이 더 있으면
-            글이 좋아진다"는 제안입니다. 쓰실지는 사장님이 정하세요.</p>
-          <ul class="ws-sug">${d.suggestions.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+            <span class="ws-sec-tag check">고르면 넣어드립니다</span></div>
+          <p class="ws-sec-p">고르신 것만 <b>자료를 찾아서</b> 본문에 넣습니다.
+            찾은 자료에 없으면 안 넣습니다 — <b>지어내지 않습니다.</b></p>
+          <label class="ws-fact-row" style="border-bottom:1px solid #eef0f3;padding-bottom:7px;margin-bottom:5px">
+            <input type="checkbox" id="ws-sug-all">
+            <span><b>전부 고르기</b></span>
+          </label>
+          ${d.suggestions.map((s, i) => `
+            <label class="ws-fact-row">
+              <input type="checkbox" data-sug="${esc(s)}">
+              <span>${esc(s)}</span>
+            </label>`).join("")}
+          <button class="ws-apply" id="ws-sug-go" style="margin-top:8px">고른 것 본문에 넣기</button>
+          <p class="ws-dim" style="margin:7px 0 0">
+            자료를 찾는 데 고른 개수만큼 시간이 걸립니다. 하나에 30초쯤입니다.</p>
         </div>` : ""}
 
         <details class="ws-preview" style="margin-top:12px">
@@ -789,7 +909,93 @@
       });
       const again = panel.querySelector("#ws-body-again");
       if (again) again.addEventListener("click", () => homeBody(true));
+
+      // ── 더 쓰시면 좋을 것 — 골라서 한 번에 넣기 ──
+      const sugAll = panel.querySelector("#ws-sug-all");
+      if (sugAll) {
+        const boxes = [...panel.querySelectorAll("[data-sug]")];
+        sugAll.onchange = () => boxes.forEach((b) => (b.checked = sugAll.checked));
+        boxes.forEach((b) => b.addEventListener("change", () => {
+          sugAll.checked = boxes.every((x) => x.checked);
+        }));
+        panel.querySelector("#ws-sug-go").onclick = () => {
+          const picked = boxes.filter((b) => b.checked).map((b) => b.dataset.sug);
+          if (!picked.length) return alert("넣을 것을 하나 이상 고르세요.");
+          fillSuggestions(picked);
+        };
+      }
     }
+  }
+
+  /**
+   * 고른 제안들을 자료로 채워 본문에 넣습니다.
+   *
+   * ⚠️ 제안은 "이런 내용이 더 있으면 좋다"는 말이지 **내용 자체가 아닙니다.**
+   * 그냥 넣으면 "카리나가 이 메이크업을 한 구체적인 일정이나 행사명"이라는
+   * 문장이 본문에 박힙니다. 그건 글이 아닙니다.
+   * 그래서 제안마다 **자료를 찾아서** 실제 사실을 채운 뒤에 넣습니다.
+   * 자료에 없으면 그 제안은 건너뜁니다. 지어내지 않습니다.
+   */
+  async function fillSuggestions(picked) {
+    const title = getTitle();
+    const found = [];
+    const skipped = [];
+
+    for (let i = 0; i < picked.length; i++) {
+      const s = picked[i];
+      showPanel(`<h4>자료 찾는 중 (${i + 1}/${picked.length})</h4>
+        <p>${esc(s)}</p>
+        <p class="ws-note">찾은 것 ${found.length}가지 · 못 찾은 것 ${skipped.length}가지</p>`);
+      try {
+        const d = await server("/api/research", { topic: title, angle: s });
+        const facts = (d.facts || []).slice(0, 3);
+        if (facts.length) found.push({ ask: s, facts, sources: d.sources || [] });
+        else skipped.push({ ask: s, why: "자료에서 확인된 사실이 없었습니다." });
+      } catch (e) {
+        skipped.push({ ask: s, why: e.message });
+      }
+    }
+
+    if (!found.length) {
+      return showPanel(`<h4>넣을 것을 못 찾았습니다</h4>
+        <div class="ws-sec warn-sec">
+          <p class="ws-sec-p">고르신 ${picked.length}가지 모두 자료에서 확인이 안 됐습니다.
+            <b>확인 안 된 걸 넣으면 글 전체가 거짓이 됩니다.</b> 그래서 안 넣었습니다.</p>
+          <div style="font-size:12.5px;line-height:1.8">
+            ${skipped.map((x) => `· ${esc(x.ask)}<br><span style="opacity:.7">&nbsp;&nbsp;${esc(x.why)}</span>`).join("<br>")}
+          </div>
+        </div>
+        <p class="ws-dim">사장님이 아시는 내용이면 직접 적어 넣으실 수 있습니다.</p>`);
+    }
+
+    // 찾은 것을 보여주고, 확인하신 뒤에 넣습니다.
+    showPanel(`
+      <h4>이만큼 찾았습니다</h4>
+      <div class="ws-sec">
+        <div class="ws-sec-h">넣을 내용 <span class="ws-sec-tag check">확인하고 넣으세요</span></div>
+        <p class="ws-sec-p">자료에서 확인된 것만 있습니다. 빼실 게 있으면 체크를 풀어주세요.</p>
+        ${found.map((g) => `
+          <div style="margin-bottom:10px">
+            <div style="font-size:12px;opacity:.7;margin-bottom:4px">${esc(g.ask)}</div>
+            ${g.facts.map((f) => `
+              <label class="ws-fact-row">
+                <input type="checkbox" data-fact="${esc(f.text)}" checked>
+                <span>${esc(f.text)} <em>[${f.source}]</em></span>
+              </label>`).join("")}
+          </div>`).join("")}
+      </div>
+      ${skipped.length ? `<div class="ws-sec warn-sec">
+        <div class="ws-sec-h">못 찾아서 뺀 것 ${skipped.length}가지</div>
+        <div style="font-size:12.5px;line-height:1.8">${skipped.map((x) => `· ${esc(x.ask)}`).join("<br>")}</div>
+      </div>` : ""}
+      <button class="ws-apply" id="ws-sugfill-go">본문에 넣기</button>
+    `);
+
+    panel.querySelector("#ws-sugfill-go").onclick = () => {
+      const picked2 = [...panel.querySelectorAll("[data-fact]:checked")].map((c) => c.dataset.fact);
+      if (!picked2.length) return alert("넣을 것을 하나 이상 고르세요.");
+      doFill(found.map((g) => g.ask).join(", "), picked2.join("\n"));
+    };
   }
 
   // ── 주제 적합도 ───────────────────────────────────────
