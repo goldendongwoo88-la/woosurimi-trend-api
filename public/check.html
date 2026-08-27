@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>설정 점검</title>
+<meta name="robots" content="noindex,nofollow" />
+<link rel="stylesheet" href="/assets/ws.css" />
+<style>
+  .item { display: grid; grid-template-columns: 24px 1fr auto; gap: 10px; align-items: start;
+    padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: none; }
+  .mark { font-size: 15px; text-align: center; line-height: 1.4; }
+  .mark.on { color: var(--brand); }
+  .mark.off { color: var(--danger); }
+  .mark.opt { color: var(--ink-3); }
+  .key { font-family: ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 600; }
+  .need { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
+  .need.must { background: var(--danger-soft); color: var(--danger); }
+  .need.soon { background: var(--warn-soft); color: var(--warn); }
+  .need.opt { background: var(--line); color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-in">
+  <a class="brand" href="/blog-index.html">우수리미<span>.</span></a>
+  <div class="spacer"></div>
+  <div class="who">설정 점검</div>
+</div></div>
+
+<div class="wrap" style="max-width:600px">
+  <h1>설정 점검</h1>
+  <p class="lede">서버에 무엇이 들어가 있고 무엇이 빠졌는지 봅니다. <b>값은 보여주지 않습니다.</b></p>
+
+  <div id="out"><div class="card"><p style="margin:0">확인 중…</p></div></div>
+
+  <div class="card">
+    <h2 style="margin-top:0">넣는 곳</h2>
+    <p style="font-size:14px;color:var(--ink-2);margin-bottom:0">
+      Render 대시보드 → 서비스 클릭 → 왼쪽 <b>Environment</b> → <b>Add Environment Variable</b><br>
+      넣고 <b>Save</b>를 누르면 서버가 알아서 다시 뜹니다. 2~3분 걸립니다.
+    </p>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+(async () => {
+  try {
+    const d = await fetch("/api/setup-status").then((r) => r.json());
+    const needClass = (n) => (n === "필수" ? "must" : n === "선택" ? "opt" : "soon");
+
+    $("#out").innerHTML = `
+      <div class="msg ${d.ready ? "ok" : "err"}">
+        ${d.ready
+          ? "필수 항목이 모두 들어가 있습니다."
+          : `아직 <b>${d.missing.length}개</b>가 빠졌습니다: <b>${d.missing.map(esc).join(", ")}</b>`}
+      </div>
+
+      <div class="card">
+        ${d.items.map((i) => `
+          <div class="item">
+            <div class="mark ${i.set ? "on" : i.need === "선택" ? "opt" : "off"}">${i.set ? "○" : "✗"}</div>
+            <div>
+              <div class="key">${esc(i.key)}</div>
+              <div class="muted">${esc(i.why)}</div>
+            </div>
+            <div class="need ${needClass(i.need)}">${esc(i.need)}</div>
+          </div>`).join("")}
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0">지금 이 브라우저</h2>
+        ${d.you
+          ? `<p style="margin:0">${esc(d.you.email)} — <b>${esc(d.you.plan)}</b> 플랜으로 로그인돼 있습니다.
+             ${d.you.plan === "biz" ? '<span class="muted">주인 계정으로 인식됩니다.</span>' : `<span class="muted">OWNER_EMAIL에 이 이메일이 없거나 아직 반영되지 않았습니다.</span>`}</p>`
+          : `<p style="margin:0">로그인돼 있지 않습니다. <a href="/join.html?next=/check.html">로그인하기</a></p>`}
+      </div>`;
+  } catch {
+    $("#out").innerHTML = `<div class="card"><div class="msg err">서버에 연결하지 못했습니다.</div></div>`;
+  }
+})();
+</script>
+</body>
+</html>

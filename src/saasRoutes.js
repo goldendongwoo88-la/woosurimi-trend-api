@@ -130,6 +130,41 @@ module.exports = function attachSaas(app) {
     res.json({ ok: true, user: u });
   });
 
+  /**
+   * 설정 점검 — 무엇이 빠졌는지 알려줍니다.
+   *
+   * ⚠️ 값은 절대 내보내지 않습니다. **설정됐는지 여부만** 참/거짓으로 알려줍니다.
+   * 값을 보여주면 이 주소를 아는 누구나 우리 비밀번호를 읽게 됩니다.
+   * 그래서 길이조차 안 알려줍니다 — 길이도 단서가 됩니다.
+   */
+  app.get("/api/setup-status", (req, res) => {
+    const has = (k) => !!String(process.env[k] || "").trim();
+    const items = [
+      { key: "AUTH_SECRET", set: has("AUTH_SECRET"), need: "필수",
+        why: "없으면 서버가 다시 뜰 때마다 로그인이 풀리고 이미 판 이용권이 전부 무효가 됩니다." },
+      { key: "OWNER_EMAIL", set: has("OWNER_EMAIL"), need: "필수",
+        why: "사장님 계정을 이용권 없이 통과시킵니다. 여기 없으면 사장님도 AI 기능을 못 씁니다." },
+      { key: "OWNER_PASSWORD", set: has("OWNER_PASSWORD"), need: "필수",
+        why: "무료 서버는 배포할 때마다 계정 파일이 지워집니다. 이게 있어야 사장님 계정이 되살아납니다." },
+      { key: "ADMIN_PASSWORD", set: has("ADMIN_PASSWORD"), need: "손님 받을 때",
+        why: "손님에게 팔 이용권 코드를 발급하는 화면(/boss.html)이 열립니다." },
+      { key: "ANTHROPIC_API_KEY", set: has("ANTHROPIC_API_KEY"), need: "AI 기능",
+        why: "제목·본문 보완, 원고 생성이 이 키로 돌아갑니다." },
+      { key: "OWNER_NAME", set: has("OWNER_NAME"), need: "선택", why: "화면에 표시할 이름입니다." },
+      { key: "STORE_URL", set: has("STORE_URL"), need: "선택", why: "요금제 화면의 스마트스토어 링크입니다." },
+      { key: "NOTIFY_WEBHOOK_URL", set: has("NOTIFY_WEBHOOK_URL"), need: "선택",
+        why: "순위 변동을 슬랙·디스코드로도 보냅니다." },
+    ];
+    const missing = items.filter((i) => !i.set && i.need === "필수");
+    res.json({
+      ready: missing.length === 0,
+      missing: missing.map((m) => m.key),
+      items,
+      // 지금 로그인한 사람이 주인으로 인식되는지 — 이게 제일 궁금한 부분입니다.
+      you: req.user ? { email: req.user.email, plan: req.user.plan } : null,
+    });
+  });
+
   // ── 요금제 · 이용권 ────────────────────────────────────
   app.get("/api/plans", (req, res) => {
     res.json({
