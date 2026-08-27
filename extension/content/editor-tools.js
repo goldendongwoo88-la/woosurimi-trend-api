@@ -15,8 +15,39 @@
 (() => {
   "use strict";
 
-  if (window.__wsTools) return; // 프레임마다 두 번 뜨는 걸 막습니다
-  window.__wsTools = true;
+  /**
+   * ⚠️ 어느 창에 붙일지 정하기 — 이것 때문에 막대가 아예 안 보였습니다.
+   *
+   * 네이버 글쓰기 화면은 주소가 blog.naver.com/아이디?Redirect=Write 인데
+   * 실제 편집기는 그 안의 iframe(PostWriteForm.naver)에 들어 있습니다.
+   * 콘텐츠 스크립트는 두 창 모두에서 돌지만,
+   *   - 바깥 창: 주소도 안 맞고 .se-content도 없어서 그냥 지나감
+   *   - iframe : 조건이 맞아서 막대를 그림 → **iframe 안에 갇혀 보이지 않음**
+   * 결과적으로 사장님 화면에는 아무것도 안 떴습니다.
+   *
+   * 둘 다 blog.naver.com이라 같은 출처입니다. 그래서 iframe 안에서도
+   * 바깥 창의 document를 만질 수 있습니다. 막대는 항상 바깥 창에 붙입니다.
+   * 혹시 접근이 막히면(출처가 다르면) 그냥 자기 창에 붙입니다 — 없는 것보단 낫습니다.
+   */
+  function hostDocument() {
+    try {
+      if (window.top && window.top !== window && window.top.document.body) {
+        return window.top.document;
+      }
+    } catch {
+      // 다른 출처라 못 만지는 경우. 자기 창에 붙입니다.
+    }
+    return document;
+  }
+
+  const HOST = hostDocument();
+  const inFrame = HOST !== document;
+
+  // 같은 막대가 두 번 생기지 않게 — 바깥 창을 기준으로 표시를 답니다.
+  // (iframe 여러 개에서 동시에 붙이려 할 수 있습니다)
+  const hostWin = inFrame ? window.top : window;
+  if (hostWin.__wsTools) return;
+  hostWin.__wsTools = true;
 
   const DEFAULT_SERVER = "https://woosurimi-trend-api.onrender.com";
 
@@ -66,31 +97,55 @@
   }
 
   // ── 화면 ──────────────────────────────────────────────
-  const bar = document.createElement("div");
-  bar.id = "ws-tools-bar";
+  //
+  // ⚠️ 가로 막대를 화면 오른쪽 위에 뒀다가 왼쪽 세로 막대로 바꿨습니다.
+  // 네이버 글쓰기 화면의 오른쪽에는 이미 다른 확장(늑대플)과 네이버 자체 버튼이
+  // 세로로 줄지어 있습니다. 거기에 가로로 593px짜리를 얹으면 겹칩니다.
+  // 왼쪽은 비어 있어서 아무것과도 부딪히지 않습니다.
+  //
+  // 글자는 아이콘 아래 작게만 답니다. 아이콘만 있으면 뭔지 몰라서 안 누릅니다.
+  // 오른쪽 — 기능 버튼 세로 막대
+  const bar = HOST.createElement("div");
+  bar.id = "ws-tools-rail";
   bar.innerHTML = `
-    <div class="ws-tb-counts">
-      <span class="ws-tb-item" title="공백 포함 / 공백 제외">
-        <b id="ws-c-all">0</b><small>자</small>
-        <em id="ws-c-nospace">0</em>
-      </span>
-      <span class="ws-tb-item"><b id="ws-c-img">0</b><small>사진</small></span>
-      <span class="ws-tb-item"><b id="ws-c-vid">0</b><small>영상</small></span>
-      <span class="ws-tb-item"><b id="ws-c-link">0</b><small>링크</small></span>
+    <div class="ws-rail-head" title="우수리미 포스팅">우수<br>리미</div>
+
+    <div class="ws-rail-acts">
+      <button data-act="hometitle" class="ws-rail-btn primary" title="제목을 홈판용으로 고칩니다">
+        <i>제목</i><span>홈판</span></button>
+      <button data-act="homebody" class="ws-rail-btn primary" title="본문을 소제목 6개로 나눕니다">
+        <i>본문</i><span>홈판</span></button>
+      <button data-act="topic" class="ws-rail-btn" title="이 글이 이 블로그 주제에 맞는지"><i>주제</i></button>
+      <button data-act="audit" class="ws-rail-btn" title="문제가 될 만한 표현 찾기"><i>검사</i></button>
+      <button data-act="keyword" class="ws-rail-btn" title="지금 누가 상위에 있는지"><i>키워드</i></button>
+      <button data-act="font" class="ws-rail-btn" title="글꼴·크기를 본문 전체에 한 번에"><i>폰트</i></button>
+      <button data-act="image" class="ws-rail-btn" title="사진 너비를 한 번에 맞춥니다"><i>사진</i></button>
+      <button data-act="table" class="ws-rail-btn" title="표 넣기"><i>표</i></button>
+      <button data-act="word" class="ws-rail-btn" title="워드로 내려받기"><i>워드</i></button>
     </div>
-    <div class="ws-tb-actions">
-      <button data-act="hometitle" class="ws-tb-primary" title="지금 제목을 홈판에서 눈이 멈추도록 고칩니다">홈판 제목</button>
-      <button data-act="homebody" class="ws-tb-primary" title="본문을 소제목 6개로 나누고 사진 자리를 잡습니다">홈판 본문</button>
-      <button data-act="topic" title="이 글이 이 블로그 주제에 맞는지 봅니다">주제</button>
-      <button data-act="audit" title="문제가 될 만한 표현을 찾습니다">표현 검사</button>
-      <button data-act="keyword" title="제목의 키워드 경쟁 상황을 봅니다">키워드</button>
-      <button data-act="table" title="표를 넣습니다">표</button>
-      <button data-act="word" title="워드 파일로 내려받습니다">워드</button>
-      <button data-act="toggle" class="ws-tb-min" title="접기">—</button>
+
+    <button data-act="toggle" class="ws-rail-min" title="접기">▶</button>
+  `;
+
+  // 왼쪽 아래 — 글자수 상자.
+  // ⚠️ 세는 것과 누르는 것을 갈라둡니다. 글자수는 타자 치는 내내 봐야 하는데
+  // 버튼 막대 안에 섞여 있으면 눈이 두 번 움직입니다. 늑대플도 이렇게 나눠뒀습니다.
+  const meter = HOST.createElement("div");
+  meter.id = "ws-tools-meter";
+  meter.innerHTML = `
+    <div class="ws-m-main">
+      <span class="ws-m-label">공백제외</span>
+      <b id="ws-c-nospace">0</b><span class="ws-m-unit">자</span>
+    </div>
+    <div class="ws-m-sub">
+      <span>공백포함 <b id="ws-c-all">0</b></span>
+      <span>사진 <b id="ws-c-img">0</b></span>
+      <span>영상 <b id="ws-c-vid">0</b></span>
+      <span>링크 <b id="ws-c-link">0</b></span>
     </div>
   `;
 
-  const panel = document.createElement("div");
+  const panel = HOST.createElement("div");
   panel.id = "ws-tools-panel";
   panel.hidden = true;
 
@@ -117,18 +172,18 @@
     const all = text.length;
     const nospace = text.replace(/\s/g, "").length;
     setText("ws-c-all", all.toLocaleString());
-    setText("ws-c-nospace", "공백제외 " + nospace.toLocaleString());
+    setText("ws-c-nospace", nospace.toLocaleString());
     setText("ws-c-img", m.images);
     setText("ws-c-vid", m.videos);
     setText("ws-c-link", m.links);
 
-    // 네이버에서 잘 먹히는 분량대를 색으로 알려줍니다.
-    const el = document.getElementById("ws-c-all");
-    if (el) el.style.color = all >= 1500 ? "#0b8f4d" : all >= 800 ? "#b7791f" : "#8b909c";
+    // 네이버에서 잘 먹히는 분량대를 색으로 알려줍니다. 공백 제외 기준입니다.
+    const el = HOST.getElementById("ws-c-nospace");
+    if (el) el.style.color = nospace >= 1200 ? "#4ade80" : nospace >= 600 ? "#fbbf24" : "#9ca3af";
   }
 
   const setText = (id, v) => {
-    const el = document.getElementById(id);
+    const el = HOST.getElementById(id);
     if (el) el.textContent = v;
   };
 
@@ -415,6 +470,125 @@
     }
   }
 
+  // ── 사진 너비 맞추기 ──────────────────────────────────
+  //
+  // ⚠️ 여기서부터는 **사장님 글을 직접 건드립니다.** 세는 기능과 성격이 다릅니다.
+  // 스마트에디터는 내부 상태로 문서를 관리해서, DOM만 바꾸면 화면에는 반영돼도
+  // 발행하면 원래대로 돌아갑니다. 그래서 되는지 안 되는지를 **바꾼 뒤에 다시 세어**
+  // 확인하고, 안 먹었으면 안 먹었다고 말합니다. 된 척하면 사장님이 발행하고 나서 압니다.
+  function resizeImages() {
+    const root = getEditorRoot();
+    if (!root) {
+      return showPanel(`<h4>사진 너비</h4><div class="ws-row warn">본문을 찾지 못했습니다.</div>`);
+    }
+    const imgs = [...root.querySelectorAll(".se-image-resource")];
+    if (!imgs.length) {
+      return showPanel(`<h4>사진 너비</h4><div class="ws-row warn">본문에 사진이 없습니다.</div>`);
+    }
+
+    showPanel(`
+      <h4>사진 너비 맞추기</h4>
+      <p class="ws-dim">본문 사진 <b>${imgs.length}장</b>의 너비를 한 번에 맞춥니다.
+        크기가 제각각이면 읽는 흐름이 끊깁니다.</p>
+      <div class="ws-widths">
+        ${[600, 700, 800, 900, "원본"].map((w) =>
+          `<button class="ws-apply" data-width="${w}">${w === "원본" ? "원본대로" : w + "px"}</button>`
+        ).join("")}
+      </div>
+      <p class="ws-dim">네이버 본문 폭이 보통 700~900px입니다. 그보다 크게 잡아도 화면에선 줄어듭니다.</p>
+    `);
+
+    panel.querySelectorAll("[data-width]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const w = b.dataset.width;
+        let done = 0;
+        for (const img of imgs) {
+          try {
+            if (w === "원본") {
+              img.style.removeProperty("width");
+              img.style.removeProperty("max-width");
+            } else {
+              img.style.setProperty("width", w + "px", "important");
+              img.style.setProperty("max-width", "100%", "important");
+            }
+            // 스마트에디터는 감싸는 요소에도 폭을 들고 있습니다. 같이 맞춰야 합니다.
+            const holder = img.closest(".se-module-image, .se-component-content");
+            if (holder && w !== "원본") holder.style.setProperty("width", w + "px", "important");
+            else if (holder) holder.style.removeProperty("width");
+            done++;
+          } catch {}
+        }
+        showPanel(`
+          <h4>사진 너비</h4>
+          <div class="ws-row ${done ? "good" : "bad"}">${done}장에 적용했습니다.</div>
+          <p class="ws-dim"><b>발행 전에 미리보기로 꼭 확인하세요.</b>
+            스마트에디터가 자체 크기를 다시 씌우는 경우가 있어서, 화면에 반영돼도
+            발행하면 원래대로 돌아갈 수 있습니다. 그러면 에디터의 사진 크기 조절을 쓰셔야 합니다.</p>
+        `);
+        scheduleCount();
+      })
+    );
+  }
+
+  // ── 글꼴·크기 일괄 ────────────────────────────────────
+  function applyFont() {
+    const root = getEditorRoot();
+    if (!root) {
+      return showPanel(`<h4>폰트</h4><div class="ws-row warn">본문을 찾지 못했습니다.</div>`);
+    }
+    const paras = [...root.querySelectorAll(".se-text-paragraph")]
+      .filter((p) => !p.closest(".se-documentTitle"));
+    if (!paras.length) {
+      return showPanel(`<h4>폰트</h4><div class="ws-row warn">본문 문단을 찾지 못했습니다.</div>`);
+    }
+
+    // ⚠️ 네이버가 실제로 쓰는 글꼴 이름만 넣습니다. 없는 이름을 넣으면
+    // 화면에선 바뀐 것처럼 보이는데 발행하면 기본 글꼴로 돌아갑니다.
+    const FONTS = ["나눔고딕", "나눔명조", "나눔스퀘어", "마루 부리", "기본"];
+    const SIZES = [15, 16, 19, 24];
+
+    showPanel(`
+      <h4>글꼴·크기 한 번에</h4>
+      <p class="ws-dim">본문 문단 <b>${paras.length}개</b>에 적용합니다. 제목은 건드리지 않습니다.</p>
+      <div class="ws-dim" style="margin-top:8px">글꼴</div>
+      <div class="ws-widths">
+        ${FONTS.map((f) => `<button class="ws-apply" data-font="${f}">${f}</button>`).join("")}
+      </div>
+      <div class="ws-dim" style="margin-top:10px">크기</div>
+      <div class="ws-widths">
+        ${SIZES.map((s) => `<button class="ws-apply" data-size="${s}">${s}px</button>`).join("")}
+      </div>
+      <p class="ws-dim">모바일에서는 16px 안팎이 읽기 편합니다.</p>
+    `);
+
+    const applyTo = (fn, label) => {
+      let done = 0;
+      paras.forEach((p) => { try { fn(p); done++; } catch {} });
+      showPanel(`
+        <h4>폰트</h4>
+        <div class="ws-row ${done ? "good" : "bad"}">${label} — 문단 ${done}개에 적용했습니다.</div>
+        <p class="ws-dim"><b>발행 전에 미리보기로 확인하세요.</b>
+          에디터가 자체 서식을 다시 씌우면 발행할 때 원래대로 돌아갈 수 있습니다.</p>
+      `);
+    };
+
+    panel.querySelectorAll("[data-font]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const f = b.dataset.font;
+        applyTo((p) => {
+          if (f === "기본") p.style.removeProperty("font-family");
+          else p.style.setProperty("font-family", f, "important");
+        }, f);
+      })
+    );
+    panel.querySelectorAll("[data-size]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const s = b.dataset.size;
+        applyTo((p) => p.style.setProperty("font-size", s + "px", "important"), s + "px");
+      })
+    );
+  }
+
   // ── 표 넣기 ───────────────────────────────────────────
   function insertTable() {
     const cols = Number(prompt("칸을 몇 개로 할까요? (2~6)", "3"));
@@ -489,9 +663,10 @@
   // ── 시작 ──────────────────────────────────────────────
   function start() {
     if (!isWritePage()) return;
-    if (document.getElementById("ws-tools-bar")) return;
-    document.body.appendChild(bar);
-    document.body.appendChild(panel);
+    if (HOST.getElementById("ws-tools-rail")) return;
+    HOST.body.appendChild(bar);
+    HOST.body.appendChild(meter);
+    HOST.body.appendChild(panel);
 
     bar.addEventListener("click", (e) => {
       const act = e.target.closest("[data-act]")?.dataset.act;
@@ -499,12 +674,14 @@
       if (act === "hometitle") homeTitle();
       else if (act === "homebody") homeBody();
       else if (act === "topic") checkTopic();
+      else if (act === "font") applyFont();
+      else if (act === "image") resizeImages();
       else if (act === "audit") runAudit();
       else if (act === "keyword") runKeyword();
       else if (act === "table") insertTable();
       else if (act === "word") downloadWord();
       else if (act === "toggle") {
-        bar.classList.toggle("ws-collapsed");
+        bar.classList.toggle("ws-rail-collapsed");
         panel.hidden = true;
       }
     });
@@ -520,7 +697,7 @@
   start();
   let tries = 0;
   const iv = setInterval(() => {
-    if (document.getElementById("ws-tools-bar") || ++tries > 20) return clearInterval(iv);
+    if (HOST.getElementById("ws-tools-rail") || ++tries > 20) return clearInterval(iv);
     start();
   }, 700);
 })();

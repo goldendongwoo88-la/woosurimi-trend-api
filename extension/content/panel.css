@@ -118,37 +118,9 @@
 .ws-lv-hard { background: #fdeceb; color: #9b2c23; }
 .ws-kwbox .ws-note { font-size: 10.5px; color: #9ca3af; margin-top: 8px; line-height: 1.6; }
 
-/* ── 글쓰기 창 도구 막대 (늑대플 형태) ───────────────────────
-   ⚠️ 네이버 에디터 위에 얹히는 것이라 z-index를 충분히 높이고,
-   네이버 CSS에 물들지 않도록 값을 전부 직접 지정합니다. */
-#ws-tools-bar {
-  position: fixed; top: 12px; right: 16px; z-index: 2147483000;
-  display: flex; align-items: center; gap: 14px;
-  background: #fff; border: 1px solid #e6e8ed; border-radius: 10px;
-  box-shadow: 0 4px 18px rgba(20,22,28,.14);
-  padding: 8px 12px; font-size: 13px; line-height: 1.4;
-  font-family: -apple-system, "Malgun Gothic", sans-serif; color: #17181c;
-}
-#ws-tools-bar.ws-collapsed .ws-tb-counts,
-#ws-tools-bar.ws-collapsed .ws-tb-actions button:not(.ws-tb-min) { display: none; }
-
-#ws-tools-bar .ws-tb-counts { display: flex; gap: 14px; align-items: center; }
-#ws-tools-bar .ws-tb-item { display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
-#ws-tools-bar .ws-tb-item b { font-size: 15px; font-variant-numeric: tabular-nums; }
-#ws-tools-bar .ws-tb-item small { color: #8b909c; font-size: 11px; }
-#ws-tools-bar .ws-tb-item em { color: #8b909c; font-size: 11px; font-style: normal; margin-left: 4px; }
-
-#ws-tools-bar .ws-tb-actions { display: flex; gap: 6px; border-left: 1px solid #e6e8ed; padding-left: 12px; }
-#ws-tools-bar .ws-tb-actions button {
-  font: inherit; font-size: 12px; font-weight: 600; padding: 5px 9px;
-  border: 1px solid #e6e8ed; border-radius: 7px; background: #f7f8fa; color: #17181c; cursor: pointer;
-}
-#ws-tools-bar .ws-tb-actions button:hover { background: #eef0f4; }
-#ws-tools-bar .ws-tb-min { min-width: 28px; }
-
 #ws-tools-panel {
   position: fixed; top: 58px; right: 16px; z-index: 2147483000;
-  width: 340px; max-height: 70vh; overflow-y: auto;
+  width: 340px; max-height: max(300px, 70vh); overflow-y: auto;
   background: #fff; border: 1px solid #e6e8ed; border-radius: 10px;
   box-shadow: 0 8px 28px rgba(20,22,28,.18); padding: 16px;
   font-size: 13px; line-height: 1.6; color: #17181c;
@@ -168,8 +140,6 @@
 #ws-tools-panel .ws-list { margin: 6px 0; padding-left: 20px; }
 
 /* 홈판 제목 후보 */
-#ws-tools-bar .ws-tb-primary { background: #0b8f4d; color: #fff; border-color: #0b8f4d; }
-#ws-tools-bar .ws-tb-primary:hover { background: #0a7d44; }
 
 #ws-tools-panel .ws-chip {
   display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 6px;
@@ -215,3 +185,83 @@
 
 #ws-tools-panel .ws-topics { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 #ws-tools-panel .ws-topics .ws-apply { margin-top: 0; font-size: 11.5px; padding: 4px 9px; }
+
+
+/* ── 글쓰기 창 도구 ───────────────────────────────────────
+   늑대플과 같은 배치입니다: 오른쪽에 기능 막대, 왼쪽 아래에 글자수 상자.
+   사장님이 그 배치에 익숙하시고, 실제로 손이 덜 움직입니다.
+
+   ⚠️ 네이버 CSS에 물들지 않도록 상속되는 값을 전부 직접 지정합니다.
+   font·color·line-height를 비워두면 페이지 스타일이 새어 들어옵니다. */
+
+/* 오른쪽 기능 막대 */
+#ws-tools-rail {
+  position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
+  z-index: 2147483000;
+  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+  width: 58px; padding: 8px 6px;
+  background: #fff; border: 1px solid #e6e8ed; border-radius: 15px;
+  box-shadow: 0 4px 20px rgba(20,22,28,.14);
+  font-family: -apple-system, "Malgun Gothic", sans-serif; color: #17181c;
+  /* ⚠️ 90vh만 쓰면 화면 높이를 0으로 보고하는 환경에서 막대가 통째로 사라집니다.
+     실제로 테스트 중에 innerHeight=0이 나와 높이가 17px로 무너졌습니다.
+     바닥값을 둬서 어떤 경우에도 최소한은 보이게 합니다. */
+  max-height: max(340px, 88vh); overflow-y: auto;
+}
+#ws-tools-rail::-webkit-scrollbar { width: 0; }
+
+#ws-tools-rail .ws-rail-head {
+  font-size: 10px; font-weight: 800; line-height: 1.25; text-align: center;
+  color: #0b8f4d; padding: 2px 0 7px; border-bottom: 1px solid #eef0f4;
+}
+
+#ws-tools-rail .ws-rail-acts { display: flex; flex-direction: column; gap: 4px; padding-top: 7px; }
+#ws-tools-rail .ws-rail-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; padding: 8px 2px; cursor: pointer;
+  border: 1px solid #e6e8ed; border-radius: 10px; background: #f7f8fa;
+  font-family: inherit; line-height: 1.2;
+}
+#ws-tools-rail .ws-rail-btn i { font-style: normal; font-size: 11.5px; font-weight: 700; color: #17181c; }
+#ws-tools-rail .ws-rail-btn span { font-size: 8.5px; color: #8b909c; }
+#ws-tools-rail .ws-rail-btn:hover { background: #eef0f4; border-color: #d6dae1; }
+#ws-tools-rail .ws-rail-btn.primary { background: #0b8f4d; border-color: #0b8f4d; }
+#ws-tools-rail .ws-rail-btn.primary i,
+#ws-tools-rail .ws-rail-btn.primary span { color: #fff; }
+#ws-tools-rail .ws-rail-btn.primary:hover { background: #0a7d44; }
+
+#ws-tools-rail .ws-rail-min {
+  margin-top: 5px; padding: 4px; cursor: pointer; font-family: inherit; font-size: 11px;
+  border: none; background: none; color: #8b909c;
+}
+#ws-tools-rail.ws-rail-collapsed { width: 30px; padding: 6px 3px; }
+#ws-tools-rail.ws-rail-collapsed .ws-rail-acts { display: none; }
+#ws-tools-rail.ws-rail-collapsed .ws-rail-head { border-bottom: none; font-size: 9px; }
+#ws-tools-rail.ws-rail-collapsed .ws-rail-min { transform: rotate(180deg); }
+
+/* 왼쪽 아래 글자수 상자 */
+#ws-tools-meter {
+  position: fixed; left: 16px; bottom: 16px; z-index: 2147482999;
+  background: rgba(28,30,36,.94); color: #f3f4f6; border-radius: 12px;
+  padding: 12px 16px; min-width: 128px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.28);
+  font-family: -apple-system, "Malgun Gothic", sans-serif; line-height: 1.35;
+}
+#ws-tools-meter .ws-m-label { display: block; font-size: 10px; color: #9ca3af; }
+#ws-tools-meter .ws-m-main b {
+  font-size: 27px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f3f4f6;
+}
+#ws-tools-meter .ws-m-unit { font-size: 11px; color: #9ca3af; margin-left: 2px; }
+#ws-tools-meter .ws-m-sub {
+  display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px;
+  padding-top: 7px; border-top: 1px solid rgba(255,255,255,.12);
+  font-size: 10px; color: #9ca3af;
+}
+#ws-tools-meter .ws-m-sub b { color: #e5e7eb; font-variant-numeric: tabular-nums; }
+
+/* 결과 창은 오른쪽 막대 왼편에 붙습니다 */
+#ws-tools-panel { right: 84px; left: auto; top: 60px; }
+
+/* 너비·글꼴 고르는 버튼 줄 */
+#ws-tools-panel .ws-widths { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+#ws-tools-panel .ws-widths .ws-apply { margin-top: 0; font-size: 12px; padding: 5px 11px; }
