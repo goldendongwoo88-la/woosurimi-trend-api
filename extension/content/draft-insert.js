@@ -627,9 +627,31 @@
         // ⚠️ 같음(===)이 아니라 **포함**으로 봅니다. 제목 칸에는 "제목"이라는
         // 안내 유령 글자가 붙어 있어서, 실제로 들어갔는데도 계속
         // "안 받았습니다"라고 거짓 실패를 냈습니다 (실측).
-        const now = (el.innerText || "").replace(INVIS, "");
-        const okT = now.includes(draft.title.replace(INVIS, "").slice(0, 20));
-        (okT ? done : failed).push(okT ? "제목" : { what: "제목", why: "편집기가 안 받았습니다" });
+        const tOK = () => (el.innerText || "").replace(INVIS, "").includes(draft.title.replace(INVIS, "").slice(0, 20));
+        let okT = tOK();
+        if (!okT) {
+          /**
+           * ⚠️ 새 문서에서는 제목칸도 같은 병입니다 — 코드가 넣은 글자를
+           * 편집기가 무시합니다 (제목이 본문 첫 줄로 밀려 들어간 실사고, 2026-08-28).
+           * 본문을 뚫은 그 길 그대로: 제목을 클립보드에 담고, 제목칸을
+           * **진짜로 클릭**한 뒤 Ctrl+V.
+           */
+          say("제목을 진짜 클릭으로 넣는 중…");
+          await writeClip(draft.title);
+          const r0 = el.getBoundingClientRect();
+          const { fx, fy } = frameOffset();
+          const resp = await new Promise((res) => {
+            try {
+              chrome.runtime.sendMessage({
+                type: "clickPaste",
+                x: Math.round(fx + r0.left + Math.min(60, r0.width / 2)),
+                y: Math.round(fy + r0.top + r0.height / 2),
+              }, res);
+            } catch { res(null); }
+          });
+          if (resp && resp.ok) { await settle(600); okT = tOK(); }
+        }
+        (okT ? done : failed).push(okT ? "제목" : { what: "제목", why: "편집기가 안 받았습니다 — 제목만 직접 붙여주세요" });
       } else failed.push({ what: "제목", why: "제목 칸을 못 찾았습니다" });
     }
 
@@ -694,7 +716,9 @@
       if (b.kind === "subhead")
         return `<p><span style="font-size:19px;"><b>${richHtml(escH(b.text))}</b></span></p>`;
       if (b.kind === "quote")
-        return `<blockquote>${richHtml(escH(b.text))}</blockquote>`;
+        // 인용 모양을 스타일로도 실어 보냅니다 — 편집기가 blockquote를 제 인용구로
+        // 안 바꿔도 시각적으로는 인용구답게 들어가게.
+        return `<blockquote style="border-left:4px solid #bbb;margin:12px 0;padding:8px 16px;color:#555;">${richHtml(escH(b.text))}</blockquote>`;
       let h = richHtml(escH(b.text));
       for (const m of b.marks || []) {
         const em = richHtml(escH(m));
