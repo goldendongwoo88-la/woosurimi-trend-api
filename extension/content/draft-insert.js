@@ -338,9 +338,7 @@
         } catch {}
         const x = Math.round(fx + r1.left + Math.min(40, Math.max(5, r1.width / 2)));
         const y = Math.round(fy + r1.top + r1.height / 2);
-        const resp = await new Promise((res) => {
-          try { chrome.runtime.sendMessage({ type: "clickPaste", x, y }, res); } catch { res(null); }
-        });
+        const resp = await askBg({ type: "clickPaste", x, y });
         if (resp && resp.ok) {
           await settle(900);
           if (check()) return { ok: true, how: "클릭+붙여넣기" };
@@ -386,9 +384,7 @@
           // ⚠️ 예비 복사(execCommand)가 선택을 훔쳐갔을 수 있으므로,
           // 키를 보내기 **직전에 반드시** 붙일 자리를 다시 세웁니다.
           placeCaret();
-          const resp = await new Promise((res) => {
-            try { chrome.runtime.sendMessage({ type: "pressPaste", commands }, res); } catch { res(null); }
-          });
+          const resp = await askBg({ type: "pressPaste", commands });
           if (resp && resp.ok) {
             await settle(700);
             if (check()) return { ok: true, how: commands ? "키보드(명령)" : "키보드" };
@@ -424,6 +420,29 @@
    * 통로가 뚫려 있으니(본문 붙여넣기가 이걸로 성공), 그 손으로 눌러줍니다.
    * 문단 클릭 → 스타일 드롭다운 클릭 → '소제목' 항목 클릭, 소제목마다 3번.
    */
+  /**
+   * 배경 작업자에게 묻고 **제한시간 안에** 답을 받습니다.
+   * ⚠️ 2026-08-28 실사고: 배경이 답을 안 주는 경우가 있어 "본문을 넣는 중…"에서
+   * 영영 멈췄습니다. 어떤 단계도 이제 8초 넘게 기다리지 않습니다 —
+   * 침묵하면 실패로 치고 다음 사다리로 갑니다.
+   */
+  function askBg(msg, timeoutMs = 8000) {
+    return new Promise((res) => {
+      let done = false;
+      const t = setTimeout(() => { if (!done) { done = true; res({ ok: false, message: "응답 시간 초과" }); } }, timeoutMs);
+      try {
+        chrome.runtime.sendMessage(msg, (resp) => {
+          if (done) return;
+          done = true;
+          clearTimeout(t);
+          res(resp || { ok: false, message: (chrome.runtime.lastError && chrome.runtime.lastError.message) || "응답 없음" });
+        });
+      } catch (e) {
+        if (!done) { done = true; clearTimeout(t); res({ ok: false, message: e.message }); }
+      }
+    });
+  }
+
   const frameOffset = () => {
     try {
       const fe = window.frameElement;
@@ -438,9 +457,7 @@
     const { fx, fy } = frameOffset();
     const x = Math.round(fx + r.left + Math.min(dxCap, r.width / 2));
     const y = Math.round(fy + r.top + r.height / 2);
-    const resp = await new Promise((res) => {
-      try { chrome.runtime.sendMessage({ type: "uiClick", x, y }, res); } catch { res(null); }
-    });
+    const resp = await askBg({ type: "uiClick", x, y });
     return !!(resp && resp.ok);
   }
 
@@ -811,9 +828,7 @@
       // 1차 — 브라우저가 누르는 키
       try {
         caretToEnd();
-        const resp = await new Promise((res) => {
-          try { chrome.runtime.sendMessage({ type: "pressPaste" }, res); } catch { res(null); }
-        });
+        const resp = await askBg({ type: "pressPaste" });
         if (resp && resp.ok) {
           await settle(700);
           if (norm(root.innerText || "").includes(mark)) return { ok: true, how: "키보드" };
