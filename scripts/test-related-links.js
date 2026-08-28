@@ -131,15 +131,23 @@ console.log("\n━━ 진짜 Ctrl+V 통로가 안전한가 ━━");
   ok(/debugger\.detach/.test(pp), "쓰고 나서 바로 떨어진다 (detach)");
 
   const pb2 = di.slice(di.indexOf("async function pasteBody"), di.indexOf("async function insert"));
-  const wAt = pb2.indexOf("clipboard.writeText");
+  const wAt = pb2.indexOf("writeClip(");
   const kAt = pb2.indexOf("pressPaste");
   ok(wAt >= 0 && kAt > wAt, "클립보드에 담은 뒤에만 키를 보낸다");
   ok(/clipOk/.test(pb2) && /if \(clipOk\)/.test(pb2), "담기 실패면 키를 안 보낸다");
+  // ⚠️ 예비 복사(execCommand)가 커서를 훔치므로, 키 직전에 자리를 다시 세워야 합니다.
+  // 이게 빠지면 원고가 **숨은 복사 칸**에 붙습니다.
+  ok(pb2.indexOf("placeCaret();", wAt) > wAt && pb2.indexOf("placeCaret();", wAt) < kAt,
+     "키 보내기 직전에 붙일 자리를 다시 세운다");
+  // iframe에서 클립보드 API가 막히는 실사례 대응 — 옛 방식 예비가 있어야 합니다.
+  ok(/execCommand\("copy"\)/.test(di), "클립보드 API 막혀도 예비 복사(execCommand)가 있다");
 
   const ab = di.slice(di.indexOf("async function appendBlock"), di.indexOf("async function saveDraft"));
-  const wAt2 = ab.indexOf("clipboard.writeText");
+  const wAt2 = ab.indexOf("writeClip(");
   const kAt2 = ab.indexOf("pressPaste");
   ok(wAt2 >= 0 && kAt2 > wAt2, "함께보기도 담은 뒤에만 키를 보낸다");
+  ok(ab.indexOf("caretToEnd();", wAt2) > wAt2 && ab.indexOf("caretToEnd();", wAt2) < kAt2,
+     "함께보기도 키 직전에 끝자리를 다시 세운다");
 
   const mf = JSON.parse(fs.readFileSync(require("path").join(__dirname, "..", "extension", "manifest.json"), "utf8"));
   ok(mf.permissions.includes("debugger"), "manifest에 debugger 권한이 있다");

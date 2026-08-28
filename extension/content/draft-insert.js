@@ -155,6 +155,38 @@
    *
    * 남겨둔 자동 시도는 **붙여넣기 흉내 하나뿐**입니다. 되면 좋고 안 되면 바로 넘어갑니다.
    */
+  /**
+   * 클립보드에 글 담기 — 두 겹입니다.
+   *   1) 요즘 방식(navigator.clipboard) — 되면 제일 깔끔합니다.
+   *   2) 옛 방식(execCommand 복사) — 네이버 편집기 iframe에서 요즘 방식이
+   *      권한 정책으로 막히는 걸 실제로 겪어서 답니다. 숨은 칸에 글을 넣고
+   *      선택해서 복사한 뒤 바로 지웁니다.
+   * ⚠️ 2번은 **선택(커서)을 훔쳐갑니다.** 부른 쪽이 반드시 커서를 다시 세워야 합니다.
+   */
+  async function writeClip(text) {
+    try {
+      await Promise.race([
+        navigator.clipboard.writeText(text),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
+      ]);
+      return true;
+    } catch {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return !!ok;
+    } catch {
+      return false;
+    }
+  }
+
   async function pasteBody(text, { overwrite = false } = {}) {
     const root = editorRoot();
     if (!root) return { ok: false, why: "본문을 찾지 못했습니다." };
@@ -183,12 +215,7 @@
     if (!first) {
       // ⚠️ 자리를 못 찾아도 빈손으로 끝내지 않습니다. 예전엔 여기서 그냥
       // 오류만 띄웠는데, 그러면 복사조차 안 돼서 사장님이 할 게 없었습니다.
-      try {
-        await Promise.race([
-          navigator.clipboard.writeText(text),
-          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
-        ]);
-      } catch {}
+      await writeClip(text);
       // ⚠️ 진단 꼬리표 — 원격에서 화면만 보고도 원인을 좁힐 수 있게, 무엇이
       // 보였는지 숫자로 남깁니다. (전체 문단 수 / 제목 쪽 문단 수)
       const all = document.querySelectorAll(".se-text-paragraph").length;
@@ -205,9 +232,12 @@
       return now.includes(norm(text.slice(0, 30))) && now.length >= norm(text).length * 0.8;
     };
 
-    // ── 1) 붙여넣기 흉내 ──
-    // 스마트에디터는 paste를 스스로 처리해서 문단을 알아서 나눕니다. 이게 제일 낫습니다.
-    try {
+    /**
+     * 붙일 자리에 커서·선택을 세웁니다. **여러 번 불러도 되게** 따로 뺐습니다 —
+     * 클립보드 예비 복사(execCommand)가 선택을 훔쳐가서, 키를 보내기 직전에
+     * 반드시 다시 세워야 하기 때문입니다.
+     */
+    const placeCaret = () => {
       first.focus();
       const range = document.createRange();
       /**
@@ -224,6 +254,12 @@
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
+    };
+
+    // ── 1) 붙여넣기 흉내 ──
+    // 스마트에디터는 paste를 스스로 처리해서 문단을 알아서 나눕니다. 이게 제일 낫습니다.
+    try {
+      placeCaret();
       const dt = new DataTransfer();
       dt.setData("text/plain", text);
       first.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
@@ -238,21 +274,19 @@
     //   클립보드에 글을 담고 → 담긴 게 확인됐을 때만 → 키를 보냅니다.
     // 담기 전에 키부터 보내면 **엉뚱한 옛 클립보드 내용**이 붙습니다.
     //
-    // ⚠️ 클립보드 쓰기는 **창이 포커스를 잃으면 영영 안 끝납니다.**
-    // 다른 창을 보고 계시면 화면이 "넣는 중…"에서 멈춰버립니다. 3초만 기다립니다.
-    let clipOk = false;
-    try {
-      await Promise.race([
-        navigator.clipboard.writeText(text),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
-      ]);
-      clipOk = true;
-    } catch {}
+    // ⚠️ 클립보드 쓰기는 **창이 포커스를 잃으면 영영 안 끝납니다.** 3초만 기다립니다.
+    // ⚠️ 그리고 네이버 편집기는 iframe 속이라 **클립보드 API가 권한 정책으로
+    // 통째로 막히는 경우**가 있습니다 (사장님 화면에서 실제 확인, 2026-08-28).
+    // 그래서 막히면 옛 방식(execCommand 복사)으로 한 번 더 시도합니다 —
+    // 그 방식은 권한 정책을 안 탑니다.
+    const clipOk = await writeClip(text);
 
     if (clipOk) {
       try {
-        // 흉내 시도(1번)가 고른 선택 영역이 그대로 살아 있습니다 — 덮어쓰기면
-        // 본문 전체가 선택된 상태라, 진짜 붙여넣기가 그 위를 정확히 덮습니다.
+        // ⚠️ 예비 복사(execCommand)가 선택을 훔쳐갔을 수 있으므로,
+        // 키를 보내기 **직전에 반드시** 붙일 자리를 다시 세웁니다.
+        // 이거 없이 키를 보내면 엉뚱한 곳(숨은 복사 칸)에 붙습니다.
+        placeCaret();
         const resp = await new Promise((res) => {
           try { chrome.runtime.sendMessage({ type: "pressPaste" }, res); } catch { res(null); }
         });
@@ -431,8 +465,8 @@
     if (had.includes(mark)) return { ok: false, why: "이미 넣으신 것 같습니다. 본문 끝을 확인해 주세요." };
 
     // 맨 끝으로 커서를 옮깁니다. 고르는 게 아니라 **끝에 세우는** 것이라
-    // 기존 글자가 지워질 일이 없습니다.
-    try {
+    // 기존 글자가 지워질 일이 없습니다. (예비 복사가 커서를 훔쳐가서 여러 번 부릅니다)
+    const caretToEnd = () => {
       last.focus();
       const range = document.createRange();
       range.selectNodeContents(last);
@@ -440,7 +474,10 @@
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
+    };
 
+    try {
+      caretToEnd();
       const dt = new DataTransfer();
       dt.setData("text/plain", "\n" + text);
       last.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
@@ -449,17 +486,11 @@
     } catch {}
 
     // 흉내가 안 먹히면 진짜 붙여넣기 키를 보냅니다 (pasteBody 2번과 같은 통로).
-    // 커서는 위에서 이미 **본문 맨 끝**에 세워져 있습니다.
-    let clipOk = false;
-    try {
-      await Promise.race([
-        navigator.clipboard.writeText("\n" + text),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
-      ]);
-      clipOk = true;
-    } catch {}
+    // 클립보드는 두 겹(writeClip) — iframe에서 요즘 방식이 막히는 걸 실제로 겪었습니다.
+    const clipOk = await writeClip("\n" + text);
     if (clipOk) {
       try {
+        caretToEnd();   // 예비 복사가 커서를 가져갔을 수 있어 반드시 다시 세웁니다.
         const resp = await new Promise((res) => {
           try { chrome.runtime.sendMessage({ type: "pressPaste" }, res); } catch { res(null); }
         });
@@ -469,7 +500,7 @@
         }
       } catch {}
       // 안내용 클립보드는 줄바꿈 없이 다시 담아둡니다 — 손으로 붙일 때 깔끔하게.
-      try { await navigator.clipboard.writeText(text); } catch {}
+      await writeClip(text);
     }
 
     // ⚠️ 그래도 안 되면 되는 척하지 않습니다. 복사해 드리고 그렇게 말합니다.
