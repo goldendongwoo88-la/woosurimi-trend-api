@@ -663,11 +663,26 @@
      *   [색]…[/색]      주홍 글자   [크게]…[/크게]  19px
      * 색은 블로그 미관상 한 벌로 통일 — 바꾸려면 여기 색값만 고치면 됩니다.
      */
+    /**
+     * 팔레트 로테이션 (사장님 요청: "매 포스팅마다 다르게").
+     * 완전 무작위는 한 글 안에서 색이 뒤죽박죽될 위험이 있어서,
+     * **어울리는 조합 4벌 중 글 제목에 따라 한 벌**을 고릅니다 —
+     * 같은 글은 언제 붙여도 같은 색(안정), 다른 글은 다른 색(사람 냄새).
+     */
+    const PALETTES = [
+      { name: "노랑·주홍", bg: "#FDF3A8", color: "#E8590C", big: 19 },
+      { name: "연두·청록", bg: "#E3F7C8", color: "#0B7285", big: 21 },
+      { name: "분홍·자주", bg: "#FFE0EB", color: "#C2255C", big: 19 },
+      { name: "하늘·파랑", bg: "#DBF0FF", color: "#1864AB", big: 21 },
+    ];
+    const pi = [...String(draft.title || "무제")].reduce((a, c) => a + c.charCodeAt(0), 0) % PALETTES.length;
+    const PAL = PALETTES[pi];
+
     const RICH = [
-      { re: /\[형광\]([\s\S]*?)\[\/형광\]/g, open: '<span style="background-color:#FDF3A8;">', close: "</span>" },
+      { re: /\[형광\]([\s\S]*?)\[\/형광\]/g, open: `<span style="background-color:${PAL.bg};">`, close: "</span>" },
       { re: /\[밑줄\]([\s\S]*?)\[\/밑줄\]/g, open: "<u>", close: "</u>" },
-      { re: /\[색\]([\s\S]*?)\[\/색\]/g, open: '<span style="color:#E8590C;">', close: "</span>" },
-      { re: /\[크게\]([\s\S]*?)\[\/크게\]/g, open: '<span style="font-size:19px;">', close: "</span>" },
+      { re: /\[색\]([\s\S]*?)\[\/색\]/g, open: `<span style="color:${PAL.color};">`, close: "</span>" },
+      { re: /\[크게\]([\s\S]*?)\[\/크게\]/g, open: `<span style="font-size:${PAL.big}px;">`, close: "</span>" },
     ];
     const richStrip = (s) => RICH.reduce((t, r) => t.replace(r.re, "$1"), String(s));
     const richHtml = (escaped) => RICH.reduce((t, r) => t.replace(r.re, (m, inner) => r.open + inner + r.close), escaped);
@@ -699,6 +714,10 @@
      */
     const markCount = new Set(draft.blocks.flatMap((b) => b.marks || [])).size;
     if (markCount) done.push(`굵게 ${markCount}곳`);
+    // 어떤 색 벌을 입었는지 알려드립니다 — "이번 글은 왜 이 색이지?"의 답.
+    if (/\[형광\]|\[색\]|\[크게\]/.test(draft.blocks.map((b) => b.text || "").join(""))) {
+      done.push(`팔레트 ${PAL.name}`);
+    }
 
     // 공식 '소제목' 스타일 — 진짜 클릭으로 드롭다운까지 눌러줍니다.
     const os = await applyOfficialSubheads(draft, say);
