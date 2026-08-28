@@ -2230,6 +2230,7 @@
             <button class="ws-apply" id="ws-pd-fmt">붙여넣었어요 — 서식 넣기</button>
           </div>
           ${r.done.length ? `<div class="ws-row good">${r.done.map(esc).join(" · ")}는 넣었습니다.</div>` : ""}
+          ${/\(진단:/.test(r.why || "") ? `<p class="ws-dim">${esc((r.why.match(/\(진단:[^)]+\)/) || [""])[0])} — 이 문구를 캡처해 주시면 원인을 좁힐 수 있습니다.</p>` : ""}
         ` : `<div class="ws-row bad">${esc(r.why)}</div>`;
         go.textContent = "다시";
         go.disabled = false;

@@ -283,6 +283,21 @@
 
     let diag = "";
     if (clipOk) {
+      /**
+       * 0차 — **확장 전용 직통 붙여넣기.**
+       * clipboardRead 권한이 있는 확장은 execCommand("paste")를 쓸 수 있습니다.
+       * 일반 웹은 못 쓰는, 확장에게만 열린 문이라 디버거도 안 거칩니다.
+       * "조직에서 관리하는 브라우저"는 디버거를 정책으로 막을 수 있어서
+       * (사장님 크롬이 그렇습니다) 이 직통이 첫 번째 길이어야 합니다.
+       */
+      try {
+        placeCaret();
+        document.execCommand("paste");
+        await settle(600);
+        if (check()) return { ok: true, how: "직통" };
+        diag = "직통 붙여넣기를 편집기가 안 받음";
+      } catch (e) { diag = `직통: ${e.message}`; }
+
       // 1차: 그냥 키 → 안 먹으면 2차: "붙여넣기 명령" 명시(commands).
       // 처음부터 둘 다 쓰면 두 번 붙을 수 있어서 순서대로 한 번씩만.
       for (const commands of [false, true]) {
@@ -516,12 +531,20 @@
       if (norm(root.innerText || "").includes(mark)) return { ok: true, how: "paste" };
     } catch {}
 
-    // 흉내가 안 먹히면 진짜 붙여넣기 키를 보냅니다 (pasteBody 2번과 같은 통로).
+    // 흉내가 안 먹히면 진짜 붙여넣기로 갑니다 (pasteBody와 같은 사다리).
     // 클립보드는 두 겹(writeClip) — iframe에서 요즘 방식이 막히는 걸 실제로 겪었습니다.
     const clipOk = await writeClip("\n" + text);
     if (clipOk) {
+      // 0차 — 확장 전용 직통 (관리형 크롬에서 디버거가 막혀도 됩니다)
       try {
         caretToEnd();   // 예비 복사가 커서를 가져갔을 수 있어 반드시 다시 세웁니다.
+        document.execCommand("paste");
+        await settle(600);
+        if (norm(root.innerText || "").includes(mark)) return { ok: true, how: "직통" };
+      } catch {}
+      // 1차 — 브라우저가 누르는 키
+      try {
+        caretToEnd();
         const resp = await new Promise((res) => {
           try { chrome.runtime.sendMessage({ type: "pressPaste" }, res); } catch { res(null); }
         });
