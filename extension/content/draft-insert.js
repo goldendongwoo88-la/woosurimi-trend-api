@@ -239,7 +239,8 @@
     if (!first) {
       // ⚠️ 자리를 못 찾아도 빈손으로 끝내지 않습니다. 예전엔 여기서 그냥
       // 오류만 띄웠는데, 그러면 복사조차 안 돼서 사장님이 할 게 없었습니다.
-      await writeClip(text);
+      // 서식째(html) 담습니다 — 손 Ctrl+V로도 형광·굵게·크기가 그대로 들어가게.
+      await writeClip(text, html);
       // ⚠️ 진단 꼬리표 — 원격에서 화면만 보고도 원인을 좁힐 수 있게, 무엇이
       // 보였는지 숫자로 남깁니다. (전체 문단 수 / 제목 쪽 문단 수)
       const all = document.querySelectorAll(".se-text-paragraph").length;
