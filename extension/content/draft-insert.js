@@ -443,6 +443,20 @@
     return !!(resp && resp.ok);
   }
 
+  /**
+   * 요소가 나타날 때까지 잠깐 기다리며 찾습니다.
+   * ⚠️ 드롭다운 목록은 클릭 직후 바로 안 뜹니다 — 350ms 한 번으로는 소제목
+   * 4곳 중 1곳이 타이밍을 놓쳤습니다 (실측). 250ms 간격으로 최대 5번 봅니다.
+   */
+  async function waitByText(startsWith, opts = {}, tries = 5) {
+    for (let i = 0; i < tries; i++) {
+      const el = visibleByText(startsWith, opts);
+      if (el) return el;
+      await settle(250);
+    }
+    return null;
+  }
+
   /** 화면에 실제로 보이는 요소 중, 글자가 딱 이걸로 시작하는 것을 찾습니다. */
   function visibleByText(startsWith, { top = null } = {}) {
     for (const el of document.querySelectorAll("button, [role='button'], li, span, div")) {
@@ -472,12 +486,11 @@
       await settle(350);
 
       // 2) 왼쪽 위 문단 스타일 드롭다운('본문'이라고 쓰인 것) 클릭.
-      const dd = visibleByText("본문", { top: 220 });
+      const dd = await waitByText("본문", { top: 220 });
       if (!dd || !(await realClick(dd))) { failed.push(b.text.slice(0, 14)); continue; }
-      await settle(350);
 
-      // 3) 펼쳐진 목록에서 '소제목'으로 시작하는 항목 클릭.
-      const item = visibleByText("소제목");
+      // 3) 펼쳐진 목록에서 '소제목'으로 시작하는 항목 클릭 — 뜰 때까지 기다립니다.
+      const item = await waitByText("소제목");
       if (!item || !(await realClick(item))) {
         // 목록이 열린 채 남지 않게 닫아줍니다.
         try { await realClick(dd); } catch {}
@@ -610,10 +623,12 @@
         await settle(120);
         F.setEditableText(el, draft.title);
         await settle();
+        // ⚠️ 같음(===)이 아니라 **포함**으로 봅니다. 제목 칸에는 "제목"이라는
+        // 안내 유령 글자가 붙어 있어서, 실제로 들어갔는데도 계속
+        // "안 받았습니다"라고 거짓 실패를 냈습니다 (실측).
         const now = (el.innerText || "").replace(INVIS, "");
-        (now === draft.title.replace(INVIS, "") ? done : failed).push(
-          now === draft.title.replace(INVIS, "") ? "제목" : { what: "제목", why: "편집기가 안 받았습니다" }
-        );
+        const okT = now.includes(draft.title.replace(INVIS, "").slice(0, 20));
+        (okT ? done : failed).push(okT ? "제목" : { what: "제목", why: "편집기가 안 받았습니다" });
       } else failed.push({ what: "제목", why: "제목 칸을 못 찾았습니다" });
     }
 
@@ -626,7 +641,8 @@
       .map((b) => {
         if (b.kind === "gap") return "";
         if (b.kind === "photo") return `[사진: ${b.text || "여기에 사진"}]`;
-        return b.text;
+        // 서식 표기는 맨글자판에서는 벗겨냅니다 — 표기가 글자로 발행되면 안 됩니다.
+        return richStrip(b.text);
       })
       .join("\n");
 
@@ -638,16 +654,34 @@
      * 소제목은 크고 굵게, 굵게 표시는 <b>로 심습니다.
      */
     const escH = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+    /**
+     * 원고 서식 표기 4종 (2026-08-28 신설 — 사장님 "밑줄·글자색·배경색·크기는 왜 안 따라와?").
+     * 원고 표준에 이 표기 자체가 없어서 못 따라온 것이었습니다. 이제 원고에
+     * 아래 표기가 있으면 서식째 클립보드에 실려 들어갑니다:
+     *   [형광]…[/형광]  노란 배경   [밑줄]…[/밑줄]  밑줄
+     *   [색]…[/색]      주홍 글자   [크게]…[/크게]  19px
+     * 색은 블로그 미관상 한 벌로 통일 — 바꾸려면 여기 색값만 고치면 됩니다.
+     */
+    const RICH = [
+      { re: /\[형광\]([\s\S]*?)\[\/형광\]/g, open: '<span style="background-color:#FDF3A8;">', close: "</span>" },
+      { re: /\[밑줄\]([\s\S]*?)\[\/밑줄\]/g, open: "<u>", close: "</u>" },
+      { re: /\[색\]([\s\S]*?)\[\/색\]/g, open: '<span style="color:#E8590C;">', close: "</span>" },
+      { re: /\[크게\]([\s\S]*?)\[\/크게\]/g, open: '<span style="font-size:19px;">', close: "</span>" },
+    ];
+    const richStrip = (s) => RICH.reduce((t, r) => t.replace(r.re, "$1"), String(s));
+    const richHtml = (escaped) => RICH.reduce((t, r) => t.replace(r.re, (m, inner) => r.open + inner + r.close), escaped);
+
     const bodyHtml = draft.blocks.map((b) => {
       if (b.kind === "gap") return "<p><br></p>";
       if (b.kind === "photo") return `<p>[사진: ${escH(b.text || "여기에 사진")}]</p>`;
       if (b.kind === "subhead")
-        return `<p><span style="font-size:19px;"><b>${escH(b.text)}</b></span></p>`;
+        return `<p><span style="font-size:19px;"><b>${richHtml(escH(b.text))}</b></span></p>`;
       if (b.kind === "quote")
-        return `<blockquote>${escH(b.text)}</blockquote>`;
-      let h = escH(b.text);
+        return `<blockquote>${richHtml(escH(b.text))}</blockquote>`;
+      let h = richHtml(escH(b.text));
       for (const m of b.marks || []) {
-        const em = escH(m);
+        const em = richHtml(escH(m));
         if (h.includes(em)) h = h.split(em).join(`<b>${em}</b>`);
       }
       return `<p>${h}</p>`;
