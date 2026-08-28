@@ -120,12 +120,20 @@ async function fetchTokenFromSession() {
  * ⚠️ 이 통로로는 **붙여넣기 키 하나만** 보냅니다. 발행·게시·공개를 누르는
  * 데 쓰지 않습니다 — 그건 원칙이고, 코드에도 그 키만 있습니다.
  */
-async function pressPaste(tabId) {
+async function pressPaste(tabId, { useCommands = false } = {}) {
   const target = { tabId };
   await chrome.debugger.attach(target, "1.3");
   try {
     const key = { modifiers: 2, key: "v", code: "KeyV", windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86 };
-    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyDown", ...key });
+    /**
+     * ⚠️ 2차 경로(useCommands): 그냥 키만 보내면 일부 화면에서 붙여넣기로
+     * 이어지지 않는 경우가 있습니다 (실제로 겪음 — 복사는 됐는데 안 붙음).
+     * commands:["paste"]는 "이 키는 붙여넣기 명령"이라고 편집기에 직접
+     * 지시하는 크롬 공식 방법입니다. 1차(그냥 키)가 안 먹었을 때만 씁니다 —
+     * 처음부터 둘 다 쓰면 두 번 붙을 수 있습니다.
+     */
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent",
+      { type: "keyDown", ...key, ...(useCommands ? { commands: ["paste"] } : {}) });
     await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyUp", ...key });
   } finally {
     // 띠를 바로 걷습니다. 실패해도(이미 떨어졌어도) 상관없습니다.
@@ -144,7 +152,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "pressPaste") {
     const tabId = _sender && _sender.tab && _sender.tab.id;
     if (!tabId) { sendResponse({ ok: false, message: "탭을 못 찾았습니다." }); return; }
-    pressPaste(tabId)
+    pressPaste(tabId, { useCommands: !!msg.commands })
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ ok: false, message: err.message }));
     return true;

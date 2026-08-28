@@ -281,32 +281,92 @@
     // 그 방식은 권한 정책을 안 탑니다.
     const clipOk = await writeClip(text);
 
+    let diag = "";
     if (clipOk) {
-      try {
-        // ⚠️ 예비 복사(execCommand)가 선택을 훔쳐갔을 수 있으므로,
-        // 키를 보내기 **직전에 반드시** 붙일 자리를 다시 세웁니다.
-        // 이거 없이 키를 보내면 엉뚱한 곳(숨은 복사 칸)에 붙습니다.
-        placeCaret();
-        const resp = await new Promise((res) => {
-          try { chrome.runtime.sendMessage({ type: "pressPaste" }, res); } catch { res(null); }
-        });
-        if (resp && resp.ok) {
-          await settle(700);
-          if (check()) return { ok: true, how: "키보드" };
-        }
-      } catch {}
+      // 1차: 그냥 키 → 안 먹으면 2차: "붙여넣기 명령" 명시(commands).
+      // 처음부터 둘 다 쓰면 두 번 붙을 수 있어서 순서대로 한 번씩만.
+      for (const commands of [false, true]) {
+        try {
+          // ⚠️ 예비 복사(execCommand)가 선택을 훔쳐갔을 수 있으므로,
+          // 키를 보내기 **직전에 반드시** 붙일 자리를 다시 세웁니다.
+          placeCaret();
+          const resp = await new Promise((res) => {
+            try { chrome.runtime.sendMessage({ type: "pressPaste", commands }, res); } catch { res(null); }
+          });
+          if (resp && resp.ok) {
+            await settle(700);
+            if (check()) return { ok: true, how: commands ? "키보드(명령)" : "키보드" };
+            diag = commands ? "키는 들어갔는데 편집기가 안 받음" : diag;
+          } else {
+            diag = (resp && resp.message) || "배경 작업자 응답 없음";
+            break;   // 통로 자체가 죽었으면 2차도 소용없습니다.
+          }
+        } catch (e) { diag = e.message; break; }
+      }
     }
 
     // ── 3) 그래도 안 되면 손으로 하시게 합니다 ──
     // ⚠️ 되는 척하지 않습니다. 이미 복사돼 있으니 Ctrl+V 한 번이면 됩니다.
+    // 진단 꼬리표 — 어느 고리가 끊겼는지 캡처 한 장으로 알 수 있게.
     return {
       ok: false,
       copied: clipOk,
       why: clipOk
         ? "자동으로 못 붙였습니다. 다듬은 글은 복사돼 있으니 본문 칸에 Ctrl+V 해주세요. " +
-          "붙여넣으신 뒤 '자동 서식'을 누르시면 소제목·인용구·강조가 들어갑니다."
+          "붙여넣으신 뒤 '자동 서식'을 누르시면 소제목·인용구·강조가 들어갑니다." +
+          (diag ? ` (진단: ${diag})` : "")
         : "클립보드가 막혀서 복사도 못 했습니다. 창을 이 화면에 둔 채로 다시 눌러주세요.",
     };
+  }
+
+  /**
+   * 원고의 구조(소제목·인용구·굵게)를 **지금 편집기에 있는 본문**에 입힙니다.
+   *
+   * ⚠️ 왜 따로 뺐는가 (2026-08-28 실사용 사고): 자동 붙이기가 실패해서 사장님이
+   * 손으로 Ctrl+V 하신 뒤 "서식 넣기"를 눌렀는데, 그 버튼이 이 함수가 아니라
+   * 일반 자동 서식(■ 표시를 찾는 도구)을 불렀습니다. 붙여넣은 글에는 ■가 이미
+   * 벗겨져 있어서 아무것도 안 입혀졌습니다. **원고가 구조를 이미 아는데
+   * 그걸 버리고 다시 찾게 시킨 것**이 잘못이었습니다.
+   * 이제 자동 붙이기 성공 경로와 손 붙이기 경로가 같은 이 함수를 씁니다.
+   */
+  async function applyStructure(draft, say = () => {}) {
+    const F = window.__wsFormat;
+    const done = [], failed = [];
+    if (!F) return { done, failed: [{ what: "서식", why: "서식 도구를 못 불러왔습니다" }] };
+
+    const subs = draft.blocks.filter((b) => b.kind === "subhead");
+    const quotes = draft.blocks.filter((b) => b.kind === "quote");
+
+    for (const b of subs) {
+      say(`소제목: ${b.text.slice(0, 18)}…`);
+      const p = bodyParagraphs().find((n) => norm(n.innerText || "").includes(norm(b.text)));
+      if (!p) { failed.push({ what: `소제목 "${b.text.slice(0, 18)}"`, why: "본문에서 그 줄을 못 찾았습니다" }); continue; }
+      (await F.setParagraphStyle(p, "소제목"))
+        ? done.push(`소제목: ${b.text.slice(0, 18)}`)
+        : failed.push({ what: `소제목 "${b.text.slice(0, 18)}"`, why: "편집기가 안 바꿔줬습니다" });
+    }
+
+    for (const b of quotes) {
+      say(`인용구: ${b.text.slice(0, 18)}…`);
+      const p = bodyParagraphs().find((n) => norm(n.innerText || "").includes(norm(b.text)));
+      if (!p) { failed.push({ what: `인용구 "${b.text.slice(0, 18)}"`, why: "본문에서 그 문장을 못 찾았습니다" }); continue; }
+      (await F.setParagraphStyle(p, "인용구"))
+        ? done.push(`인용구: ${b.text.slice(0, 18)}`)
+        : failed.push({ what: `인용구 "${b.text.slice(0, 18)}"`, why: "편집기가 안 바꿔줬습니다" });
+    }
+
+    // 굵게 — ⚠️ 클로드가 이미 골라준 것만 넣습니다. AI를 다시 안 부릅니다. 0원.
+    const marks = [];
+    for (const b of draft.blocks) if (b.marks) for (const m of b.marks) marks.push(m);
+    for (const m of [...new Set(marks)]) {
+      say(`굵게: ${m.slice(0, 14)}`);
+      const p = bodyParagraphs().find((n) => norm(n.innerText || "").includes(norm(m)));
+      if (!p) { failed.push({ what: `굵게 "${m}"`, why: "본문에서 그 글자를 못 찾았습니다" }); continue; }
+      const rr = await F.applyMark(p, m, "bold");
+      rr.ok ? done.push(`굵게: ${m}`) : failed.push({ what: `굵게 "${m}"`, why: rr.why });
+    }
+
+    return { done, failed };
   }
 
   /**
@@ -403,39 +463,10 @@
     if (!r.ok) return { ok: false, why: r.why, copied: r.copied, done, failed };
     done.push(`본문 (${r.how === "paste" ? "붙여넣기" : "한 줄씩"})`);
 
-    // ── 3. 소제목·인용구 문단 스타일 ──
-    const subs = draft.blocks.filter((b) => b.kind === "subhead");
-    const quotes = draft.blocks.filter((b) => b.kind === "quote");
-
-    for (const b of subs) {
-      say(`소제목: ${b.text.slice(0, 18)}…`);
-      const p = bodyParagraphs().find((n) => norm(n.innerText || "").includes(norm(b.text)));
-      if (!p) { failed.push({ what: `소제목 "${b.text.slice(0, 18)}"`, why: "본문에서 그 줄을 못 찾았습니다" }); continue; }
-      (await F.setParagraphStyle(p, "소제목"))
-        ? done.push(`소제목: ${b.text.slice(0, 18)}`)
-        : failed.push({ what: `소제목 "${b.text.slice(0, 18)}"`, why: "편집기가 안 바꿔줬습니다" });
-    }
-
-    for (const b of quotes) {
-      say(`인용구: ${b.text.slice(0, 18)}…`);
-      const p = bodyParagraphs().find((n) => norm(n.innerText || "").includes(norm(b.text)));
-      if (!p) { failed.push({ what: `인용구 "${b.text.slice(0, 18)}"`, why: "본문에서 그 문장을 못 찾았습니다" }); continue; }
-      (await F.setParagraphStyle(p, "인용구"))
-        ? done.push(`인용구: ${b.text.slice(0, 18)}`)
-        : failed.push({ what: `인용구 "${b.text.slice(0, 18)}"`, why: "편집기가 안 바꿔줬습니다" });
-    }
-
-    // ── 4. 굵게 (**표시**였던 것) ──
-    // ⚠️ 클로드가 이미 골라준 것만 넣습니다. AI를 다시 안 부릅니다. 값이 0원입니다.
-    const marks = [];
-    for (const b of draft.blocks) if (b.marks) for (const m of b.marks) marks.push(m);
-    for (const m of [...new Set(marks)]) {
-      say(`굵게: ${m.slice(0, 14)}`);
-      const p = bodyParagraphs().find((n) => norm(n.innerText || "").includes(norm(m)));
-      if (!p) { failed.push({ what: `굵게 "${m}"`, why: "본문에서 그 글자를 못 찾았습니다" }); continue; }
-      const rr = await F.applyMark(p, m, "bold");
-      rr.ok ? done.push(`굵게: ${m}`) : failed.push({ what: `굵게 "${m}"`, why: rr.why });
-    }
+    // ── 3~4. 소제목·인용구·굵게 — 원고가 아는 위치대로 ──
+    const st = await applyStructure(draft, say);
+    done.push(...st.done);
+    failed.push(...st.failed);
 
     return { ok: true, done, failed, photoSlots: draft.blocks.filter((b) => b.kind === "photo").length };
   }
@@ -551,5 +582,5 @@
     return { ok: true, changed: after !== before, label: after || before };
   }
 
-  window.__wsInsert = { insert, saveDraft, isEmpty, pasteBody, appendBlock, bodyParagraphs };
+  window.__wsInsert = { insert, applyStructure, saveDraft, isEmpty, pasteBody, appendBlock, bodyParagraphs };
 })();

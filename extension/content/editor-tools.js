@@ -2173,7 +2173,30 @@
          */
         if (forceBtn) forceBtn.disabled = false;
         const fb = out.querySelector("#ws-pd-fmt");
-        if (fb) fb.addEventListener("click", () => runFormat());
+        /**
+         * ⚠️ 예전엔 여기서 runFormat()(일반 자동 서식, ■를 찾음)을 불렀습니다.
+         * 그런데 붙여넣은 본문에는 ■가 이미 벗겨져 있어서 아무것도 안 입혀졌습니다
+         * (2026-08-28 실사용에서 확인). 원고(draft)가 소제목·인용구·굵게 위치를
+         * 이미 아니까, 그 지식으로 입히는 applyStructure를 부릅니다.
+         */
+        if (fb) fb.addEventListener("click", async () => {
+          fb.disabled = true;
+          fb.textContent = "서식 넣는 중…";
+          const st = await I.applyStructure(draft, (m) => (fb.textContent = m));
+          let saved = null;
+          if (panel.querySelector("#ws-pd-save") && panel.querySelector("#ws-pd-save").checked) {
+            fb.textContent = "임시저장 중…";
+            saved = await I.saveDraft();
+          }
+          fb.textContent = `서식 ${st.done.length}군데 넣었습니다`;
+          out.insertAdjacentHTML("beforeend", `
+            <div class="ws-row ${st.failed.length ? "warn" : "good"}">
+              서식 <b>${st.done.length}군데</b> 완료${st.failed.length ? ` · ${st.failed.length}군데 실패` : ""}
+              ${saved ? (saved.ok ? " · 임시저장됨" : ` · ${esc(saved.why)}`) : ""}
+            </div>
+            ${st.failed.length ? `<div class="ws-dim" style="font-size:11.5px">${st.failed.map((f) => esc(f.what)).join(", ")}는 직접 해주세요.</div>` : ""}`);
+          scheduleCount();
+        });
         return;
       }
 
@@ -2209,6 +2232,15 @@
     // 두 버튼이 같은 일을 합니다. 다른 건 force 하나뿐입니다.
     if (go) go.addEventListener("click", run(go, false));
     if (forceBtn) forceBtn.addEventListener("click", run(forceBtn, true));
+
+    /**
+     * ⚠️ 빈 편집기면 **묻지 않고 바로** 넣습니다 (사장님 요청, 2026-08-28 —
+     * "저 화면 안 뜨고 바로 붙여지게"). 빈 문서에 넣는 건 잃을 게 없어서 안전합니다.
+     * 글이 이미 있으면 덮어쓰기 = 되돌릴 수 없으므로, 그때만 확인을 받습니다.
+     * 패널은 그대로 떠서 진행 상황·결과를 보여줍니다 — 조용히 사라지는 게 아니라
+     * "넣는 중 → 넣었습니다"로 바뀝니다.
+     */
+    if (state.empty && go) go.click();
   }
 
   // ── 자동 서식 (소제목·인용구·강조) ─────────────────────

@@ -170,6 +170,10 @@
    * @returns {{title, blocks: Array<{kind, text, marks?}>}}
    */
   function parse(raw) {
+    // ⚠️ [강조]…[/강조] 는 편집국(8485) 원고의 굵게 표시입니다. 파서가 몰라서
+    // 태그가 글자 그대로 발행될 뻔했습니다 (2026-08-28 실사용에서 발견).
+    // **…** 로 바꿔서 기존 굵게 처리에 태웁니다.
+    raw = String(raw || "").replace(/\[강조\]([\s\S]*?)\[\/강조\]/g, "**$1**");
     const body = pickBody(raw);
     let lines = body.split("\n");
     lines = dropTitleList(lines);
