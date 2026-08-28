@@ -281,6 +281,27 @@
     // 그 방식은 권한 정책을 안 탑니다.
     const clipOk = await writeClip(text);
 
+    /**
+     * 사다리에 오르기 전 — **타자 경로.** 클립보드도 붙여넣기도 안 거치고,
+     * 타자 치듯 본문을 직접 입력합니다(insertText). 붙여넣기 신호를 편집기가
+     * 무시하는 걸 실측으로 확인해서(진단: "키는 들어갔는데 안 받음") 답니다.
+     * ⚠️ 문단이 제대로 나뉘었는지까지 확인하고, 한 덩어리로 뭉쳤으면
+     * 되돌리기(undo) 후 다음 사다리로 갑니다 — 뭉친 글을 두면 서식이 다 망가집니다.
+     */
+    const paraGoal = Math.max(3, Math.round((text.match(/\n/g) || []).length * 0.4));
+    const diags = [];
+    try {
+      placeCaret();
+      document.execCommand("insertText", false, text);
+      await settle(400);
+      if (check()) {
+        if (bodyParagraphs({ includeGuide: true }).length >= paraGoal) return { ok: true, how: "입력" };
+        diags.push("입력은 됐는데 문단이 안 나뉨");
+        document.execCommand("undo");
+        await settle(250);
+      } else diags.push("입력 명령 무시됨");
+    } catch (e) { diags.push(`입력: ${e.message}`); }
+
     let diag = "";
     if (clipOk) {
       /**
@@ -329,7 +350,7 @@
       why: clipOk
         ? "자동으로 못 붙였습니다. 다듬은 글은 복사돼 있으니 본문 칸에 Ctrl+V 해주세요. " +
           "붙여넣으신 뒤 '자동 서식'을 누르시면 소제목·인용구·강조가 들어갑니다." +
-          (diag ? ` (진단: ${diag})` : "")
+          ((diags.length || diag) ? ` (진단: ${[...diags, diag].filter(Boolean).join(" / ")})` : "")
         : "클립보드가 막혀서 복사도 못 했습니다. 창을 이 화면에 둔 채로 다시 눌러주세요.",
     };
   }

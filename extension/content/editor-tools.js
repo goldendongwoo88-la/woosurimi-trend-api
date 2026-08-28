@@ -2249,6 +2249,18 @@
          * 이미 아니까, 그 지식으로 입히는 applyStructure를 부릅니다.
          */
         if (fb) fb.addEventListener("click", async () => {
+          /**
+           * ⚠️ 본문이 비어 있으면 서식 넣기가 헛돕니다("0군데 완료·8군데 실패").
+           * 사장님이 Ctrl+V 전에 이 버튼을 누르는 일이 실제로 두 번 있었습니다 —
+           * 순서 실수는 사람이 아니라 화면이 막아야 합니다.
+           */
+          const now = I.isEmpty();
+          if (now.empty) {
+            fb.textContent = "붙여넣었어요 — 서식 넣기";
+            out.insertAdjacentHTML("beforeend",
+              `<div class="ws-row warn">본문이 아직 비어 있습니다. <b>본문 칸을 클릭하고 Ctrl+V</b> 먼저 해주세요 — 글자가 보이면 그때 이 버튼입니다.</div>`);
+            return;
+          }
           fb.disabled = true;
           fb.textContent = "서식 넣는 중…";
           const st = await I.applyStructure(draft, (m) => (fb.textContent = m));
