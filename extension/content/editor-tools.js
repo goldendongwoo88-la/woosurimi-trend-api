@@ -1737,17 +1737,80 @@
   // ── 워드 내려받기 ─────────────────────────────────────
   // ⚠️ 진짜 .docx를 만들려면 별도 라이브러리가 필요합니다. 대신 워드가 열 수 있는
   // HTML을 .doc으로 저장합니다. 워드에서 정상적으로 열리고 편집됩니다.
-  function downloadWord() {
+  /**
+   * 워드로 내려받기 — 글과 사진만, 화면 부스러기 없이.
+   *
+   * ⚠️ 처음 판은 편집기 화면을 통째로 복제해 담았습니다. 그랬더니 워드에
+   * "대표사진 삭제", "AI 활용 설정", "스마트렌즈 분석" 같은 **편집기 단추
+   * 글자까지** 들어가고, 사진은 네이버 로그인 주소라 전부 "표시할 수 없음"으로
+   * 깨졌습니다 (2026-08-28 사장님 실사용에서 확인).
+   *
+   * 그래서 거르는 게 아니라 **골라 담습니다**: 글 문단(.se-text-paragraph)과
+   * 사진만. 단추·안내 문구는 문단 밖에 살아서 자연히 안 담깁니다.
+   * 사진은 이 화면(로그인 상태)에서 받아 **파일 안에 심어서** 어디서 열어도 보입니다.
+   */
+  async function downloadWord() {
     const title = getTitle() || "블로그 원고";
     const root = getEditorRoot();
     if (!root) return showPanel(`<div class="ws-row warn">본문을 찾지 못했습니다.</div>`);
-    const clone = root.cloneNode(true);
-    clone.querySelectorAll(".se-documentTitle").forEach((n) => n.remove());
+
+    showPanel(`<h4>워드로 내려받기</h4><div class="ws-row">글과 사진을 모으는 중…</div>`);
+
+    const parts = [];
+    let imgOk = 0, imgFail = 0;
+    const comps = root.querySelectorAll(":scope .se-component, :scope > div");
+    // 컴포넌트 단위가 안 잡히는 판도 있어 실패하면 문단 전체로 갑니다.
+    const list = comps.length ? [...comps] : [root];
+
+    for (const comp of list) {
+      if (comp.closest(".se-documentTitle")) continue;
+
+      // 사진 — 로그인된 이 화면에서 받아 파일 안에 심습니다.
+      for (const img of comp.querySelectorAll("img.se-image-resource, .se-image-resource")) {
+        const src = img.currentSrc || img.src;
+        if (!src) continue;
+        try {
+          const blob = await fetch(src, { credentials: "include" }).then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.blob();
+          });
+          const dataUri = await new Promise((res, rej) => {
+            const fr = new FileReader();
+            fr.onload = () => res(fr.result);
+            fr.onerror = rej;
+            fr.readAsDataURL(blob);
+          });
+          parts.push(`<p><img src="${dataUri}" style="max-width:100%"></p>`);
+          imgOk++;
+        } catch {
+          parts.push(`<p>[사진: 여기 — 내려받지 못해 자리만 남깁니다]</p>`);
+          imgFail++;
+        }
+      }
+
+      // 글 문단 — 안내 문구(글감)는 빼고, 인용구는 인용 모양으로.
+      const I = window.__wsInsert;
+      for (const p of comp.querySelectorAll(".se-text-paragraph")) {
+        const t = (p.innerText || "").trim();
+        if (!t) continue;
+        // 글감 안내 문구는 원고가 아닙니다 (draft-insert의 판별과 같은 결).
+        if (/(기다립니다|남겨보세요|기록해\s*보세요|들려주세요|적어보세요)\.?\s*#/.test(t)) continue;
+        const isQuote = !!p.closest(".se-quotation");
+        // 굵게 등 서식은 살리되, 네이버 잡동사니 속성은 워드가 알아서 무시합니다.
+        parts.push(isQuote ? `<blockquote>${p.innerHTML}</blockquote>` : `<p>${p.innerHTML}</p>`);
+      }
+    }
+
+    if (!parts.length) {
+      return showPanel(`<h4>워드로 내려받기</h4><div class="ws-row warn">담을 글을 못 찾았습니다.</div>`);
+    }
 
     const html =
       `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">` +
-      `<title>${esc(title)}</title></head><body>` +
-      `<h1>${esc(title)}</h1>${clone.innerHTML}</body></html>`;
+      `<title>${esc(title)}</title>` +
+      `<style>body{font-family:'Malgun Gothic',sans-serif;line-height:1.7}` +
+      `blockquote{border-left:3px solid #999;margin:12px 0;padding:6px 14px;color:#444}</style>` +
+      `</head><body><h1>${esc(title)}</h1>${parts.join("\n")}</body></html>`;
 
     const blob = new Blob(["﻿", html], { type: "application/msword" });
     const a = document.createElement("a");
@@ -1756,6 +1819,11 @@
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+
+    showPanel(`<h4>워드로 내려받기</h4>
+      <div class="ws-row good">내려받았습니다 — 문단과 사진만 담았습니다.</div>
+      <p class="ws-dim">사진 ${imgOk}장은 파일 안에 심어서 어디서 열어도 보입니다.${imgFail ? ` ${imgFail}장은 못 받아 자리만 남겼습니다.` : ""}<br>
+      워드가 "제한된 보기"로 열면 위쪽 <b>편집 사용</b>을 눌러주세요.</p>`);
   }
 
   // ── 줄바꿈 ─────────────────────────────────────────────
