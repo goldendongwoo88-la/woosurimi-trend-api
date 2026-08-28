@@ -415,6 +415,82 @@
   }
 
   /**
+   * 진짜 클릭으로 네이버 **공식 '소제목' 스타일**을 입힙니다 (1.27.9).
+   *
+   * ⚠️ 왜 이렇게까지: 편집기는 코드가 거는 스타일을 전부 무시하고, 클립보드
+   * 서식으로는 "크고 굵은 글"까지만 됩니다. 왼쪽 드롭다운이 '소제목'으로 바뀌는
+   * 공식 스타일은 **사람처럼 드롭다운을 눌러야만** 됩니다. 마침 진짜 클릭
+   * 통로가 뚫려 있으니(본문 붙여넣기가 이걸로 성공), 그 손으로 눌러줍니다.
+   * 문단 클릭 → 스타일 드롭다운 클릭 → '소제목' 항목 클릭, 소제목마다 3번.
+   */
+  const frameOffset = () => {
+    try {
+      const fe = window.frameElement;
+      if (fe) { const r = fe.getBoundingClientRect(); return { fx: r.left, fy: r.top }; }
+    } catch {}
+    return { fx: 0, fy: 0 };
+  };
+
+  async function realClick(el, { dxCap = 60 } = {}) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const { fx, fy } = frameOffset();
+    const x = Math.round(fx + r.left + Math.min(dxCap, r.width / 2));
+    const y = Math.round(fy + r.top + r.height / 2);
+    const resp = await new Promise((res) => {
+      try { chrome.runtime.sendMessage({ type: "uiClick", x, y }, res); } catch { res(null); }
+    });
+    return !!(resp && resp.ok);
+  }
+
+  /** 화면에 실제로 보이는 요소 중, 글자가 딱 이걸로 시작하는 것을 찾습니다. */
+  function visibleByText(startsWith, { top = null } = {}) {
+    for (const el of document.querySelectorAll("button, [role='button'], li, span, div")) {
+      if (el.closest("#ws-tools-panel, #ws-tools-dock")) continue;
+      const t = (el.innerText || "").trim();
+      if (!t || !t.startsWith(startsWith) || t.length > startsWith.length + 3) continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      if (top != null && r.top > top) continue;
+      return el;
+    }
+    return null;
+  }
+
+  async function applyOfficialSubheads(draft, say = () => {}) {
+    const subs = draft.blocks.filter((b) => b.kind === "subhead");
+    let done = 0;
+    const failed = [];
+    for (const b of subs) {
+      say(`소제목 스타일: ${b.text.slice(0, 14)}…`);
+      const p = bodyParagraphs({ includeGuide: true })
+        .find((n) => norm(n.innerText || "").includes(norm(b.text)));
+      if (!p) { failed.push(b.text.slice(0, 14)); continue; }
+
+      // 1) 그 문단을 진짜로 클릭 — 편집기 커서가 그 문단에 섭니다.
+      if (!(await realClick(p, { dxCap: 30 }))) { failed.push(b.text.slice(0, 14)); continue; }
+      await settle(350);
+
+      // 2) 왼쪽 위 문단 스타일 드롭다운('본문'이라고 쓰인 것) 클릭.
+      const dd = visibleByText("본문", { top: 220 });
+      if (!dd || !(await realClick(dd))) { failed.push(b.text.slice(0, 14)); continue; }
+      await settle(350);
+
+      // 3) 펼쳐진 목록에서 '소제목'으로 시작하는 항목 클릭.
+      const item = visibleByText("소제목");
+      if (!item || !(await realClick(item))) {
+        // 목록이 열린 채 남지 않게 닫아줍니다.
+        try { await realClick(dd); } catch {}
+        failed.push(b.text.slice(0, 14));
+        continue;
+      }
+      await settle(350);
+      done++;
+    }
+    return { done, total: subs.length, failed };
+  }
+
+  /**
    * 원고의 구조(소제목·인용구·굵게)를 **지금 편집기에 있는 본문**에 입힙니다.
    *
    * ⚠️ 왜 따로 뺐는가 (2026-08-28 실사용 사고): 자동 붙이기가 실패해서 사장님이
@@ -587,10 +663,13 @@
      * 인용구·진짜 '소제목' 스타일까지 원하시면 편집기 드롭다운으로 바꾸면 되고,
      * 홈판 셈(글자 수·소제목 수)은 글자 기준이라 지금 상태로도 잡힙니다.
      */
-    const subCount = draft.blocks.filter((b) => b.kind === "subhead").length;
     const markCount = new Set(draft.blocks.flatMap((b) => b.marks || [])).size;
-    if (subCount) done.push(`소제목 ${subCount}곳 (크게·굵게로)`);
     if (markCount) done.push(`굵게 ${markCount}곳`);
+
+    // 공식 '소제목' 스타일 — 진짜 클릭으로 드롭다운까지 눌러줍니다.
+    const os = await applyOfficialSubheads(draft, say);
+    if (os.done) done.push(`공식 소제목 ${os.done}/${os.total}곳`);
+    if (os.failed.length) failed.push(...os.failed.map((t) => ({ what: `소제목 "${t}"`, why: "드롭다운을 못 눌렀습니다 — 문단 클릭 후 왼쪽 위에서 직접 바꿔주세요" })));
 
     return { ok: true, done, failed, photoSlots: draft.blocks.filter((b) => b.kind === "photo").length };
   }

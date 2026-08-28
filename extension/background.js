@@ -149,6 +149,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return;
   }
 
+  if (msg.type === "uiClick") {
+    // 진짜 클릭 한 번 — 편집기 위 아무 좌표나. clickPaste에서 검증된 통로의 낱개판.
+    // 소제목 드롭다운처럼 "클릭 → 화면 변화 확인 → 다음 클릭"이 필요한 흐름에 씁니다.
+    const t3 = _sender && _sender.tab && _sender.tab.id;
+    if (!t3) { sendResponse({ ok: false, message: "탭을 못 찾았습니다." }); return; }
+    (async () => {
+      const target = { tabId: t3 };
+      await chrome.debugger.attach(target, "1.3");
+      try {
+        const m = { x: msg.x, y: msg.y, button: "left", clickCount: 1 };
+        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mousePressed", ...m });
+        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseReleased", ...m });
+      } finally {
+        try { await chrome.debugger.detach(target); } catch {}
+      }
+    })()
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, message: err.message }));
+    return true;
+  }
+
   if (msg.type === "clickPaste") {
     /**
      * 진짜 클릭 + Ctrl+V 를 한 호흡에.
