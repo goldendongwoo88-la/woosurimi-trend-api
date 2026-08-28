@@ -163,7 +163,31 @@
    *      선택해서 복사한 뒤 바로 지웁니다.
    * ⚠️ 2번은 **선택(커서)을 훔쳐갑니다.** 부른 쪽이 반드시 커서를 다시 세워야 합니다.
    */
-  async function writeClip(text) {
+  async function writeClip(text, html = null) {
+    /**
+     * ⚠️ html을 주면 **서식째** 복사합니다 (굵게·크기·색이 든 채로).
+     * 편집기가 코드로 거는 서식은 무시해도, **붙여넣기에 실려 온 서식은
+     * 받아들입니다** — 사람들이 워드에서 굵은 글씨를 복사해 붙이는 그 길입니다.
+     * 숨은 편집칸에 HTML을 넣고 선택-복사하면 글자·서식 두 벌이 함께 담깁니다.
+     */
+    if (html) {
+      try {
+        const dv = document.createElement("div");
+        dv.contentEditable = "true";
+        dv.innerHTML = html;
+        dv.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;";
+        document.body.appendChild(dv);
+        const range = document.createRange();
+        range.selectNodeContents(dv);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const ok = document.execCommand("copy");
+        dv.remove();
+        if (ok) return true;
+      } catch {}
+      // 서식 복사가 막히면 맨글자로라도 — 본문이 안 들어가는 것보단 낫습니다.
+    }
     try {
       await Promise.race([
         navigator.clipboard.writeText(text),
@@ -187,7 +211,7 @@
     }
   }
 
-  async function pasteBody(text, { overwrite = false } = {}) {
+  async function pasteBody(text, { overwrite = false, html = null } = {}) {
     const root = editorRoot();
     if (!root) return { ok: false, why: "본문을 찾지 못했습니다." };
 
@@ -279,7 +303,7 @@
     // 통째로 막히는 경우**가 있습니다 (사장님 화면에서 실제 확인, 2026-08-28).
     // 그래서 막히면 옛 방식(execCommand 복사)으로 한 번 더 시도합니다 —
     // 그 방식은 권한 정책을 안 탑니다.
-    const clipOk = await writeClip(text);
+    const clipOk = await writeClip(text, html);
 
     /**
      * 사다리에 오르기 전 — **타자 경로.** 클립보드도 붙여넣기도 안 거치고,
@@ -290,17 +314,11 @@
      */
     const paraGoal = Math.max(3, Math.round((text.match(/\n/g) || []).length * 0.4));
     const diags = [];
-    try {
-      placeCaret();
-      document.execCommand("insertText", false, text);
-      await settle(400);
-      if (check()) {
-        if (bodyParagraphs({ includeGuide: true }).length >= paraGoal) return { ok: true, how: "입력" };
-        diags.push("입력은 됐는데 문단이 안 나뉨");
-        document.execCommand("undo");
-        await settle(250);
-      } else diags.push("입력 명령 무시됨");
-    } catch (e) { diags.push(`입력: ${e.message}`); }
+    /**
+     * ⚠️ 순서 중요 (1.27.8): 검증된 승자(진짜 클릭+붙여넣기)가 **맨 앞**입니다.
+     * 서식(굵게·소제목)이 클립보드에 실려 있어서, 이 길로 들어가야 서식까지
+     * 함께 들어갑니다. 타자 경로는 맨글자라 뒤로 물렸습니다.
+     */
 
     /**
      * ★ 결정타 — **진짜 클릭 + Ctrl+V.**
@@ -329,6 +347,19 @@
         } else diags.push(`클릭경로: ${(resp && resp.message) || "응답 없음"}`);
       } catch (e) { diags.push(`클릭경로: ${e.message}`); }
     }
+
+    // 타자 경로 — 클릭 경로가 막힌 환경용 예비. 맨글자라 서식은 못 싣습니다.
+    try {
+      placeCaret();
+      document.execCommand("insertText", false, text);
+      await settle(400);
+      if (check()) {
+        if (bodyParagraphs({ includeGuide: true }).length >= paraGoal) return { ok: true, how: "입력(서식 없음)" };
+        diags.push("입력은 됐는데 문단이 안 나뉨");
+        document.execCommand("undo");
+        await settle(250);
+      } else diags.push("입력 명령 무시됨");
+    } catch (e) { diags.push(`입력: ${e.message}`); }
 
     let diag = "";
     if (clipOk) {
@@ -523,14 +554,43 @@
       })
       .join("\n");
 
-    const r = await pasteBody(bodyText);
-    if (!r.ok) return { ok: false, why: r.why, copied: r.copied, done, failed };
-    done.push(`본문 (${r.how === "paste" ? "붙여넣기" : "한 줄씩"})`);
+    /**
+     * ⚠️ 서식은 **클립보드에 실어 보냅니다** (1.27.8).
+     * 코드로 나중에 서식을 거는 방식(applyStructure)은 편집기가 자기 커서가
+     * 아니라며 전부 무시했습니다 ("9군데 못 넣음" 실측). 그런데 붙여넣기에
+     * 실려 온 서식은 받습니다 — 워드에서 굵은 글씨를 복사해 붙이는 그 길입니다.
+     * 소제목은 크고 굵게, 굵게 표시는 <b>로 심습니다.
+     */
+    const escH = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const bodyHtml = draft.blocks.map((b) => {
+      if (b.kind === "gap") return "<p><br></p>";
+      if (b.kind === "photo") return `<p>[사진: ${escH(b.text || "여기에 사진")}]</p>`;
+      if (b.kind === "subhead")
+        return `<p><span style="font-size:19px;"><b>${escH(b.text)}</b></span></p>`;
+      if (b.kind === "quote")
+        return `<blockquote>${escH(b.text)}</blockquote>`;
+      let h = escH(b.text);
+      for (const m of b.marks || []) {
+        const em = escH(m);
+        if (h.includes(em)) h = h.split(em).join(`<b>${em}</b>`);
+      }
+      return `<p>${h}</p>`;
+    }).join("");
 
-    // ── 3~4. 소제목·인용구·굵게 — 원고가 아는 위치대로 ──
-    const st = await applyStructure(draft, say);
-    done.push(...st.done);
-    failed.push(...st.failed);
+    const r = await pasteBody(bodyText, { html: bodyHtml });
+    if (!r.ok) return { ok: false, why: r.why, copied: r.copied, done, failed };
+    done.push(`본문+서식 (${r.how})`);
+
+    /**
+     * 서식이 붙여넣기에 실려 들어갔으면 뒷단 서식 걸기는 건너뜁니다 —
+     * 어차피 편집기가 무시해서 "못 넣었습니다" 소음만 냈습니다.
+     * 인용구·진짜 '소제목' 스타일까지 원하시면 편집기 드롭다운으로 바꾸면 되고,
+     * 홈판 셈(글자 수·소제목 수)은 글자 기준이라 지금 상태로도 잡힙니다.
+     */
+    const subCount = draft.blocks.filter((b) => b.kind === "subhead").length;
+    const markCount = new Set(draft.blocks.flatMap((b) => b.marks || [])).size;
+    if (subCount) done.push(`소제목 ${subCount}곳 (크게·굵게로)`);
+    if (markCount) done.push(`굵게 ${markCount}곳`);
 
     return { ok: true, done, failed, photoSlots: draft.blocks.filter((b) => b.kind === "photo").length };
   }
