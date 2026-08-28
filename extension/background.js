@@ -149,6 +149,37 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return;
   }
 
+  if (msg.type === "clickPaste") {
+    /**
+     * 진짜 클릭 + Ctrl+V 를 한 호흡에.
+     *
+     * ⚠️ 왜: 네이버 편집기는 자기만의 커서를 따로 굴려서, 코드로 세운 커서로는
+     * 붙여넣기를 무시합니다 (실측 진단: "키는 들어갔는데 편집기가 안 받음").
+     * **마우스가 실제로 그 자리를 눌러야** 편집기 커서가 서고, 그다음 키가 먹습니다.
+     * 사람이 손으로 클릭+Ctrl+V 하면 되는 이유가 바로 이것입니다 — 그걸 그대로 재현합니다.
+     */
+    const tabId2 = _sender && _sender.tab && _sender.tab.id;
+    if (!tabId2) { sendResponse({ ok: false, message: "탭을 못 찾았습니다." }); return; }
+    (async () => {
+      const target = { tabId: tabId2 };
+      await chrome.debugger.attach(target, "1.3");
+      try {
+        const m = { x: msg.x, y: msg.y, button: "left", clickCount: 1 };
+        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mousePressed", ...m });
+        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseReleased", ...m });
+        await new Promise((r) => setTimeout(r, 200));   // 편집기가 커서를 세울 짬
+        const key = { modifiers: 2, key: "v", code: "KeyV", windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86 };
+        await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyDown", ...key });
+        await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyUp", ...key });
+      } finally {
+        try { await chrome.debugger.detach(target); } catch {}
+      }
+    })()
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, message: err.message }));
+    return true;
+  }
+
   if (msg.type === "pressPaste") {
     const tabId = _sender && _sender.tab && _sender.tab.id;
     if (!tabId) { sendResponse({ ok: false, message: "탭을 못 찾았습니다." }); return; }

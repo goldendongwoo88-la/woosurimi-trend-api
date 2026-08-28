@@ -302,6 +302,34 @@
       } else diags.push("입력 명령 무시됨");
     } catch (e) { diags.push(`입력: ${e.message}`); }
 
+    /**
+     * ★ 결정타 — **진짜 클릭 + Ctrl+V.**
+     * 편집기는 코드가 세운 커서를 무시하고 **실제 마우스 클릭이 만든 자기
+     * 커서**만 인정합니다 (실측 진단으로 확정). 그래서 브라우저에게 본문
+     * 좌표를 진짜로 클릭시키고 바로 Ctrl+V 를 보냅니다 — 사람 손 그대로.
+     * 편집기가 iframe 속이면 좌표에 iframe 위치를 더해야 합니다 (같은 주소라 읽힘).
+     */
+    if (clipOk && !overwrite) {
+      try {
+        const r1 = first.getBoundingClientRect();
+        let fx = 0, fy = 0;
+        try {
+          const fe = window.frameElement;
+          if (fe) { const fr = fe.getBoundingClientRect(); fx = fr.left; fy = fr.top; }
+        } catch {}
+        const x = Math.round(fx + r1.left + Math.min(40, Math.max(5, r1.width / 2)));
+        const y = Math.round(fy + r1.top + r1.height / 2);
+        const resp = await new Promise((res) => {
+          try { chrome.runtime.sendMessage({ type: "clickPaste", x, y }, res); } catch { res(null); }
+        });
+        if (resp && resp.ok) {
+          await settle(900);
+          if (check()) return { ok: true, how: "클릭+붙여넣기" };
+          diags.push("진짜 클릭까지 했는데 안 받음");
+        } else diags.push(`클릭경로: ${(resp && resp.message) || "응답 없음"}`);
+      } catch (e) { diags.push(`클릭경로: ${e.message}`); }
+    }
+
     let diag = "";
     if (clipOk) {
       /**
