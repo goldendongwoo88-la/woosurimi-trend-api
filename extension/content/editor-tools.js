@@ -2278,6 +2278,34 @@
             ${st.failed.length ? `<div class="ws-dim" style="font-size:11.5px">${st.failed.map((f) => esc(f.what)).join(", ")}는 직접 해주세요.</div>` : ""}`);
           scheduleCount();
         });
+
+        /**
+         * ⚠️ Ctrl+V 감시꾼 (1.27.15) — 사장님이 본문에 붙여넣는 **순간을 감지**해서
+         * 나머지(공식 소제목 클릭·임시저장)를 자동으로 이어갑니다.
+         * 이걸로 실패 시 동선이 "Ctrl+V 한 번"으로 끝납니다 — 버튼 또 누를 필요 없음.
+         * 서식(형광·색·굵게)은 클립보드에 실려 있어 붙여넣기 자체에 포함됩니다.
+         */
+        let ticks = 0;
+        const watch = setInterval(async () => {
+          if (!panel.contains(out) || ++ticks > 300) { clearInterval(watch); return; }  // 패널 바뀌면·3분 지나면 중단
+          if (I.isEmpty().empty) return;
+          clearInterval(watch);
+          if (fb) fb.disabled = true;
+          out.insertAdjacentHTML("beforeend",
+            `<div class="ws-row good">붙여넣기 확인! 나머지를 자동으로 이어갑니다…</div>`);
+          try {
+            const os = await I.applyOfficialSubheads(draft, () => {});
+            let saved2 = null;
+            const box = panel.querySelector("#ws-pd-save");
+            if (box && box.checked) saved2 = await I.saveDraft();
+            out.insertAdjacentHTML("beforeend", `
+              <div class="ws-row ${os.failed.length ? "warn" : "good"}">
+                완료 — 공식 소제목 ${os.done}/${os.total}곳${saved2 ? (saved2.ok ? " · 임시저장됨" : "") : ""}
+              </div>
+              ${os.failed.length ? `<div class="ws-dim" style="font-size:11.5px">소제목 ${os.failed.map(esc).join(", ")}는 문단 클릭 후 왼쪽 위에서 직접 바꿔주세요.</div>` : ""}`);
+          } catch {}
+          scheduleCount();
+        }, 600);
         return;
       }
 

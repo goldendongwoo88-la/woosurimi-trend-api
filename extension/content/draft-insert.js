@@ -347,55 +347,14 @@
       } catch (e) { diags.push(`클릭경로: ${e.message}`); }
     }
 
-    // 타자 경로 — 클릭 경로가 막힌 환경용 예비. 맨글자라 서식은 못 싣습니다.
-    try {
-      placeCaret();
-      document.execCommand("insertText", false, text);
-      await settle(400);
-      if (check()) {
-        if (bodyParagraphs({ includeGuide: true }).length >= paraGoal) return { ok: true, how: "입력(서식 없음)" };
-        diags.push("입력은 됐는데 문단이 안 나뉨");
-        document.execCommand("undo");
-        await settle(250);
-      } else diags.push("입력 명령 무시됨");
-    } catch (e) { diags.push(`입력: ${e.message}`); }
-
-    let diag = "";
-    if (clipOk) {
-      /**
-       * 0차 — **확장 전용 직통 붙여넣기.**
-       * clipboardRead 권한이 있는 확장은 execCommand("paste")를 쓸 수 있습니다.
-       * 일반 웹은 못 쓰는, 확장에게만 열린 문이라 디버거도 안 거칩니다.
-       * "조직에서 관리하는 브라우저"는 디버거를 정책으로 막을 수 있어서
-       * (사장님 크롬이 그렇습니다) 이 직통이 첫 번째 길이어야 합니다.
-       */
-      try {
-        placeCaret();
-        document.execCommand("paste");
-        await settle(600);
-        if (check()) return { ok: true, how: "직통" };
-        diag = "직통 붙여넣기를 편집기가 안 받음";
-      } catch (e) { diag = `직통: ${e.message}`; }
-
-      // 1차: 그냥 키 → 안 먹으면 2차: "붙여넣기 명령" 명시(commands).
-      // 처음부터 둘 다 쓰면 두 번 붙을 수 있어서 순서대로 한 번씩만.
-      for (const commands of [false, true]) {
-        try {
-          // ⚠️ 예비 복사(execCommand)가 선택을 훔쳐갔을 수 있으므로,
-          // 키를 보내기 **직전에 반드시** 붙일 자리를 다시 세웁니다.
-          placeCaret();
-          const resp = await askBg({ type: "pressPaste", commands });
-          if (resp && resp.ok) {
-            await settle(700);
-            if (check()) return { ok: true, how: commands ? "키보드(명령)" : "키보드" };
-            diag = commands ? "키는 들어갔는데 편집기가 안 받음" : diag;
-          } else {
-            diag = (resp && resp.message) || "배경 작업자 응답 없음";
-            break;   // 통로 자체가 죽었으면 2차도 소용없습니다.
-          }
-        } catch (e) { diag = e.message; break; }
-      }
-    }
+    /**
+     * ⚠️ 사다리 축소 (1.27.15 결단): 타자·직통·키 경로는 이 편집기에서 전부
+     * 무시당하는 걸 반복 실측했고, 시도 시간만 30초 넘게 잡아먹으며
+     * "넣는 중…"이 길어지는 원인이었습니다. 이제 **클릭+붙여넣기 한 번만**
+     * 빠르게 시도하고, 안 되면 몇 초 안에 확실한 길(Ctrl+V 한 번)로 안내합니다.
+     * Ctrl+V 순간을 화면이 감지해 나머지(공식 소제목·임시저장)는 자동 진행됩니다.
+     */
+    const diag = "";
 
     // ── 3) 그래도 안 되면 손으로 하시게 합니다 ──
     // ⚠️ 되는 척하지 않습니다. 이미 복사돼 있으니 Ctrl+V 한 번이면 됩니다.
@@ -677,7 +636,30 @@
     // 사진을 대신 넣어드릴 수는 없습니다 — 어떤 사진인지는 사장님만 압니다.
     // 대신 그 자리에 무엇을 넣을지 적어두면 사장님이 하나씩 갈아끼우시면 됩니다.
     say("본문을 넣는 중…");
-    const bodyText = draft.blocks
+
+    /**
+     * 소제목 구역 규칙 (사장님 지정, 2026-08-28):
+     * 소제목 사이가 붙어 보이지 않게, 그리고 **구역마다 사진을 넣으실 거라서** —
+     * 모든 소제목 **직전에 [빈 줄 + 사진 자리 + 빈 줄]을 보장**합니다.
+     * 원고에 이미 그 자리 사진이 있으면 중복으로 안 넣습니다.
+     */
+    const blocksOut = [];
+    for (const b of draft.blocks) {
+      if (b.kind === "subhead") {
+        // 바로 앞(빈 줄 건너뛰고)에 사진 자리가 이미 있는지 봅니다.
+        let j = blocksOut.length - 1;
+        while (j >= 0 && blocksOut[j].kind === "gap") j--;
+        const hasPhoto = j >= 0 && blocksOut[j].kind === "photo";
+        if (!hasPhoto && blocksOut.length) {
+          if (blocksOut[blocksOut.length - 1].kind !== "gap") blocksOut.push({ kind: "gap" });
+          blocksOut.push({ kind: "photo", text: `${b.text.slice(0, 14)} 관련 사진` });
+        }
+        if (blocksOut.length && blocksOut[blocksOut.length - 1].kind !== "gap") blocksOut.push({ kind: "gap" });
+      }
+      blocksOut.push(b);
+    }
+
+    const bodyText = blocksOut
       .map((b) => {
         if (b.kind === "gap") return "";
         if (b.kind === "photo") return `[사진: ${b.text || "여기에 사진"}]`;
@@ -727,7 +709,7 @@
     const richStrip = (s) => RICH.reduce((t, r) => t.replace(r.re, "$1"), String(s));
     const richHtml = (escaped) => RICH.reduce((t, r) => t.replace(r.re, (m, inner) => r.open + inner + r.close), escaped);
 
-    const bodyHtml = draft.blocks.map((b) => {
+    const bodyHtml = blocksOut.map((b) => {
       if (b.kind === "gap") return "<p><br></p>";
       if (b.kind === "photo") return `<p>[사진: ${escH(b.text || "여기에 사진")}]</p>`;
       if (b.kind === "subhead")
@@ -886,5 +868,5 @@
     return { ok: true, changed: after !== before, label: after || before };
   }
 
-  window.__wsInsert = { insert, applyStructure, saveDraft, isEmpty, pasteBody, appendBlock, bodyParagraphs };
+  window.__wsInsert = { insert, applyStructure, applyOfficialSubheads, saveDraft, isEmpty, pasteBody, appendBlock, bodyParagraphs };
 })();
