@@ -2579,56 +2579,120 @@
     panel.querySelector("#ws-fmt-go").addEventListener("click", (e) => applyFormat(d, e.target));
   }
 
-  /** 실제로 넣습니다. 하나씩, 확인하면서. */
+  /**
+   * 실제로 넣습니다 — **편집국이 쓰는 방식으로.**
+   *
+   * ⚠️ 2026-09-01, 사장님 지적으로 통째로 바꿨습니다.
+   * 예전엔 도구줄 단추를 하나씩 눌러서 넣었습니다. 그게 계속 깨졌습니다 —
+   * 15군데 중 1군데만 들어가고, 도구줄 밖을 눌러 화면이 튕기고,
+   * 인용구는 빈 칸을 새로 만들어 사장님 원고를 더럽혔습니다.
+   *
+   * 편집국은 처음부터 다르게 합니다. **서식을 HTML에 구워서 한 번에 붙여넣습니다.**
+   * 그 길은 이미 검증됐습니다(원고 붙이기가 매일 그렇게 씁니다). 같은 계획을
+   * 그 통로로 보내면 됩니다. 단추를 안 누르니 튕길 일도, 빈 칸이 생길 일도 없습니다.
+   */
   async function applyFormat(d, btn) {
-    const F = window.__wsFormat;
     const out = panel.querySelector("#ws-fmt-out");
+    const I = window.__wsInsert;
     btn.disabled = true;
 
     const root = getEditorRoot();
     if (!root) { out.innerHTML = `<div class="ws-row bad">본문을 못 찾았습니다.</div>`; return; }
 
+    /**
+     * ⚠️ 이 방식은 본문을 통째로 다시 씁니다. 그래서 **사진이 이미 들어 있으면
+     * 사진이 날아갑니다.** 글을 망가뜨리는 건 안 되는 것보다 나쁩니다 — 멈춥니다.
+     */
+    const media = root.querySelectorAll(".se-component.se-image, .se-component.se-video, .se-component.se-oglink");
+    if (media.length) {
+      btn.disabled = false;
+      out.innerHTML = `
+        <div class="ws-row bad"><b>사진이 이미 들어 있어서 멈췄습니다.</b></div>
+        <div class="ws-sec warn-sec">
+          <p class="ws-sec-p">이 방식은 본문을 다시 쓰기 때문에 <b>넣어두신 사진 ${media.length}개가 날아갑니다.</b>
+          서식을 먼저 넣고 사진을 나중에 넣어주세요. 사진이 이미 있으면 손으로 하시는 게 안전합니다.</p>
+        </div>`;
+      return;
+    }
+    if (!I || !I.pasteBody) {
+      btn.disabled = false;
+      out.innerHTML = `<div class="ws-row bad">붙여넣기 기능을 못 찾았습니다. 새로고침(F5) 후 다시 해주세요.</div>`;
+      return;
+    }
+
     const SKIP = ".se-oglink, .se-image, .se-imageStrip, .se-video, .se-sticker, .se-material, .se-placesMap, .se-code";
-    const paras = () => [...root.querySelectorAll(".se-text-paragraph")].filter(
+    const paras = [...root.querySelectorAll(".se-text-paragraph")].filter(
       (n) => !n.closest(SKIP) && !n.closest(".se-documentTitle") && !n.closest(".se-placeholder")
     );
 
-    const done = [];
-    const failed = [];
-    let step = 0;
-    const totalSteps = d.subheads.length + d.quotes.length + d.marks.length;
-    const tick = (what) => {
-      step++;
-      btn.textContent = `넣는 중… ${step}/${totalSteps}`;
-      out.innerHTML = `<div class="ws-row">${esc(what)}</div>`;
+    btn.textContent = "서식 굽는 중…";
+
+    const norm = (s) => String(s || "").replace(/[\s​-‍﻿]/g, "");
+    const escH = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const hit = (line, t) => t && norm(line).includes(norm(t));
+
+    // 강조 종류별 HTML 옷. 도구줄을 안 누르고 이 옷을 입혀서 보냅니다.
+    const WRAP = {
+      bold: (s) => `<b>${s}</b>`,
+      underline: (s) => `<u>${s}</u>`,
+      color: (s) => `<span style="color:#c0392b;">${s}</span>`,
+      highlight: (s) => `<span style="background-color:#fff3a3;">${s}</span>`,
     };
 
-    // ── 1. 소제목 ──
-    // ⚠️ 문단 스타일을 바꾸면 화면 구조가 바뀝니다. 그래서 매번 다시 찾습니다.
-    for (const s of d.subheads) {
-      tick(`소제목: ${s.text}`);
-      const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(s.text)));
-      if (!p) { failed.push({ what: `소제목 "${s.text}"`, why: "본문에서 그 줄을 못 찾았습니다" }); continue; }
-      const okk = await F.setParagraphStyle(p, "소제목");
-      okk ? done.push(`소제목: ${s.text}`) : failed.push({ what: `소제목 "${s.text}"`, why: (F.getLastWhy && F.getLastWhy()) || "편집기가 안 바꿔줬습니다" });
-    }
+    const done = [];
+    const failed = [];
+    const usedMark = new Set();
 
-    // ── 2. 인용구 ──
-    for (const q of d.quotes) {
-      tick(`인용구: ${q.text.slice(0, 20)}…`);
-      const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(q.text)));
-      if (!p) { failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: "본문에서 그 문장을 못 찾았습니다" }); continue; }
-      const okk = await F.setParagraphStyle(p, "인용구");
-      okk ? done.push(`인용구: ${q.text.slice(0, 20)}…`) : failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: (F.getLastWhy && F.getLastWhy()) || "편집기가 안 바꿔줬습니다" });
-    }
+    const html = paras.map((p) => {
+      const line = (p.innerText || "").replace(/​/g, "");
+      if (!line.trim()) return "<p><br></p>";
 
-    // ── 3. 강조 ──
-    for (const m of d.marks) {
-      tick(`${m.label}: ${m.text}`);
-      const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(m.text)));
-      if (!p) { failed.push({ what: `${m.label} "${m.text}"`, why: "본문에서 그 글자를 못 찾았습니다" }); continue; }
-      const r = await F.applyMark(p, m.text, m.kind);
-      r.ok ? done.push(`${m.label}: ${m.text}`) : failed.push({ what: `${m.label} "${m.text}"`, why: r.why });
+      const sub = d.subheads.find((s) => hit(line, s.text));
+      if (sub) {
+        done.push(`소제목: ${sub.text}`);
+        // h2로 보냅니다 — 실측상 h2는 편집기가 진짜 제목으로 받고 h3는 안 받습니다.
+        return `<h2 style="font-size:19px;font-weight:bold;">${escH(line)}</h2>`;
+      }
+
+      const q = d.quotes.find((x) => hit(line, x.text));
+      if (q) {
+        done.push(`인용구: ${q.text.slice(0, 20)}…`);
+        return `<blockquote style="border-left:4px solid #bbb;margin:12px 0;padding:8px 16px;color:#555;">${escH(line)}</blockquote>`;
+      }
+
+      // 본문 — 이 줄에 걸리는 강조들을 글자에 직접 입힙니다.
+      let h = escH(line);
+      for (const m of d.marks) {
+        if (usedMark.has(m.text) || !hit(line, m.text)) continue;
+        const target = escH(m.text);
+        if (!h.includes(target)) continue;
+        const wrap = WRAP[m.kind] || WRAP.bold;
+        h = h.split(target).join(wrap(target));
+        usedMark.add(m.text);
+        done.push(`${m.label}: ${m.text}`);
+      }
+      return `<p>${h}</p>`;
+    }).join("");
+
+    // 계획에 있었는데 본문에서 못 찾은 것들 — 되는 척하지 않고 그대로 알려줍니다.
+    for (const s of d.subheads) if (!done.some((x) => x === `소제목: ${s.text}`))
+      failed.push({ what: `소제목 "${s.text}"`, why: "본문에서 그 줄을 못 찾았습니다" });
+    for (const q of d.quotes) if (!done.some((x) => x === `인용구: ${q.text.slice(0, 20)}…`))
+      failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: "본문에서 그 문장을 못 찾았습니다" });
+    for (const m of d.marks) if (!usedMark.has(m.text))
+      failed.push({ what: `${m.label} "${m.text}"`, why: "본문에서 그 글자를 못 찾았습니다" });
+
+    btn.textContent = "본문에 넣는 중…";
+    const plain = paras.map((p) => (p.innerText || "").replace(/​/g, "")).join("\n");
+    const r = await I.pasteBody(plain, { overwrite: true, html });
+
+    if (!r || !r.ok) {
+      btn.disabled = false;
+      btn.textContent = "다시 넣기";
+      out.innerHTML = `
+        <div class="ws-row bad"><b>본문을 바꾸지 못했습니다.</b> 글은 그대로입니다.</div>
+        <div class="ws-sec warn-sec"><p class="ws-sec-p">${esc((r && r.why) || "편집기가 붙여넣기를 안 받았습니다")}</p></div>`;
+      return;
     }
 
     btn.textContent = `${done.length}군데 넣었습니다`;
