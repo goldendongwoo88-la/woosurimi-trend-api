@@ -2477,6 +2477,31 @@
     }
   }
 
+  /**
+   * 실측 기준을 한 줄로 풀어씁니다.
+   *
+   * ⚠️ 2026-08-31 고침: 서버가 8/27 재실측하면서 모양이 바뀌었습니다.
+   *   옛 모양 measured.winner = { bold: 12.8, ... }  (블로그 한 개를 셌을 때)
+   *   새 모양 measured.perThousand = { bold: [3.4, 7.2], underline: 0, ... }  (범위)
+   * 확장은 계속 winner를 읽고 있어서 `undefined.bold`로 자동 서식 전체가 죽었습니다.
+   * 이제 새 모양을 먼저 보고, 옛 모양도 받아주고, 둘 다 없으면 이 줄만 조용히 뺍니다
+   * (기준 한 줄 때문에 서식 넣기 전체가 막히면 안 됩니다).
+   */
+  function fmtMeasured(mz) {
+    const one = (v) =>
+      Array.isArray(v) ? (v[0] === v[1] ? `${v[0]}` : `${v[0]}~${v[1]}`) : (v == null ? null : `${v}`);
+    const p = mz && (mz.perThousand || mz.winner);
+    if (!p) return "잘 되는 블로그 비율에 맞춰 골랐습니다.";
+    const parts = [
+      ["굵게", one(p.bold)],
+      ["밑줄", one(p.underline)],
+      ["배경색", one(p.highlight)],
+      ["글자색", one(p.color)],
+    ].filter(([, v]) => v !== null).map(([k, v]) => `${k} ${v}`);
+    if (!parts.length) return "잘 되는 블로그 비율에 맞춰 골랐습니다.";
+    return `잘 되는 블로그를 세어보니 1,000자에 ${parts.join(" · ")}번입니다. 그 비율로 맞췄습니다.`;
+  }
+
   function renderFormat(d, cached) {
     const kindColor = { bold: "#17181c", underline: "#1a4ba0", highlight: "#8a5a10", color: "#b0201f" };
     const total = d.marks.length + d.quotes.length + d.subheads.length;
@@ -2527,10 +2552,7 @@
       ${d.marks.length ? `
       <div class="ws-sec">
         <div class="ws-sec-h">3 · 강조 ${d.marks.length}군데</div>
-        <p class="ws-sec-p">잘 되는 블로그를 세어보니 1,000자에
-          굵게 ${d.measured.winner.bold} · 밑줄 ${d.measured.winner.underline} ·
-          배경색 ${d.measured.winner.highlight} · 글자색 ${d.measured.winner.color}번입니다.
-          그 비율로 맞췄습니다.</p>
+        <p class="ws-sec-p">${fmtMeasured(d.measured)}</p>
         ${d.marks.map((m) => `<div style="padding:6px 0;border-bottom:1px solid #f0f1f4">
           <span style="font-size:10.5px;font-weight:700;color:${kindColor[m.kind]};
             border:1px solid ${kindColor[m.kind]};border-radius:4px;padding:1px 5px">${esc(m.label)}</span>
