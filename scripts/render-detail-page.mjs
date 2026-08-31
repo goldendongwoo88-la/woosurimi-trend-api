@@ -273,7 +273,7 @@ function normalizeMemo(memo) {
   return out;
 }
 
-async function renderOne(memo, outFile) {
+async function renderOne(memo, outFile, { sample = false } = {}) {
   const { sections, product } = buildSections(normalizeMemo(memo));
   let y = 0;
   let parts = "";
@@ -282,10 +282,21 @@ async function renderOne(memo, outFile) {
     parts += r.svg;
     y = r.y;
   }
-  const H = Math.ceil(y + 40);
+  const H = Math.ceil(y + (sample ? 66 : 40));
+
+  // 샘플 배지 — 가상 상품으로 만든 시안을 실제 상품 광고로 오인하면 표시광고법 문제가 됩니다.
+  // 그림에 박아 넣어서 잘라내기 전에는 지워지지 않게 합니다.
+  const badgeText = "SAMPLE · 샘플 시안 (가상 상품)";
+  const badgeSvg = sample
+    ? `<rect x="${W - PAD - (measure(badgeText, 15) + 32)}" y="18" width="${measure(badgeText, 15) + 32}" height="34" rx="17" fill="#b91c1c"/>`
+      + txt(badgeText, W - PAD - 16, 40, 15, "#ffffff", { anchor: "end" })
+      + txt("이 페이지는 서비스 구성을 보여주기 위한 샘플입니다. 실제 판매 상품이 아닙니다.", PAD, H - 42, 14, "#b91c1c")
+    : "";
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <rect width="${W}" height="${H}" fill="#ffffff"/>
   ${parts}
+  ${badgeSvg}
   ${txt("이 상세페이지는 판매자가 제공한 사실 정보만으로 제작되었습니다.", PAD, H - 18, 13, MUTED, { opacity: 0.8 })}
 </svg>`;
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
@@ -296,9 +307,12 @@ async function renderOne(memo, outFile) {
   return !flat;
 }
 
-const [memoPath, outDir] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const sample = argv.includes("--sample");
+const [memoPath, outDir] = argv.filter((a) => !a.startsWith("--"));
 if (!memoPath || !outDir) {
-  console.error("사용법: node scripts/render-detail-page.mjs <메모.json> <출력폴더>");
+  console.error("사용법: node scripts/render-detail-page.mjs <메모.json> <출력폴더> [--sample]");
+  console.error("  --sample : 가상 상품 시안임을 알리는 SAMPLE 배지를 그림에 박습니다 (포트폴리오용)");
   process.exit(1);
 }
 const input = JSON.parse(fs.readFileSync(memoPath, "utf8"));
@@ -307,6 +321,6 @@ fs.mkdirSync(outDir, { recursive: true });
 let ok = true;
 for (const [i, memo] of memos.entries()) {
   const safe = String(memo.product || `상품${i + 1}`).replace(/[\\/:*?"<>|]/g, "");
-  ok = (await renderOne(memo, path.join(outDir, `${String(i + 1).padStart(2, "0")}_${safe}.png`))) && ok;
+  ok = (await renderOne(memo, path.join(outDir, `${String(i + 1).padStart(2, "0")}_${safe}.png`), { sample })) && ok;
 }
 if (!ok) process.exitCode = 1;
