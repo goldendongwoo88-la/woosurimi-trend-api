@@ -248,33 +248,20 @@ function drawSection(sec, y0) {
   return { svg, y };
 }
 
-/**
- * buildSections는 compare/specs가 **배열**로 오면 객체 배열로만 읽습니다
- * (`x.point`, `x.k`). 사람이 쓰기 편한 문자열 배열("항목 | 우리 | 일반", "용량: 500ml")을
- * 그대로 넣으면 전부 걸러져서 **비교표·스펙표 섹션이 소리 없이 사라집니다.**
- * 여기서 미리 객체로 풀어 줍니다.
- */
-function normalizeMemo(memo) {
-  const out = { ...memo };
-  if (Array.isArray(memo.compare)) {
-    out.compare = memo.compare.map((x) => {
-      if (x && typeof x === "object") return x;
-      const p = String(x).split("|").map((s) => s.trim());
-      return { point: p[0] || "", ours: p[1] || "", others: p[2] || "" };
-    }).filter((r) => r.point);
-  }
-  if (Array.isArray(memo.specs)) {
-    out.specs = memo.specs.map((x) => {
-      if (x && typeof x === "object") return x;
-      const [k, ...rest] = String(x).split(/[:：]/);
-      return { k: (k || "").trim(), v: rest.join(":").trim() };
-    }).filter((r) => r.k && r.v);
-  }
-  return out;
-}
-
 async function renderOne(memo, outFile, { sample = false } = {}) {
-  const { sections, product } = buildSections(normalizeMemo(memo));
+  // 메모 해석(문자열 배열 "용량: 500ml" / "항목 | 우리 | 일반" 포함)은 전부 buildSections가 합니다.
+  // 여기서 같은 파싱을 또 하면 두 곳이 어긋납니다 — 원본 한 곳만 고치면 되게 둡니다.
+  const { sections, product } = buildSections(memo);
+  // 메모에 넣었는데 섹션이 안 나오면 조용히 넘어가지 않고 멈춥니다. 원인은 둘 중 하나입니다:
+  // 메모 형식이 틀렸거나("용량 500ml"처럼 콜론 누락), sections.js의 해석이 바뀌었거나.
+  for (const [key, type, label, hint] of [
+    ["specs", "spec", "스펙표", '"항목: 값" 형식인지'],
+    ["compare", "compare", "비교표", '"항목 | 우리 | 일반" 형식인지'],
+  ]) {
+    if (memo[key]?.length && !sections.some((s) => s.type === type)) {
+      throw new Error(`${label}가 비었습니다 — 메모의 ${key} 줄이 ${hint} 확인하세요 (그래도 안 되면 sections.js의 해석 변경)`);
+    }
+  }
   let y = 0;
   let parts = "";
   for (const sec of sections) {
@@ -321,6 +308,12 @@ fs.mkdirSync(outDir, { recursive: true });
 let ok = true;
 for (const [i, memo] of memos.entries()) {
   const safe = String(memo.product || `상품${i + 1}`).replace(/[\\/:*?"<>|]/g, "");
-  ok = (await renderOne(memo, path.join(outDir, `${String(i + 1).padStart(2, "0")}_${safe}.png`), { sample })) && ok;
+  try {
+    ok = (await renderOne(memo, path.join(outDir, `${String(i + 1).padStart(2, "0")}_${safe}.png`), { sample })) && ok;
+  } catch (e) {
+    // 한 건이 틀렸다고 나머지까지 버리지 않습니다 — 배치로 10건씩 돌리는 게 이 도구의 목적입니다.
+    console.error(`  ✗ ${safe}: ${e.message}`);
+    ok = false;
+  }
 }
 if (!ok) process.exitCode = 1;
