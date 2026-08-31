@@ -2999,6 +2999,26 @@
   titleBar.id = "ws-title-bar";
   titleBar.hidden = true;
 
+  /**
+   * 띠를 도구줄 **바로 아래**에 놓습니다.
+   *
+   * ⚠️ 2026-09-01 — 고정 숫자(top:110px)를 쓰다가 두 번 가렸습니다.
+   * 도구줄 높이는 창 너비·줄바꿈·표시되는 아이콘 수에 따라 달라집니다.
+   * 그래서 숫자를 다시 찍지 않고, **도구줄 아래끝을 실제로 재서** 그 밑에 붙입니다.
+   * 도구줄을 못 찾으면 예전 값으로 돌아갑니다.
+   */
+  function placeTitleBar() {
+    let bottom = 0;
+    for (const el of HOST.querySelectorAll("[class*='se-toolbar'], [class*='se-header']")) {
+      const r = el.getBoundingClientRect();
+      // 화면 위쪽에 가로로 넓게 깔린 것만 도구줄로 봅니다.
+      if (r.width < 320 || r.height <= 0 || r.top > 260) continue;
+      if (getComputedStyle(el).visibility === "hidden") continue;
+      if (r.bottom > bottom) bottom = r.bottom;
+    }
+    titleBar.style.top = (bottom > 0 ? Math.round(bottom) + 8 : 110) + "px";
+  }
+
   function updateTitleBar() {
     const t = getTitle();
     // ⚠️ 제목이 비었을 때 네이버가 넣어두는 안내 유령 글자("제목")를 진짜 제목으로
@@ -3006,6 +3026,7 @@
     if (!t || t === "제목") { titleBar.hidden = true; return; }
     if (titleBar.textContent !== t) titleBar.textContent = t;
     titleBar.hidden = false;
+    placeTitleBar();
   }
 
   // ── 시작 ──────────────────────────────────────────────
@@ -3014,6 +3035,9 @@
     if (HOST.getElementById("ws-tools-dock")) return;
     HOST.body.appendChild(counts);
     HOST.body.appendChild(titleBar);
+    // 창을 줄이면 도구줄이 두 줄이 되기도 합니다. 그때 띠도 같이 내려가야 합니다.
+    window.addEventListener("resize", placeTitleBar, { passive: true });
+    window.addEventListener("scroll", placeTitleBar, { passive: true });
     HOST.body.appendChild(bar);
     HOST.body.appendChild(panel);
 
