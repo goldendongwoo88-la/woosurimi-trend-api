@@ -27,6 +27,8 @@ const lineBreak = require("./lineBreak");
 const spellCheck = require("./spellCheck");
 const thumbAuto = require("./thumbAuto");
 const thumbStrategy = require("./thumbStrategy");
+// 홈판 상위 블로그가 쓰는 10가지 썸네일 틀 — 글에 맞는 것을 골라줍니다 (AI 안 씀)
+const thumbPatterns = require("./thumbPatterns");
 const emphasis = require("./emphasis");
 
 // 썸네일용 사진 받기.
@@ -781,6 +783,91 @@ module.exports = function attachSaas(app) {
       } catch (e) {
         res.status(502).json({ error: e.message || "자동으로 고르지 못했습니다." });
       }
+    }
+  );
+
+  /**
+   * ── 썸네일 후보 4개 (패턴 추천) ─────────────────────────
+   *
+   * 홈판 상위 블로그가 실제로 쓰는 10가지 틀 중, 이 글에 맞는 것 4개를 골라 **그려서** 돌려줍니다.
+   * 사장님이 그중 하나를 고르시면 됩니다.
+   *
+   * ⚠️ **AI를 안 씁니다. 값이 0원입니다.** 틀 고르기는 제목 낱말 규칙, 그리기는 픽셀 계산입니다.
+   *    (기존 /api/thumb/auto는 AI가 사진을 고르느라 크레딧이 나갑니다 — 이건 다릅니다)
+   *
+   * ⚠️ page를 넘기면 다른 4개가 나옵니다(새로고침). 음수도 됩니다(되돌아가기).
+   *    끝까지 가면 처음으로 돌아옵니다 — 막다른 길을 만들지 않습니다.
+   *
+   * ⚠️ 만들 수 없는 틀은 애초에 추천하지 않습니다(2분할은 사진 2장, 콜라주는 3장).
+   *    고른 뒤에 "못 만듭니다"라고 말하는 게 제일 나쁩니다.
+   */
+  app.post(
+    "/api/thumb/patterns",
+    thumbAutoUpload.array("photos", 12),
+    async (req, res) => {
+      const b = req.body || {};
+      const title = String(b.title || "");
+      const body = String(b.body || "");
+      const size = String(b.size || "square");
+      const page = Number(b.page || 0) || 0;
+
+      // 사진 받기 — 화면에서는 파일, 확장에서는 네이버 주소
+      let buffers = (req.files || []).map((f) => f.buffer);
+      if (!buffers.length && b.imageUrls) {
+        let urls;
+        try {
+          urls = typeof b.imageUrls === "string" ? JSON.parse(b.imageUrls) : b.imageUrls;
+        } catch {
+          return res.status(400).json({ error: "사진 주소 목록을 읽지 못했습니다." });
+        }
+        if (!Array.isArray(urls) || !urls.length) {
+          return res.status(400).json({ error: "본문에서 사진을 찾지 못했습니다. 사진을 먼저 넣어주세요." });
+        }
+        const good = urls.filter((u) => thumbAuto.isAllowedUrl(u)).slice(0, thumbAuto.MAX_PHOTOS);
+        const got = await Promise.all(good.map((u) => thumbAuto.fetchImage(u).catch(() => null)));
+        buffers = got.filter(Boolean);
+      }
+      if (!buffers.length) return res.status(400).json({ error: "사진을 올려주세요." });
+
+      // 문구는 제목 분석에서 가져옵니다 — 제목을 되풀이하지 않는 궁금증 문구
+      const strategy = thumbStrategy.strategize(title, body);
+      const caption = (strategy.captions || [])[0] || "";
+      const rec = thumbPatterns.pick(title, body, buffers.length, page);
+
+      // 틀마다 색을 다르게 줍니다 — 4개가 한눈에 구분되게
+      const THEMES = ["black", "yellow", "red", "white"];
+      const items = [];
+      for (let i = 0; i < rec.items.length; i++) {
+        const c = rec.items[i];
+        try {
+          const jpeg = await thumbnail.renderPattern(c.pattern, buffers, {
+            text: caption, size, theme: THEMES[i % THEMES.length],
+          });
+          items.push({
+            id: c.pattern.id,
+            label: c.pattern.label,
+            reason: c.reason,
+            why: c.pattern.why,
+            seen: c.pattern.seen,
+            theme: THEMES[i % THEMES.length],
+            image: "data:image/jpeg;base64," + jpeg.toString("base64"),
+          });
+        } catch (e) {
+          // 못 그린 틀은 조용히 빼고 갑니다 — 깨진 칸을 보여주느니 3개를 보여주는 게 낫습니다
+          items.push({ id: c.pattern.id, label: c.pattern.label, reason: c.reason, failed: e.message || "못 그렸습니다" });
+        }
+      }
+
+      res.json({
+        ok: true,
+        items,
+        page: rec.page,
+        pages: rec.pages,
+        total: rec.total,
+        caption,
+        strategy,
+        photoCount: buffers.length,
+      });
     }
   );
 

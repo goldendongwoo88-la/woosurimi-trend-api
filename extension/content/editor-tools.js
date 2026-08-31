@@ -2692,6 +2692,11 @@
         }</button>
       </div>
       <div class="ws-row">
+        <div style="margin-bottom:6px"><b>틀 추천</b> — 홈판 상위가 쓰는 10가지 중 고르기</div>
+        <div style="font-size:11.5px;opacity:.75;margin-bottom:8px">이 글에 맞는 틀 4개를 만들어 보여드립니다. AI를 안 써서 값이 안 나갑니다.</div>
+        <button class="ws-mini" id="ws-th-pat">4개 만들어보기</button>
+      </div>
+      <div class="ws-row">
         <div style="margin-bottom:6px"><b>수동</b> — 직접 고르기</div>
         <div style="font-size:11.5px;opacity:.75;margin-bottom:8px">사진을 직접 올리고 문구도 직접 정합니다.</div>
         <button class="ws-mini" id="ws-th-manual">직접 만들기</button>
@@ -2708,6 +2713,75 @@
     panel.querySelector("#ws-th-manual").addEventListener("click", () => {
       window.open(`${base}/thumb.html${title ? "?title=" + encodeURIComponent(title) : ""}`, "_blank", "noopener");
     });
+
+    /**
+     * ── 틀 추천 (2026-08-31 신설) ─────────────────────────
+     *
+     * 홈판 상위 블로그 62장을 눈으로 보고 뽑은 **10가지 틀** 중, 이 글에 맞는 4개를 그려서
+     * 보여줍니다. 사장님이 하나 고르시면 그걸 내려받습니다.
+     *
+     * ⚠️ **AI를 안 부릅니다. 값이 0원입니다.** 위의 "AI가 골라주기"와는 다른 길입니다.
+     *    저건 AI가 사진을 골라서 크레딧이 나가고, 이건 규칙이 틀을 골라서 안 나갑니다.
+     *
+     * ⚠️ 쪽을 기억합니다. [다른 틀 보기]는 다음 4개, [되돌아가기]는 이전 4개.
+     *    끝까지 가면 처음으로 돌아옵니다 — 막다른 길을 안 만듭니다.
+     */
+    const patBtn = panel.querySelector("#ws-th-pat");
+    if (patBtn) {
+      let page = 0;
+      let lastPages = 1;
+
+      const drawPatterns = async () => {
+        const out = panel.querySelector("#ws-th-out");
+        out.innerHTML = `<p class="ws-note">틀 4개를 그리는 중입니다… (사진 ${urls.length}장)</p>`;
+        let r;
+        try {
+          r = await server("/api/thumb/patterns", { imageUrls: urls, title, body, page });
+        } catch (e) {
+          out.innerHTML = `<div class="ws-row bad">${esc(e.message)}</div>`;
+          return;
+        }
+        lastPages = r.pages || 1;
+        const cards = (r.items || []).map((it, i) => {
+          if (!it.image) {
+            return `<div class="ws-row" style="opacity:.5;font-size:11.5px">
+              ${esc(it.label)} — 이 글에서는 못 만듭니다 (${esc(it.failed || "")})</div>`;
+          }
+          return `
+            <div class="ws-row" style="padding:8px">
+              <img src="${it.image}" alt="${esc(it.label)}"
+                style="width:100%;border-radius:8px;display:block;margin-bottom:6px" />
+              <div style="font-weight:700;font-size:12.5px;margin-bottom:2px">${i + 1}. ${esc(it.label)}</div>
+              <div style="font-size:11.5px;opacity:.78;margin-bottom:2px">${esc(it.reason)}</div>
+              <div style="font-size:11px;opacity:.6;margin-bottom:7px">왜 통하나 — ${esc(it.why || "")}${
+                it.seen ? ` · 실제로 쓰는 곳: ${esc(it.seen)}` : ""
+              }</div>
+              <a class="ws-mini" href="${it.image}" download="홈판썸네일-${esc(it.id)}.jpg"
+                style="display:inline-block;text-decoration:none">이걸로 하기 (내려받기)</a>
+            </div>`;
+        }).join("");
+
+        out.innerHTML = `
+          <div class="ws-row good" style="font-size:11.5px">
+            문구 <b>${esc(r.caption || "(없음)")}</b> — 제목을 되풀이하지 않는 궁금증 문구입니다.
+            <span style="opacity:.7">· ${r.page + 1}/${r.pages}쪽 (틀 ${r.total}개)</span>
+          </div>
+          ${cards}
+          <div class="ws-row" style="display:flex;gap:6px">
+            <button class="ws-mini" id="ws-pat-prev">← 되돌아가기</button>
+            <button class="ws-mini" id="ws-pat-next">다른 틀 보기 →</button>
+          </div>
+          <p class="ws-note">고른 그림을 내려받아 본문 **맨 위**에 넣으시면 그게 홈판에 뜹니다.</p>`;
+
+        const go = (d) => { page += d; drawPatterns(); };
+        const prev = out.querySelector("#ws-pat-prev");
+        const next = out.querySelector("#ws-pat-next");
+        if (prev) prev.addEventListener("click", () => go(-1));
+        if (next) next.addEventListener("click", () => go(1));
+      };
+
+      patBtn.addEventListener("click", () => { page = 0; drawPatterns(); });
+    }
 
     const autoBtn = panel.querySelector("#ws-th-auto");
     if (autoBtn) autoBtn.addEventListener("click", async () => {

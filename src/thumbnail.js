@@ -307,8 +307,18 @@ function bigTextSvg({ w, h, text, theme = "black" }) {
   }
   size = Math.min(...lines.map(fit));
 
-  // 강조할 낱말 — 숫자가 든 낱말 우선
-  const accentWord = words.find((x) => /\d/.test(x)) || words[0];
+  /**
+   * 강조할 낱말 하나.
+   *   ① 숫자가 든 낱말 (6억? 95억 40분 — 숫자가 제일 셉니다)
+   *   ② 없으면 **제일 긴 낱말** — 대개 그게 알맹이입니다
+   *
+   * ⚠️ 처음엔 그냥 첫 낱말을 빨갛게 했는데, "멤버 한 명이 소시오패스였다"에서
+   * '멤버'가 빨개졌습니다. 알맹이는 '소시오패스였다'입니다. 조사·관형어가 앞에
+   * 오는 한국어에서 첫 낱말은 알맹이가 아닌 경우가 많습니다.
+   */
+  const accentWord =
+    words.find((x) => /\d/.test(x)) ||
+    words.reduce((a, b) => (b.length > a.length ? b : a), words[0]);
 
   const lineH = Math.round(size * 1.22);
   // 아래 1/3 자리에 놓습니다. 인물 얼굴(위쪽 38%)을 안 가립니다.
