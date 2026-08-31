@@ -82,6 +82,31 @@
   }
 
   /**
+   * 지금 화면에 열려 있는 항목들의 **실제 이름**을 모읍니다.
+   *
+   * ⚠️ 왜 필요한가: "소제목 항목이 안 보입니다"만 나오면 네이버가 그 항목을 뭐라고
+   * 부르는지 알 수가 없어서 계속 짐작만 하게 됩니다. 실패할 때 진짜 이름을 같이
+   * 보여주면 한 번에 고칠 수 있습니다.
+   */
+  function visibleOptionNames() {
+    const seen = new Set();
+    for (const el of document.querySelectorAll("button, [role='option'], [role='menuitem'], li, a, span")) {
+      const t = (el.innerText || el.textContent || "").trim();
+      if (!t || t.length > 12 || /\n/.test(t)) continue;
+      if (!isVisible(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width >= 260 || r.height >= 70) continue;
+      seen.add(t);
+      if (seen.size >= 40) break;
+    }
+    return [...seen];
+  }
+
+  /** 요소가 뭔지 짧게 적습니다. 엉뚱한 걸 눌렀는지 보려고. */
+  const describe = (el) =>
+    !el ? "(없음)" : `${el.tagName.toLowerCase()}.${String(el.className || "").split(/\s+/).slice(0, 2).join(".")}`;
+
+  /**
    * 마지막 실패 이유. 실패한 자리에서 남기고, 부르는 쪽이 화면에 보여줍니다.
    * (이유 없이 "안 바꿔줬습니다"만 나오면 고칠 자리를 못 찾습니다)
    */
@@ -150,9 +175,13 @@
 
     const option = findStyleOption(label);
     if (!option) {
+      const names = visibleOptionNames();
       // 드롭다운을 열어놨으면 닫아줍니다. 열린 채로 두면 사장님 화면이 어수선합니다.
       realClick(trigger);
-      return fail(`드롭다운은 열었는데 "${label}" 항목이 안 보입니다`);
+      return fail(
+        `드롭다운은 열었는데 "${label}" 항목이 안 보입니다. ` +
+        `[누른 것: ${describe(trigger)}] [지금 보이는 이름들: ${names.join(" / ") || "없음"}]`
+      );
     }
     realClick(option);
     await settle();
@@ -162,7 +191,12 @@
     const after = paragraph.isConnected
       ? paragraph.className + "|" + ((paragraph.closest(".se-component") || {}).className || "")
       : "(교체됨)";
-    if (after === before) return fail("항목까지 눌렀는데 문단이 그대로입니다 (편집기가 무시)");
+    if (after === before) {
+      return fail(
+        `항목까지 눌렀는데 문단이 그대로입니다. ` +
+        `[누른 것: ${describe(trigger)} → ${describe(option)}] [문단: ${before}]`
+      );
+    }
     lastWhy = "";
     return true;
   }
@@ -221,18 +255,35 @@
    * 여기서는 글을 **바꾸는 게 아니라 감싸는** 것이라, 제목 때 겪었던
    * "span이 사라지는" 문제는 안 생깁니다.
    */
+  /**
+   * 편집기에 단축키를 눌러줍니다 (Ctrl+B 같은 것).
+   * execCommand를 무시하는 편집기도 자기 단축키는 듣습니다.
+   */
+  function pressKey(node, key) {
+    const host = (node.closest && node.closest('[contenteditable="true"]')) || node;
+    for (const type of ["keydown", "keypress", "keyup"]) {
+      host.dispatchEvent(new KeyboardEvent(type, {
+        key, code: "Key" + key.toUpperCase(),
+        keyCode: key.toUpperCase().charCodeAt(0), which: key.toUpperCase().charCodeAt(0),
+        ctrlKey: true, bubbles: true, cancelable: true,
+      }));
+    }
+  }
+
   const COMMANDS = {
     bold: {
       // ⚠️ bold와 underline은 **토글**입니다. 이미 굵은 글자에 또 걸면 **풀립니다.**
       // 실제로 이것 때문에 "반환값은 true인데 굵게가 안 들어간" 일이 있었습니다.
       // 그래서 먼저 지금 상태를 보고, 이미 되어 있으면 건드리지 않습니다.
       toggle: true,
+      key: "b",
       state: () => document.queryCommandState("bold"),
       run: () => document.execCommand("bold"),
       landed: (el) => /<b[\s>]|<strong[\s>]|font-weight:\s*(bold|[6-9]00)/i.test(el.innerHTML),
     },
     underline: {
       toggle: true,
+      key: "u",
       state: () => document.queryCommandState("underline"),
       run: () => document.execCommand("underline"),
       landed: (el) => /<u[\s>]|text-decoration[^;"]*underline/i.test(el.innerHTML),
@@ -274,6 +325,13 @@
 
     try { cmd.run(); } catch {}
     await settle(140);
+
+    // ⚠️ 스마트에디터는 자기가 직접 편집을 관리해서 execCommand를 통째로 무시할 수 있습니다.
+    // (오류도 안 내고 조용히 지나갑니다) 그럴 땐 편집기가 직접 듣고 있는 **단축키**로 한 번 더.
+    if (root.innerHTML === beforeHtml && cmd.key) {
+      pressKey(root, cmd.key);
+      await settle(180);
+    }
     window.getSelection().removeAllRanges();
 
     // 1) 글자가 사라지지 않았는가 — 제일 중요합니다.
@@ -283,7 +341,15 @@
     }
     // 2) 서식이 정말 들어갔는가 — 반환값 말고 HTML로 봅니다.
     if (root.innerHTML === beforeHtml) {
-      return { ok: false, why: "편집기가 이 서식을 안 받았습니다 (화면이 그대로입니다)" };
+      // 포커스가 진짜 편집기에 갔는지, 선택이 살아 있었는지 같이 보여줍니다.
+      const host = root.closest && root.closest('[contenteditable="true"]');
+      const focused = document.activeElement;
+      return {
+        ok: false,
+        why: `편집기가 이 서식을 안 받았습니다 (화면이 그대로). ` +
+             `[편집칸: ${host ? describe(host) : "contenteditable을 못 찾음"}] ` +
+             `[지금 포커스: ${describe(focused)}]`,
+      };
     }
     if (cmd.landed && !cmd.landed(root)) {
       return { ok: false, why: "서식이 들어간 흔적이 없습니다" };
