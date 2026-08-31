@@ -63,6 +63,24 @@
    * 글자로 찾으면 항상 안쪽 span이 잡힙니다. 그 span을 눌러봤자 아무 일도 안 납니다.
    * (드롭다운이 안 열려서 "항목이 안 보인다"고 나왔던 겁니다)
    */
+  /**
+   * ⚠️ 2026-09-01 — 사장님 화면이 네이버 홈으로 튕겼습니다. 제 잘못이었습니다.
+   * 버튼을 **문서 전체**에서 찾다 보니 도구줄 밖의 엉뚱한 것(링크·메뉴)을 눌렀습니다.
+   * 이제 도구줄 안이 아니면 아예 후보로 안 봅니다. 그리고 아래 이름들은 절대 안 누릅니다.
+   */
+  const inToolbar = (el) =>
+    !!(el.closest && el.closest("[class*='se-toolbar'], [class*='se-property-toolbar'], [class*='se-text-format-toolbar']"));
+
+  const DANGER = /^(발행|저장|임시저장|취소|삭제|나가기|로그아웃|등록|확인|닫기|이전|다음)$/;
+  const isDanger = (el) => {
+    const t = (el.innerText || el.textContent || "").trim();
+    const a = (el.getAttribute && el.getAttribute("aria-label") || "").trim();
+    return DANGER.test(t) || DANGER.test(a);
+  };
+
+  /** 눌러도 되는 후보인가 — 도구줄 안이고, 위험한 이름이 아니어야 합니다. */
+  const safeTarget = (el) => !!el && inToolbar(el) && !isDanger(el);
+
   function clickable(el, avoid) {
     if (!el) return null;
     // ⚠️ 2026-09-01 실측: 드롭다운 **항목이 드롭다운 단추 안쪽에** 그려집니다.
@@ -90,10 +108,11 @@
         const t = (el.innerText || el.textContent || "").trim();
         const aria = (el.getAttribute && el.getAttribute("aria-label") || "").trim();
         if (t !== name && aria !== name) continue;
-        if (!isVisible(el)) continue;
+        if (!isVisible(el) || !safeTarget(el)) continue;
         const r = el.getBoundingClientRect();
         if (r.width >= 260 || r.height >= 70) continue;
-        return clickable(el);
+        const c = clickable(el);
+        if (safeTarget(c)) return c;
       }
     }
     return null;
@@ -112,11 +131,11 @@
     for (const el of document.querySelectorAll("button, [role='option'], [role='menuitem'], li, a, span")) {
       const t = (el.innerText || el.textContent || "").trim();
       if (t !== label) continue;
-      if (!isVisible(el)) continue;
+      if (!isVisible(el) || !safeTarget(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width >= 260 || r.height >= 70) continue;
       const c = clickable(el, avoid);
-      if (c && c !== avoid) return c;
+      if (c && c !== avoid && safeTarget(c)) return c;
     }
     return null;
   }
@@ -151,7 +170,7 @@
     if (!scope) return null;
     for (const el of scope.querySelectorAll("li, [role='option'], [role='menuitem'], button, a")) {
       if (el === opener || el.contains(opener)) continue;
-      if (!isVisible(el)) continue;
+      if (!isVisible(el) || !safeTarget(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 8 || r.width >= 260 || r.height < 8 || r.height >= 70) continue;
       return el;
@@ -217,6 +236,14 @@
     const before = paragraph.className + "|" + (paragraph.closest(".se-component") || {}).className;
 
     /**
+     * ⚠️ 2026-09-01 — 인용구를 "바꾸기"가 아니라 "삽입"해서 사장님 원고 맨 위에
+     * 빈 인용구 블록이 2개 생겼습니다. 글을 망가뜨리는 건 안 되는 일보다 나쁩니다.
+     * 그래서 작업 전 편집기 전체 글자 수를 재두고, 늘어나면 되돌립니다.
+     */
+    const editor = paragraph.closest('[contenteditable="true"]') || paragraph.closest(".se-content") || document.body;
+    const textBefore = norm(editor.innerText || "");
+
+    /**
      * ⚠️ 2026-08-31: 실패가 전부 "편집기가 안 바꿔줬습니다" 한 문장으로만 나와서
      * 어느 단계에서 막혔는지 알 수가 없었습니다(16군데 전부 실패인데 원인 불명).
      * 이제 단계별로 이유를 남깁니다. 고칠 자리를 찾는 데 이게 없으면 계속 짐작만 하게 됩니다.
@@ -264,6 +291,18 @@
     const after = paragraph.isConnected
       ? paragraph.className + "|" + ((paragraph.closest(".se-component") || {}).className || "")
       : "(교체됨)";
+    // 글이 늘어났으면 = 바꾼 게 아니라 새로 끼워넣은 것입니다. 되돌립니다.
+    const textAfter = norm(editor.innerText || "");
+    if (textAfter.length > textBefore.length) {
+      focusEditable(editor);
+      try { document.execCommand("undo"); } catch {}
+      await settle(200);
+      if (norm(editor.innerText || "").length > textBefore.length) {
+        return fail(`"${label}"을 넣으려다 빈 칸이 새로 생겼습니다. 되돌리기가 안 돼서 멈췄습니다 — 그 빈 칸은 직접 지워주세요`);
+      }
+      return fail(`"${label}"은 문단을 바꾸는 게 아니라 새로 끼워넣어져서, 되돌리고 건너뛰었습니다`);
+    }
+
     if (after === before) {
       return fail(
         `항목까지 눌렀는데 문단이 그대로입니다. ` +
@@ -351,7 +390,7 @@
   function findColorSwatch() {
     const cands = [];
     for (const el of document.querySelectorAll("button, a, li, span, [role='option']")) {
-      if (!isVisible(el)) continue;
+      if (!isVisible(el) || !safeTarget(el)) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 8 || r.width > 40 || r.height < 8 || r.height > 40) continue;
       const bg = getComputedStyle(el).backgroundColor || "";
