@@ -3007,7 +3007,69 @@
    * 그래서 숫자를 다시 찍지 않고, **도구줄 아래끝을 실제로 재서** 그 밑에 붙입니다.
    * 도구줄을 못 찾으면 예전 값으로 돌아갑니다.
    */
-  function placeTitleBar() {
+  /**
+   * ── 사진 편집기가 열려 있는가 ────────────────────────────
+   *
+   * ⚠️ 2026-09-01 사장님 지적: 사진 보정에 들어가면 우리 UI가 그 위를 덮어서
+   * **"적용" 버튼까지 가렸습니다.** 사진을 못 만지면 도구가 아니라 방해물입니다.
+   * 편집기가 열려 있는 동안에는 우리 것을 통째로 숨깁니다.
+   *
+   * 네이버가 클래스 이름을 바꿔도 버티도록 두 가지로 봅니다:
+   *   1) 이름에 편집기·팝업 티가 나는 요소
+   *   2) 이름이 안 맞아도 **화면을 거의 다 덮은 겹판**이 떠 있으면 편집 중으로 봅니다
+   */
+  function photoEditorOpen() {
+    const NAMED = "[class*='image-editor'], [class*='imageEditor'], [class*='photo-editor']," +
+                  "[class*='se-popup'], [class*='se-modal'], [class*='se-layer-editor']";
+    for (const el of HOST.querySelectorAll(NAMED)) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 400 && r.height > 300) return true;
+    }
+    // 이름이 안 걸릴 때를 대비한 그물 — 화면 80% 이상을 덮은 겹판
+    for (const el of HOST.querySelectorAll("body > div, body > section")) {
+      if (el.id && el.id.startsWith("ws-")) continue; // 우리 것은 뺍니다
+      const cs = getComputedStyle(el);
+      if (cs.position !== "fixed" && cs.position !== "absolute") continue;
+      if (cs.display === "none" || cs.visibility === "hidden") continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < innerWidth * 0.8 || r.height < innerHeight * 0.8) continue;
+      /**
+       * ⚠️ 안전장치. 페이지를 감싸는 큰 상자도 화면을 다 덮습니다. 그걸 편집기로
+       * 착각하면 **평소에도 도구가 사라집니다.** 겹판은 본문을 품고 있지 않습니다 —
+       * 본문을 품고 있으면 그건 겹판이 아니라 그냥 페이지 껍데기입니다.
+       */
+      const main = HOST.querySelector(".se-main-container");
+      if (main && el.contains(main)) continue;
+      return true;
+    }
+    return false;
+  }
+
+  /** 사진 편집 중이면 우리 것을 다 숨깁니다. 끝나면 원래대로 돌려놓습니다. */
+  let hiddenForPhoto = false;
+  function togglePhotoMode() {
+    const open = photoEditorOpen();
+    if (open === hiddenForPhoto) return open;
+    hiddenForPhoto = open;
+    for (const el of [counts, titleBar, bar, panel]) {
+      if (!el) continue;
+      if (open) {
+        el.dataset.wsPrevDisplay = el.style.display || "";
+        el.style.display = "none";
+      } else {
+        el.style.display = el.dataset.wsPrevDisplay || "";
+      }
+    }
+    return open;
+  }
+
+  let titleBarTop = 0; // 한 번 정해지면 그대로 씁니다.
+
+  function placeTitleBar(force) {
+    // ⚠️ 스크롤을 내리면 도구줄이 위로 밀려 올라갑니다. 그때 다시 재면 띠가 따라
+    // 올라가버립니다. 그래서 **맨 위에 있을 때 잰 값**만 자리로 씁니다.
+    if (titleBarTop && !force) { titleBar.style.top = titleBarTop + "px"; return; }
+
     let bottom = 0;
     for (const el of HOST.querySelectorAll("[class*='se-toolbar'], [class*='se-header']")) {
       const r = el.getBoundingClientRect();
@@ -3016,10 +3078,14 @@
       if (getComputedStyle(el).visibility === "hidden") continue;
       if (r.bottom > bottom) bottom = r.bottom;
     }
-    titleBar.style.top = (bottom > 0 ? Math.round(bottom) + 8 : 110) + "px";
+    // 스크롤이 내려간 상태에서 잰 값은 못 믿습니다 — 그럴 땐 자리를 확정하지 않습니다.
+    if (bottom > 0 && window.scrollY < 40) titleBarTop = Math.round(bottom) + 8;
+    titleBar.style.top = (titleBarTop || 110) + "px";
   }
 
   function updateTitleBar() {
+    // 사진 편집 중이면 아무것도 띄우지 않습니다.
+    if (togglePhotoMode()) return;
     const t = getTitle();
     // ⚠️ 제목이 비었을 때 네이버가 넣어두는 안내 유령 글자("제목")를 진짜 제목으로
     // 착각해서, 빈 문서에도 "제목"이라고 적힌 띠가 떠 있었습니다(2026-08-31).
@@ -3035,9 +3101,12 @@
     if (HOST.getElementById("ws-tools-dock")) return;
     HOST.body.appendChild(counts);
     HOST.body.appendChild(titleBar);
-    // 창을 줄이면 도구줄이 두 줄이 되기도 합니다. 그때 띠도 같이 내려가야 합니다.
-    window.addEventListener("resize", placeTitleBar, { passive: true });
-    window.addEventListener("scroll", placeTitleBar, { passive: true });
+    /**
+     * ⚠️ 창 크기가 바뀌면 도구줄이 두 줄이 되기도 해서 그때만 다시 잽니다.
+     * **스크롤에는 반응하지 않습니다** — 스크롤마다 다시 재면 도구줄이 올라가는 만큼
+     * 띠가 따라 움직여서 계속 덜그럭거립니다. 한 번 잡은 자리에 붙박이로 둡니다.
+     */
+    window.addEventListener("resize", () => placeTitleBar(true), { passive: true });
     HOST.body.appendChild(bar);
     HOST.body.appendChild(panel);
 
@@ -3079,6 +3148,16 @@
      * 제목 칸이 늦게 생기는 경우도 있어서, 가볍게 주기로 확인하는 편이 맞습니다.
      */
     setInterval(updateTitleBar, 800);
+    /**
+     * 0.8초 주기만으로는 사진 편집기가 뜬 뒤에도 잠깐 우리 것이 보입니다.
+     * 사진을 누르는 순간·닫는 순간에 바로 반응하게 클릭에도 붙입니다.
+     * (조금 뒤에 한 번 더 봅니다 — 편집기가 열리는 데 시간이 걸립니다)
+     */
+    document.addEventListener("click", () => {
+      togglePhotoMode();
+      setTimeout(updateTitleBar, 250);
+      setTimeout(updateTitleBar, 700);
+    }, true);
   }
 
   /**
