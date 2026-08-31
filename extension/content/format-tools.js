@@ -40,15 +40,30 @@
    * ⚠️ 클래스 이름으로 찾지 않습니다. 네이버가 자주 바꿉니다.
    * **보이는 글자**로 찾습니다 — "본문", "소제목", "인용구"는 안 바뀝니다.
    */
+  /**
+   * 눈에 보이는가.
+   *
+   * ⚠️ 예전엔 offsetParent !== null 로 봤습니다. 이게 함정이었습니다 —
+   * 조상 중에 position:fixed 가 있으면 **화면에 멀쩡히 보여도 offsetParent가 null**입니다.
+   * 네이버 도구줄은 스크롤을 따라다니느라 fixed로 붙어 있어서, 도구줄 단추가
+   * 통째로 "안 보이는 것"으로 걸러졌을 수 있습니다. 이제 실제 크기·스타일로 봅니다.
+   */
+  function isVisible(el) {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const s = getComputedStyle(el);
+    return s.visibility !== "hidden" && s.display !== "none" && s.opacity !== "0";
+  }
+
   function findStyleDropdown() {
     const wanted = ["본문", "소제목", "인용구"];
     // 도구줄 안에서 저 셋 중 하나를 글자로 가진 작은 버튼을 찾습니다.
-    for (const el of document.querySelectorAll("button, [role='button'], .se-toolbar-option-text-button, a")) {
+    for (const el of document.querySelectorAll("button, [role='button'], .se-toolbar-option-text-button, a, span")) {
       const t = (el.innerText || el.textContent || "").trim();
-      if (wanted.includes(t) && el.offsetParent !== null) {
+      if (wanted.includes(t) && isVisible(el)) {
         // 너무 큰 요소면 드롭다운이 아니라 감싸는 상자입니다.
         const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.width < 220 && r.height < 60) return el;
+        if (r.width < 260 && r.height < 70) return el;
       }
     }
     return null;
@@ -59,9 +74,9 @@
     for (const el of document.querySelectorAll("button, [role='option'], [role='menuitem'], li, a, span")) {
       const t = (el.innerText || el.textContent || "").trim();
       if (t !== label) continue;
-      if (el.offsetParent === null) continue;
+      if (!isVisible(el)) continue;
       const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.width < 220 && r.height < 60) return el;
+      if (r.width < 260 && r.height < 70) return el;
     }
     return null;
   }
@@ -91,11 +106,16 @@
   async function setParagraphStyle(paragraph, label) {
     const before = paragraph.className + "|" + (paragraph.closest(".se-component") || {}).className;
 
-    if (!putCaret(paragraph)) return false;
+    /**
+     * ⚠️ 2026-08-31: 실패가 전부 "편집기가 안 바꿔줬습니다" 한 문장으로만 나와서
+     * 어느 단계에서 막혔는지 알 수가 없었습니다(16군데 전부 실패인데 원인 불명).
+     * 이제 단계별로 이유를 남깁니다. 고칠 자리를 찾는 데 이게 없으면 계속 짐작만 하게 됩니다.
+     */
+    if (!putCaret(paragraph)) return fail("커서를 그 문단에 못 놓았습니다");
     await settle(120);
 
     const trigger = findStyleDropdown();
-    if (!trigger) return false;
+    if (!trigger) return fail("도구줄에서 문단 스타일 단추(본문/소제목/인용구)를 못 찾았습니다");
 
     realClick(trigger);
     await settle(180);
@@ -104,7 +124,7 @@
     if (!option) {
       // 드롭다운을 열어놨으면 닫아줍니다. 열린 채로 두면 사장님 화면이 어수선합니다.
       realClick(trigger);
-      return false;
+      return fail(`드롭다운은 열었는데 "${label}" 항목이 안 보입니다`);
     }
     realClick(option);
     await settle();
@@ -114,7 +134,9 @@
     const after = paragraph.isConnected
       ? paragraph.className + "|" + ((paragraph.closest(".se-component") || {}).className || "")
       : "(교체됨)";
-    return after !== before;
+    if (after === before) return fail("항목까지 눌렀는데 문단이 그대로입니다 (편집기가 무시)");
+    lastWhy = "";
+    return true;
   }
 
   /**
