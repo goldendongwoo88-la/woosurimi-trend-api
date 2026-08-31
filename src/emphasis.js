@@ -69,21 +69,58 @@ const MEASURED = {
  * 그래서 0은 아니되 아주 적게 둡니다.
  */
 /**
- * ⚠️ 2026-09-01 사장님 지시로 올렸습니다.
- * 직접 강조를 넣어 발행하신 글(디올 소바쥬)을 재보니 굵게 152자·글자색 43자
- * (파랑 #0075C8 · 초록 · 핑크)였고, **"이것보다 더 많이, 인용구 포함"**을 원하십니다.
+ * ── 강조 밀도는 **갈래별 실측**에서 가져옵니다 (2026-09-01) ──────────────
  *
- * 위 MEASURED(실측)와는 어긋납니다 — 잘 되는 블로그는 글자색을 거의 안 쓰고,
- * 색을 많이 쓰는 쪽이 오히려 성과가 낮았습니다. 그 데이터는 위에 그대로 남겨둡니다.
- * 다만 사장님 블로그의 톤은 사장님이 정하는 것이고, 실제 성과는
- * gw_analytics 장부에 쌓아 우리 계정 기준으로 다시 판단하면 됩니다.
+ * ⚠️ 처음엔 여기에 고정 숫자를 적어놨습니다. 그건 짐작이었습니다.
+ * 사장님 지시: "홈판 상위노출 블로거와 8월 메이트 블로거를 분석해서 그것과 비슷하게."
+ * 그 실측은 이미 있습니다 — `homefeedRules.MATE` (2026-08-31, 본문 해부 25곳·130편).
+ * 숫자를 여기 베껴 적지 않고 **그 한 곳에서 끌어옵니다.** 거기를 고치면 여기도 따라옵니다.
  *
- *   굵게 5 → 9 · 글자색 1 → 3 · 밑줄 0.6 → 1.5 · 배경색 0.6 → 1
+ *   갈래              강조계/1000  굵게   글자색
+ *   홈판(연예·가십)      17.3      10.9    3.5
+ *   패션 메이트          18.0       7.4    1.6
+ *   뷰티 메이트           2.8       2.4    0
+ *   사장님(현재)         66.6      13.6   53.5   ← 색이 홈판의 15배
+ *
+ * 사장님이 노리는 건 **홈판**이므로 기본값을 홈판으로 둡니다.
+ * (뷰티 메이트 중앙값 2.8은 사장님이 원하는 "더 촘촘하게"와 정반대입니다)
  */
-const PER_1000 = { bold: 9, underline: 1.5, highlight: 1, color: 3 };
+const homefeed = require("./homefeedRules");
 
-/** 아무리 긴 글이어도 이 이상은 안 합니다. */
-const HARD_CAP = { bold: 34, underline: 6, highlight: 4, color: 12 };
+const DEFAULT_GENRE = "홈판(연예·가십)";
+
+/**
+ * 갈래 하나의 실측을 1,000자당 목표로 바꿉니다.
+ * 밑줄·배경색은 따로 안 쟀으므로 (강조계 − 굵게 − 글자색)을 둘로 나눠 씁니다.
+ */
+function per1000For(genre) {
+  const g = (homefeed.MATE && homefeed.MATE.groups && homefeed.MATE.groups[genre]) || null;
+  if (!g) return { bold: 9, underline: 1.5, highlight: 1, color: 3 };
+  const bold = Number(g.boldPer1k) || 0;
+  const color = Number(g.colorPer1k) || 0;
+  const rest = Math.max(0, (Number(g.emphasisPer1k) || 0) - bold - color);
+  return {
+    bold,
+    color,
+    // 나머지를 밑줄에 더 싣습니다. 배경색은 제일 세게 튀어서 적게 씁니다.
+    underline: Math.round(rest * 0.65 * 10) / 10,
+    highlight: Math.round(rest * 0.35 * 10) / 10,
+  };
+}
+
+const PER_1000 = per1000For(DEFAULT_GENRE);
+
+/**
+ * 아무리 긴 글이어도 이 이상은 안 합니다.
+ * 실측 기준 1,000자당 값의 약 3배 — 3,000자 글까지는 비율대로 가고 그 위로는 잠급니다.
+ */
+const capOf = (p) => ({
+  bold: Math.ceil(p.bold * 3),
+  underline: Math.max(2, Math.ceil(p.underline * 3)),
+  highlight: Math.max(2, Math.ceil(p.highlight * 3)),
+  color: Math.max(2, Math.ceil(p.color * 3)),
+});
+const HARD_CAP = capOf(PER_1000);
 
 const KINDS = {
   bold: { label: "굵게", why: "제일 눈에 띄고 부담이 없습니다. 핵심어에 씁니다." },
@@ -160,16 +197,28 @@ const SYSTEM = `당신은 네이버 블로그 글에서 **강조할 자리**를 
  * 강조할 자리를 고릅니다.
  * @returns {{ok, marks, targets, stats, dropped, warnings}}
  */
-async function plan({ title = "", body = "" } = {}) {
+async function plan({ title = "", body = "", genre = "", skillId = "" } = {}) {
   const text = String(body || "");
   const chars = text.replace(/[\s​]/g, "").length;
   if (chars < 150) return { ok: false, why: "본문이 짧습니다. 150자 이상 쓰신 뒤에 해주세요." };
   if (!isConfigured()) return { ok: false, why: "서버에 ANTHROPIC_API_KEY가 없어서 이 기능을 못 씁니다." };
 
+  /**
+   * 갈래를 알면 그 갈래 실측을 씁니다. 모르면 홈판 기준입니다.
+   * ⚠️ 뷰티 메이트 중앙값은 굵게 2.4로 아주 낮습니다. 사장님이 홈판을 노리시므로
+   * 갈래를 못 알아냈을 때 그쪽으로 떨어지지 않게 기본을 홈판으로 둡니다.
+   */
+  const useGenre =
+    (genre && homefeed.MATE.groups[genre] && genre) ||
+    (skillId && homefeed.mateGenreOf(skillId)) ||
+    DEFAULT_GENRE;
+  const per1000 = per1000For(useGenre);
+  const cap = capOf(per1000);
+
   const k = chars / 1000;
   const targets = {};
-  for (const key of Object.keys(PER_1000)) {
-    targets[key] = Math.max(1, Math.min(HARD_CAP[key], Math.round(PER_1000[key] * k)));
+  for (const key of Object.keys(per1000)) {
+    targets[key] = Math.max(1, Math.min(cap[key], Math.round(per1000[key] * k)));
   }
 
   const prompt =
@@ -206,7 +255,11 @@ async function plan({ title = "", body = "" } = {}) {
     return { ok: false, why: `강조할 자리를 못 골랐습니다: ${e.message}` };
   }
 
-  return validate(parsed, { text, targets, chars });
+  const out = validate(parsed, { text, targets, chars });
+  // 어느 갈래 실측을 쓴 건지 남깁니다 — 화면에서 근거를 보여줄 수 있게.
+  out.genre = useGenre;
+  out.per1000 = per1000;
+  return out;
 }
 
 /**
@@ -316,4 +369,8 @@ function validate(parsed, { text, targets, chars }) {
   };
 }
 
-module.exports = { plan, validate, KINDS, MEASURED, PER_1000, SUBHEAD_SIZE, asSubhead, SUBHEAD_MARKS };
+module.exports = {
+  plan, validate, KINDS, MEASURED, PER_1000, SUBHEAD_SIZE, asSubhead, SUBHEAD_MARKS,
+  // 갈래별 목표를 밖에서도 볼 수 있게 — 화면에 근거를 보여주거나 점검할 때 씁니다.
+  per1000For, DEFAULT_GENRE,
+};
