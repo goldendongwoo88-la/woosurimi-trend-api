@@ -21,6 +21,8 @@
 const sharp = require("sharp");
 const { callClaude, isConfigured, extractJson } = require("./claudeClient");
 const thumbnail = require("./thumbnail");
+// 제목만 보고 "어떤 구성이 눌릴지"를 정하는 규칙. AI를 안 쓰니 0원입니다.
+const thumbStrategy = require("./thumbStrategy");
 
 /** AI에 한 번에 보낼 사진 수. 많이 보내면 느리고 비쌉니다. */
 const MAX_PHOTOS = 12;
@@ -188,6 +190,9 @@ const SYSTEM = `당신은 네이버 블로그 홈피드 썸네일을 고르는 �
 - 반드시 제목이나 본문에 **실제로 있는 말**에서 가져오세요.
 - 본문에 없는 내용을 약속하는 문구는 절대 안 됩니다. 들어왔다가 바로 나갑니다.
 - 지어내지 마세요. 없으면 빈 문자열로 두세요.
+- **제목을 그대로 옮겨 적지 마세요.** 제목은 이미 썸네일 옆에 붙어 있습니다.
+  같은 말을 두 번 읽게 하면 궁금증이 사라집니다. 제목이 "결론"을 말했다면 문구는
+  "그래서 뭔데?"가 되게, 제목의 낱말을 쓰되 **다른 각도**로 자르세요.
 
 반드시 JSON만 답하세요. 설명은 JSON 안에 넣으세요.`;
 
@@ -195,7 +200,7 @@ const SYSTEM = `당신은 네이버 블로그 홈피드 썸네일을 고르는 �
  * AI에게 물어봅니다.
  * @returns {object} 아래 shape() 참고
  */
-async function choose({ photos, title = "", body = "", mode }) {
+async function choose({ photos, title = "", body = "", mode, strategy = null }) {
   if (!isConfigured()) throw new Error("서버에 ANTHROPIC_API_KEY가 없어서 자동 고르기를 못 씁니다.");
   if (!photos.length) throw new Error("고를 사진이 없습니다.");
 
@@ -229,7 +234,15 @@ ${forced ? `
 사장님이 이미 "${forced === "pair" ? "두 장" : "한 장"}"으로 정하셨습니다. 그대로 하세요.
 ` : ""}
 ${hint ? `참고: ${hint}
-` : ""}
+` : ""}${strategy ? `
+**제목을 규칙으로 분석한 결과입니다** (AI가 아니라 코드가 낸 것이라 틀릴 수 있습니다.
+사진을 보고 아니라고 판단하면 따르지 않아도 됩니다 — 대신 why에 이유를 적으세요):
+- 어울리는 구성: ${strategy.composition}${strategy.mosaicWho ? ` (가릴 대상: ${strategy.mosaicWho})` : ""}
+- 근거: ${strategy.why}
+${strategy.celebs.length ? `- 제목에서 찾은 이름: ${strategy.celebs.join(", ")}
+` : ""}${strategy.captions.length ? `- 제목과 겹치지 않는 문구 후보: ${strategy.captions.join(" / ")}
+  (이 중에 쓸 만한 게 있으면 text에 쓰세요. 더 나은 게 있으면 당신 것을 쓰세요.)
+` : ""}` : ""}
 **두 장을 붙이면 좋은 경우** (제목이 전후 비교가 아니어도 됩니다):
 - 같은 사람/대상인데 눈에 띄게 달라 보이는 두 장 (화장 전후, 착용 전후, 시간차)
 - 나란히 놓으면 "무슨 차이지?"라는 궁금증이 생기는 두 장
@@ -292,7 +305,7 @@ ${ask}`,
  * 본문에 없는 문구를 지어내기도 합니다. 사진 번호가 틀리면 엉뚱한 사진이
  * 썸네일이 되고, 문구가 지어낸 것이면 낚시가 됩니다.
  */
-function validate(plan, { count, title, body }) {
+function validate(plan, { count, title, body, strategy = null }) {
   const warn = [];
   const inRange = (n) => Number.isInteger(n) && n >= 0 && n < count;
 
@@ -323,8 +336,48 @@ function validate(plan, { count, title, body }) {
   const invented = [];
   let text = String(plan.text || "").trim();
   let sub = String(plan.sub || "").trim();
+  // 이 문구가 AI가 쓴 것인지, 규칙(thumbStrategy)이 만든 것인지. 아래 지어내기 검사를
+  // 어디에 걸지 정하는 데 씁니다.
+  let textFrom = text ? "ai" : "none";
 
-  for (const [label, val] of [["text", text], ["sub", sub]]) {
+  // 규칙이 만들어 둔, 제목과 겹치지 않는 문구 후보 (없으면 빈 배열)
+  const ruleCaptions = ((strategy && strategy.captions) || []).filter(
+    (c) => !thumbStrategy.echoesTitle(c, title)
+  );
+
+  /**
+   * ⚠️ 사장님 지적(2026-08-28): "썸네일 문구가 제목과 똑같아서 궁금증이 안 생긴다."
+   * AI에게 하지 말라고 일러도 제목을 그대로 옮겨 적는 일이 있습니다. 말로만 막지 않고
+   * **여기서 실제로 바꿉니다.** 바꿀 후보가 없으면 최소한 알려는 드립니다.
+   */
+  if (text && thumbStrategy.echoesTitle(text, title)) {
+    if (ruleCaptions.length) {
+      warn.push(`AI 문구가 제목과 거의 같아서("${text}") 궁금증 문구로 바꿨습니다: "${ruleCaptions[0]}"`);
+      text = ruleCaptions[0];
+      textFrom = "rule";
+    } else {
+      warn.push(`문구("${text}")가 제목과 거의 같습니다. 제목을 두 번 읽게 되니 바꾸시는 게 좋습니다.`);
+    }
+  }
+
+  if (!text) {
+    // 규칙 문구 → 제목에서 자른 문구 순서로 물러섭니다.
+    text = (ruleCaptions[0] || thumbnail.suggestText(title)[0] || "").trim();
+    textFrom = ruleCaptions[0] ? "rule" : "title";
+    warn.push(
+      textFrom === "rule"
+        ? "AI가 쓸 만한 문구를 못 찾아서 제목 분석으로 만든 궁금증 문구를 넣었습니다."
+        : "AI가 쓸 만한 문구를 못 찾아서 제목에서 뽑았습니다."
+    );
+  }
+
+  /**
+   * ⚠️ 지어내기 검사는 **AI가 쓴 문구에만** 겁니다.
+   * 규칙 문구는 제목 낱말에서 코드가 만든 것이라 지어낸 말이 섞일 수 없고,
+   * 미끼 문구("이 쿠션 뭐야?")는 제목에 그 낱말이 실제로 있을 때만 나옵니다.
+   * 여기에 같은 잣대를 대면 멀쩡한 문구가 전부 경고를 답니다.
+   */
+  for (const val of [textFrom === "ai" ? text : "", sub]) {
     for (const w of clean(val).split(/\s+/).filter((x) => x.length >= 2)) {
       if (!source.includes(w)) invented.push(w);
     }
@@ -338,10 +391,6 @@ function validate(plan, { count, title, body }) {
 
   const vis = clean(text).replace(/\s/g, "").length;
   if (vis > 10) warn.push(`큰 글씨가 ${vis}자입니다. 8자 안팎이 모바일에서 제일 잘 읽힙니다.`);
-  if (!text) {
-    warn.push("AI가 쓸 만한 문구를 못 찾아서 제목에서 뽑았습니다.");
-    text = (thumbnail.suggestText(title)[0] || "").trim();
-  }
 
   return {
     mode,
@@ -358,8 +407,11 @@ function validate(plan, { count, title, body }) {
     photos: (plan.photos || []).filter((p) => inRange(p.i)),
     invented: [...new Set(invented)],
     warn,
-    // 제목에서 뽑은 대안 — AI 문구가 마음에 안 들 때 바로 바꿔 쓰시라고.
-    alternatives: thumbnail.suggestText(title),
+    // 문구가 어디서 왔는지 — ai(AI가 씀) / rule(제목 분석 규칙) / title(제목에서 자름)
+    textFrom,
+    // 바꿔 쓰실 대안 — **궁금증 문구를 앞에** 두고, 제목에서 자른 것을 뒤에 둡니다.
+    // (제목에서 자른 건 결국 제목을 다시 읽는 것이라 후순위입니다.)
+    alternatives: [...new Set([...ruleCaptions, ...thumbnail.suggestText(title)])].slice(0, 6),
   };
 }
 
@@ -371,11 +423,14 @@ function validate(plan, { count, title, body }) {
  *   force: "single" | "beforeAfter" — 사장님이 직접 정하고 싶을 때
  * @returns {{plan:object, jpeg:Buffer, ba:object}}
  */
-async function run(buffers, { title = "", body = "", size = "square", theme = "black", force } = {}) {
+async function run(buffers, { title = "", body = "", size = "square", theme = "black", force, mosaic } = {}) {
   const list = buffers.slice(0, MAX_PHOTOS);
   const { photos, dropped } = await prepare(list);
   if (!photos.length) throw new Error("읽을 수 있는 사진이 없습니다. JPG나 PNG로 올려주세요.");
 
+  // 제목만 보고 구성·문구를 먼저 정합니다. AI를 부르기 전이라 값이 0원이고,
+  // 이 결과를 AI에게 참고로 넘겨서 "제목 되풀이"를 처음부터 막습니다.
+  const strategy = thumbStrategy.strategize(title, body);
   const ba = looksBeforeAfter(title, body);
   // ⚠️ 제목은 이제 **참고**입니다. 정하는 건 AI가 사진을 보고 합니다.
   // force가 오면 사장님이 직접 고르신 것이라 그대로 따릅니다.
@@ -383,8 +438,37 @@ async function run(buffers, { title = "", body = "", size = "square", theme = "b
     : force === "beforeAfter" ? "forcePair"
     : (ba.yes ? "beforeAfter" : "single");
 
-  const rawPlan = await choose({ photos, title, body, mode });
-  const plan = validate(rawPlan, { count: list.length, title, body });
+  const rawPlan = await choose({ photos, title, body, mode, strategy });
+  const plan = validate(rawPlan, { count: list.length, title, body, strategy });
+  plan.strategy = strategy;
+
+  /**
+   * 모자이크를 걸지 정합니다.
+   *
+   * ⚠️ 규칙이 "가려서 궁금하게"라고 해도, **인물 사진일 때만** 겁니다.
+   * 얼굴 인식을 안 하고 위쪽 중앙을 가리는 방식이라, 제품이나 풍경 사진에 걸면
+   * 그냥 사진이 망가집니다. AI가 매긴 kind(인물-얼굴/인물-전신)를 근거로 씁니다.
+   * mosaic를 직접 넘기시면(true/false) 그게 우선입니다.
+   */
+  const kindOf = (i) => {
+    const p = (plan.photos || []).find((x) => x.i === i);
+    return String((p && p.kind) || "");
+  };
+  const mosaicTarget = plan.mode === "beforeAfter" ? plan.after : plan.pick;
+  const isPerson = kindOf(mosaicTarget).includes("인물");
+  const wantMosaic = mosaic === true || mosaic === false
+    ? mosaic
+    : thumbStrategy.wantsMosaic(strategy.composition) && isPerson;
+
+  plan.mosaic = {
+    on: wantMosaic,
+    who: strategy.mosaicWho,
+    why: wantMosaic
+      ? `${strategy.why} (얼굴 자리를 네모칸으로 가립니다 — 얼굴 인식이 아니라 위쪽 중앙입니다)`
+      : thumbStrategy.wantsMosaic(strategy.composition) && !isPerson && mosaic !== false
+        ? `가려서 궁금하게 만드는 구성이지만, 고른 사진이 인물이 아니라(${kindOf(mosaicTarget) || "판단 불가"}) 걸지 않았습니다.`
+        : "이 구성에는 모자이크를 쓰지 않습니다.",
+  };
 
   // ⚠️ AI에 보낸 건 400px로 줄인 사진입니다. 실제 썸네일은 **원본**으로 만듭니다.
   // 줄인 걸로 만들면 홈피드에서 뭉개져 보입니다.
@@ -401,6 +485,8 @@ async function run(buffers, { title = "", body = "", size = "square", theme = "b
       labels: (plan.leftLabel || plan.rightLabel)
         ? { left: plan.leftLabel || " ", right: plan.rightLabel || " " }
         : null,
+      // 두 명 중 한 명만 가릴 때 — 뒤에 나온 사람(대개 화제의 인물)인 오른쪽을 가립니다.
+      mosaicSide: plan.mosaic.on ? "right" : null,
     });
   } else {
     jpeg = await thumbnail.single({
@@ -409,6 +495,7 @@ async function run(buffers, { title = "", body = "", size = "square", theme = "b
       sub: plan.sub,
       size,
       theme,
+      mosaic: plan.mosaic.on,
     });
   }
 
@@ -426,7 +513,7 @@ async function run(buffers, { title = "", body = "", size = "square", theme = "b
       ? "제목은 전후 비교가 아닌데, 사진을 보니 두 장을 붙이는 게 낫다고 판단했습니다."
       : "제목은 전후 비교인데, 사진으로는 차이가 안 보여서 한 장으로 만들었습니다.";
   }
-  return { plan, jpeg, ba, considered: list.length };
+  return { plan, jpeg, ba, strategy, considered: list.length };
 }
 
 module.exports = { run, looksBeforeAfter, prepare, choose, validate, fetchImage, isAllowedUrl, MAX_PHOTOS };

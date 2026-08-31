@@ -26,6 +26,7 @@ const thumbnail = require("./thumbnail");
 const lineBreak = require("./lineBreak");
 const spellCheck = require("./spellCheck");
 const thumbAuto = require("./thumbAuto");
+const thumbStrategy = require("./thumbStrategy");
 const emphasis = require("./emphasis");
 
 // 썸네일용 사진 받기.
@@ -597,9 +598,28 @@ module.exports = function attachSaas(app) {
   });
 
   // 제목에서 썸네일 문구 뽑기 — AI를 안 쓰니 사용량도 안 셉니다.
+  //
+  // ⚠️ 예전엔 제목을 잘라서만 줬습니다. 그러면 썸네일에 제목이 또 적힙니다(사장님 지적).
+  // 이제 **궁금증 문구를 앞에** 놓고, 제목에서 자른 것은 뒤에 둡니다.
   app.post("/api/thumb/suggest", (req, res) => {
-    const title = String((req.body || {}).title || "");
-    res.json({ ok: true, suggestions: thumbnail.suggestText(title) });
+    const b = req.body || {};
+    const title = String(b.title || "");
+    const s = thumbStrategy.strategize(title, String(b.body || ""));
+    const curiosity = s.captions.filter((c) => !thumbStrategy.echoesTitle(c, title));
+    res.json({
+      ok: true,
+      suggestions: [...new Set([...curiosity, ...thumbnail.suggestText(title)])].slice(0, 6),
+      curiosity,
+      fromTitle: thumbnail.suggestText(title),
+    });
+  });
+
+  // 제목만 보고 "어떤 썸네일 구성이 눌릴지" — AI를 안 쓰니 공짜입니다.
+  // 확장·화면이 사진을 올리기 전에 미리 보여드리는 용도입니다.
+  app.post("/api/thumb/strategy", (req, res) => {
+    const b = req.body || {};
+    const s = thumbStrategy.strategize(String(b.title || ""), String(b.body || ""));
+    res.json({ ok: true, ...s, mosaic: thumbStrategy.wantsMosaic(s.composition) });
   });
 
   // 실제로 만들기. 사진 1장이면 한 장짜리, 2장이면 비포/애프터.
@@ -624,6 +644,8 @@ module.exports = function attachSaas(app) {
       const sub = String(b.sub || "").trim();
       const size = String(b.size || "square");
       const theme = String(b.theme || "black");
+      // 얼굴 가리기 — 직접 만들 때도 켤 수 있게. 두 장이면 오른쪽(화제의 인물 자리)을 가립니다.
+      const mosaic = b.mosaic === "on" || b.mosaic === "true" || b.mosaic === true;
 
       // 길다고 막지는 않습니다. 줄여서라도 넣고, 대신 알려드립니다.
       const warn = [];
@@ -647,6 +669,7 @@ module.exports = function attachSaas(app) {
               b.labels === "off"
                 ? null
                 : { left: String(b.leftLabel || "BEFORE"), right: String(b.rightLabel || "AFTER") },
+            mosaicSide: mosaic ? (b.mosaicSide === "left" ? "left" : "right") : null,
           });
         } else {
           mode = "single";
@@ -657,6 +680,7 @@ module.exports = function attachSaas(app) {
             size,
             theme,
             position: b.position === "top" ? "top" : "bottom",
+            mosaic,
           });
         }
         // 사진이 실제로 나온 뒤에 셉니다.
@@ -701,6 +725,10 @@ module.exports = function attachSaas(app) {
       const size = String(b.size || "square");
       const theme = String(b.theme || "black");
       const force = b.force === "single" || b.force === "beforeAfter" ? b.force : null;
+      // 모자이크는 기본이 "규칙에 맡김"입니다. 사장님이 켜고 끄실 때만 넘어옵니다.
+      const mosaic = b.mosaic === "on" || b.mosaic === "true" || b.mosaic === true ? true
+        : b.mosaic === "off" || b.mosaic === "false" || b.mosaic === false ? false
+        : undefined;
 
       let buffers = (req.files || []).map((f) => f.buffer);
 
@@ -737,13 +765,14 @@ module.exports = function attachSaas(app) {
       }
 
       try {
-        const r = await thumbAuto.run(buffers, { title, body, size, theme, force });
+        const r = await thumbAuto.run(buffers, { title, body, size, theme, force, mosaic });
         // 여기까지 왔으면 썸네일이 실제로 나왔습니다. 이제 깎습니다.
         usage.chargeCredits(req, "thumbAuto");
         res.json({
           ok: true,
           plan: r.plan,
           ba: r.ba,
+          strategy: r.strategy,
           considered: r.considered,
           // 사진은 본문에 JSON으로 실어야 해서 base64로 보냅니다.
           image: "data:image/jpeg;base64," + r.jpeg.toString("base64"),
@@ -899,6 +928,10 @@ module.exports = function attachSaas(app) {
       byTopic: (r.BODY && r.BODY.byTopic) || null,
       universal: (r.BODY && r.BODY.universal) || null,
       dontBother: (r.BODY && r.BODY.dontBother) || null,
+      // 2026-08-31 메이트·홈판 실측 — 갈래별 본문 수치·제목 문법·벌어진 곳
+      mate: r.MATE || null,
+      // 썸네일 실측 — 홈판은 썸네일이 제목보다 먼저 보이는 자리입니다
+      thumb: r.THUMB || null,
     });
   });
 

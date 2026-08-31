@@ -22,6 +22,9 @@
     font-size:13.5px; font-family:inherit; color:var(--ink);
   }
   input:focus { outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(79,70,229,.12); }
+  .toggle { display:flex; align-items:center; margin:16px 0; }
+  .toggle input[type="checkbox"] { width:44px; height:24px; margin:0; cursor:pointer; accent-color:var(--brand); }
+  .toggle-label { margin-left:12px; font-weight:600; cursor:pointer; }
   .go {
     margin-top:20px; padding:11px 22px; border:0; border-radius:8px; cursor:pointer;
     background:var(--brand); color:#fff; font-weight:700; font-size:13.5px; font-family:inherit;
@@ -72,6 +75,12 @@
     <label for="server">서버 주소</label>
     <input id="server" placeholder="https://woosurimi-trend-api.onrender.com" autocomplete="off">
     <p class="hint">바꿀 일 없습니다. 비워두면 기본값이 들어갑니다.</p>
+
+    <div class="toggle">
+      <input type="checkbox" id="useLocal">
+      <label for="useLocal" class="toggle-label">🖥️ 개발 모드 (로컬 블로그 사용)</label>
+    </div>
+    <p class="hint">ON이면 http://localhost:8485 (로컬 블로그)를 사용합니다. 개발 중일 때만 켜세요.</p>
 
     <button class="go" id="save">저장</button>
     <button class="ghost" id="synctoken">토큰 자동으로 받기</button>

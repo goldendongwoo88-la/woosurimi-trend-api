@@ -92,12 +92,27 @@ async function fetchVisitors(blogId) {
  * ⚠️ 이 API의 응답은 JSON인데 pagingHtml 필드 안에 작은따옴표를 \' 로 escape해서
  * 넣어놨습니다. JSON 표준에서 \' 는 허용되지 않아 JSON.parse가 통째로 실패합니다.
  * 실제로 여기서 한 번 터졌습니다. 그래서 파싱 전에 그 필드를 들어냅니다.
+ *
+ * ⚠️ countPerPage는 **5·10·20·30만 받습니다.** 그 밖의 값(12, 25 …)을 넣으면
+ * 네이버가 오류를 내지 않고 **조용히 5개만 돌려줍니다.** 2026-08-31에 벤치마킹
+ * 분석에서 이걸로 당했습니다 — 25개를 달라고 했는데 5개만 와서, 표본이 5분의 1로
+ * 줄어든 줄도 모르고 통계를 냈습니다. 그래서 여기서 **가장 가까운 허용값으로 맞춥니다.**
+ * 조용히 틀리느니 알아서 맞추는 게 낫습니다.
  */
+const ALLOWED_PER_PAGE = [5, 10, 20, 30];
+
+function snapPerPage(n) {
+  const want = Number(n) || 30;
+  return ALLOWED_PER_PAGE.reduce((best, v) =>
+    Math.abs(v - want) < Math.abs(best - want) ? v : best, ALLOWED_PER_PAGE[0]);
+}
+
 async function fetchPostList(blogId, { page = 1, countPerPage = 30 } = {}) {
+  const per = snapPerPage(countPerPage);
   const { status, text } = await get(
     `https://blog.naver.com/PostTitleListAsync.naver?blogId=${encodeURIComponent(
       blogId
-    )}&currentPage=${page}&countPerPage=${countPerPage}&categoryNo=0`
+    )}&currentPage=${page}&countPerPage=${per}&categoryNo=0`
   );
   if (status !== 200) return { total: 0, posts: [] };
 

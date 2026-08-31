@@ -73,7 +73,11 @@ function homefeedPatch(skillId) {
     // 여기서 덧댑니다. 스킬 이름을 넘기면 짐작하지 않고 정확히 골라 옵니다.
     //   후기 스킬  → 판정을 맨 위 3줄에, 근거는 본문에서
     //   연예 스킬  → 맨 위는 상황 포착(장면), 답은 중간에
-    r.placementBlock("", "", skillId) + "\n"
+    r.placementBlock("", "", skillId) + "\n" +
+    // ⚠️ 2026-08-31 추가 — 메이트·홈판 명단을 직접 재서 나온 것입니다.
+    // 위 EVIDENCE(8-27, 검색 상위 27곳)와 **다른 자료**라 따로 덧댑니다.
+    // 어긋나는 항목은 mateBlock 쪽이 더 최신이고 갈래별로 갈라져 있으니 그쪽을 씁니다.
+    r.mateBlock(skillId)
   );
 }
 

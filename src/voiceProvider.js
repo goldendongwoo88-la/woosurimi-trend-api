@@ -1,19 +1,30 @@
 // AI 성우 목소리(TTS, Text-to-Speech) 연동 모듈입니다.
 //
-// ⚠️ 중요: 이 파일은 "코드"만 준비되어 있습니다. 실제로 AI 목소리가 나오려면 아래 3개
-// 서비스 중 하나에 직접 가입해서 API 키를 발급받고, Render(또는 로컬 .env)에
-// 환경변수로 등록해야 합니다. 키를 등록하지 않으면 /api/shortform/render는 나레이션
-// 없이(자막만 있는) 영상으로 자동으로 대체해서 만들어주고, 왜 나레이션이 빠졌는지
-// 이유를 응답에 함께 알려줍니다 — 서버가 에러로 죽지 않습니다.
+// ⚠️ 중요: 이 파일은 "코드"만 준비되어 있습니다. 실제로 AI 목소리가 나오려면 아래 서비스
+// 중 하나에 직접 가입해서 API 키를 발급받고, Render(또는 로컬 .env)에 환경변수로
+// 등록해야 합니다. 키를 등록하지 않으면 /api/shortform/render는 나레이션 없이(자막만
+// 있는) 영상으로 자동으로 대체해서 만들어주고, 왜 나레이션이 빠졌는지 이유를 응답에
+// 함께 알려줍니다 — 서버가 에러로 죽지 않습니다.
 //
-// 지원 3사와 필요한 환경변수:
-//   1) 네이버 CLOVA Voice  → CLOVA_VOICE_CLIENT_ID, CLOVA_VOICE_CLIENT_SECRET
-//   2) 타입캐스트 Typecast → TYPECAST_API_KEY  (+ 선택: TYPECAST_ACTOR_ID)
-//   3) ElevenLabs          → ELEVENLABS_API_KEY (+ 선택: ELEVENLABS_VOICE_ID)
+// 지원 서비스와 필요한 환경변수:
+//   1) 네이버 CLOVA Voice  → CLOVA_VOICE_CLIENT_ID, CLOVA_VOICE_CLIENT_SECRET (유료)
+//   2) 타입캐스트 Typecast → TYPECAST_API_KEY  (+ 선택: TYPECAST_ACTOR_ID) (유료)
+//   3) ElevenLabs          → ELEVENLABS_API_KEY (+ 선택: ELEVENLABS_VOICE_ID) (유료)
+//   4) Microsoft Azure Speech → AZURE_SPEECH_KEY, AZURE_SPEECH_REGION (유료)
+//   5) Voicebox(로컬, 무료) → VOICEBOX_PROFILE_ID (+ 선택: VOICEBOX_URL, VOICEBOX_ENGINE)
 //
 // 각 서비스의 정확한 API 스펙(요청 형식)은 서비스 쪽 사정으로 바뀔 수 있어서, 만약 특정
 // 서비스에서 에러가 계속 나면 해당 회사의 최신 개발자 문서를 검색해서 파라미터명이
 // 바뀌지 않았는지 확인해 보는 걸 권장합니다.
+//
+// ⚠️ Voicebox는 나머지 4개와 성격이 다릅니다 — 클라우드 API가 아니라 사장님(또는 렌더를
+// 실제로 돌리는) 컴�터에서 직접 실행되는 오픈소스 앱(voicebox.sh)입니다. 그래서:
+//   - 무료입니다(건당 비용 없음). 대신 이 코드를 실행하는 컴퓨터에 Voicebox 앱이 켜져
+//     있어야만 동작합니다 — Render 같은 원격 서버에서는 안 됩니다(거기엔 설치가 안 되어
+//     있으니까요). 로컬에서 영상을 만들 때만 쓰는 용도입니다.
+//   - "API 키" 대신 Voicebox 안에서 미리 만들어 둔 "목소리 프로필 ID"가 필요합니다.
+//     Voicebox 앱을 켜고 내 목소리를 3~30초 녹음해서 프로필을 만든 뒤, 그 프로필의
+//     ID를 VOICEBOX_PROFILE_ID에 넣으면 됩니다(Voicebox UI 또는 GET /profiles로 확인).
 
 const fs = require("fs");
 
@@ -37,6 +48,11 @@ const PROVIDERS = {
     label: "Microsoft Azure Speech",
     configured: () => !!(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION),
     defaultVoice: process.env.AZURE_SPEECH_VOICE || "ko-KR-InJoonNeural", // 사장님이 샘플 듣고 고른 기본 한국어 남성 뉴럴 보이스
+  },
+  voicebox: {
+    label: "Voicebox (로컬, 무료)",
+    configured: () => !!process.env.VOICEBOX_PROFILE_ID,
+    defaultVoice: process.env.VOICEBOX_PROFILE_ID || null,
   },
 };
 
@@ -198,6 +214,36 @@ async function synthesizeAzure(text, voiceId, destPath) {
   await saveBinaryResponse(res, destPath);
 }
 
+// Voicebox 로컬 REST API (기본 포트 17493). Voicebox 앱이 이 컴퓨터에서 실행 중이어야
+// 합니다. /generate는 즉시 오디오 바이너리(주로 wav)를 응답 바디로 돌려줍니다 —
+// 다른 서비스처럼 폴링이 필요 없습니다.
+async function synthesizeVoicebox(text, voiceId, destPath) {
+  const baseUrl = process.env.VOICEBOX_URL || "http://127.0.0.1:17493";
+  const profileId = voiceId || PROVIDERS.voicebox.defaultVoice;
+  if (!profileId) {
+    throw new Error("Voicebox는 사용할 목소리 프로필(profile_id)이 필요합니다 — VOICEBOX_PROFILE_ID 환경변수를 등록해 주세요.");
+  }
+  let res;
+  try {
+    res = await fetchWithTimeout(`${baseUrl}/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        profile_id: profileId,
+        engine: process.env.VOICEBOX_ENGINE || "qwen_custom_voice",
+      }),
+    }, 60000); // 로컬 GPU/CPU 추론이라 클라우드 API보다 느릴 수 있어 넉넉하게 잡습니다.
+  } catch (err) {
+    throw new Error(`Voicebox 앱에 연결하지 못했습니다(${baseUrl}) — 이 컴퓨터에서 Voicebox가 실행 중인지 확인해 주세요. (${err.message})`);
+  }
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Voicebox API 오류(${res.status}): ${errText.slice(0, 200)}`);
+  }
+  await saveBinaryResponse(res, destPath);
+}
+
 /**
  * text: 나레이션으로 읽을 문장
  * provider: "clova" | "typecast" | "elevenlabs" | "azure"
@@ -216,6 +262,7 @@ async function synthesizeVoice({ text, provider, voiceId, destPath }) {
   if (provider === "typecast") return synthesizeTypecast(text, voiceId, destPath).then(() => destPath);
   if (provider === "elevenlabs") return synthesizeElevenLabs(text, voiceId, destPath).then(() => destPath);
   if (provider === "azure") return synthesizeAzure(text, voiceId, destPath).then(() => destPath);
+  if (provider === "voicebox") return synthesizeVoicebox(text, voiceId, destPath).then(() => destPath);
   throw new Error(`구현되지 않은 음성 제공자입니다: ${provider}`);
 }
 

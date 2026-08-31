@@ -169,9 +169,14 @@
    * 위쪽은 절대 안 됩니다. 네이버가 도구를 거기 두기 때문에 무엇을 올려도 가립니다.
    * 아래는 글감 바 하나만 피하면 되고, 눈이 본문에서 조금만 내려오면 닿습니다.
    */
-  const bar = HOST.createElement("div");
-  bar.id = "ws-tools-dock";
-  bar.innerHTML = `
+  /**
+   * 2026-08-30 사장님 지시로 자리를 나눴습니다.
+   * 글자수는 왼쪽 아래(본문 쓰면서 곁눈으로 보는 숫자), 버튼은 오른쪽 세로(빈 여백).
+   * 아래 가로 한 줄이던 시절엔 사진을 넣을 때 막대가 본문을 가려 불편했습니다.
+   */
+  const counts = HOST.createElement("div");
+  counts.id = "ws-tools-counts";
+  counts.innerHTML = `
     <div class="ws-dock-counts">
       <span class="ws-dock-num" title="공백 제외 글자 수"><b id="ws-c-nospace">0</b>자</span>
       <span class="ws-dock-sub">
@@ -181,6 +186,11 @@
         <span>링크 <b id="ws-c-link">0</b></span>
       </span>
     </div>
+  `;
+
+  const bar = HOST.createElement("div");
+  bar.id = "ws-tools-dock";
+  bar.innerHTML = `
     <div class="ws-dock-acts">
       <button data-act="hometitle" class="ws-dock-btn primary" title="제목을 홈판용으로 고칩니다">홈판 제목</button>
       <button data-act="homebody" class="ws-dock-btn primary" title="본문을 소제목 6개로 나눕니다">홈판 본문</button>
@@ -1765,21 +1775,36 @@
     for (const comp of list) {
       if (comp.closest(".se-documentTitle")) continue;
 
-      // 사진 — 로그인된 이 화면에서 받아 파일 안에 심습니다.
-      for (const img of comp.querySelectorAll("img.se-image-resource, .se-image-resource")) {
+      /**
+       * 사진 — 파일 안에 심습니다.
+       *
+       * ⚠️ 1.27.17에서 길을 바꿨습니다. 네이버 사진은 pstatic.net(다른 도메인)에 살아서
+       * 여기(콘텐츠 스크립트)의 fetch는 CORS에 전부 막혔습니다. 그래서 사진이 한 장도
+       * 안 들어갔던 것입니다. 이제 배경(fetchImage)을 거칩니다 — 배경은 host_permissions로
+       * 이 제약을 안 받습니다. blob: 주소(방금 올린 사진)는 페이지 안에서만 열리므로
+       * 그것만 여기서 직접 받습니다.
+       */
+      for (const img of comp.querySelectorAll("img.se-image-resource, img[class*='se-image']")) {
         const src = img.currentSrc || img.src;
         if (!src) continue;
         try {
-          const blob = await fetch(src, { credentials: "include" }).then((r) => {
-            if (!r.ok) throw new Error(r.status);
-            return r.blob();
-          });
-          const dataUri = await new Promise((res, rej) => {
-            const fr = new FileReader();
-            fr.onload = () => res(fr.result);
-            fr.onerror = rej;
-            fr.readAsDataURL(blob);
-          });
+          let dataUri;
+          if (src.startsWith("blob:") || src.startsWith("data:")) {
+            const blob = await fetch(src).then((r) => { if (!r.ok) throw new Error(r.status); return r.blob(); });
+            dataUri = await new Promise((res, rej) => {
+              const fr = new FileReader();
+              fr.onload = () => res(fr.result);
+              fr.onerror = rej;
+              fr.readAsDataURL(blob);
+            });
+          } else {
+            dataUri = await new Promise((res, rej) => {
+              chrome.runtime.sendMessage({ type: "fetchImage", url: src }, (r) => {
+                if (chrome.runtime.lastError || !r || !r.ok) return rej(new Error((r && r.message) || "배경 응답 없음"));
+                res(r.dataUri);
+              });
+            });
+          }
           parts.push(`<p><img src="${dataUri}" style="max-width:100%"></p>`);
           imgOk++;
         } catch {
@@ -1789,7 +1814,6 @@
       }
 
       // 글 문단 — 안내 문구(글감)는 빼고, 인용구는 인용 모양으로.
-      const I = window.__wsInsert;
       for (const p of comp.querySelectorAll(".se-text-paragraph")) {
         const t = (p.innerText || "").trim();
         if (!t) continue;
@@ -1902,6 +1926,14 @@
     }
     return out.filter(Boolean);
   }
+
+  /**
+   * ⚠️ 원고를 넣을 때(draft-insert.js)도 같은 함수로 잘라야 합니다.
+   * 자르는 규칙이 두 벌이 되면 "줄바꿈 버튼 결과"와 "원고 넣기 결과"가 달라집니다.
+   * typeof 가드는 시험(test-linebreak-parity.js)이 이 코드를 window 없는 곳에서
+   * 떼어다 돌리기 때문입니다.
+   */
+  if (typeof window !== "undefined") window.__wsBreak = { breakOne, BREAK_LIMIT, BREAK_TARGET };
 
   function runLineBreak() {
     const root = getEditorRoot();
@@ -2632,11 +2664,21 @@
       try {
         const r = await server("/api/thumb/auto", { imageUrls: urls, title, body, force });
         const p = r.plan;
+        // 제목을 규칙으로 분석한 결과(구성·가린 사람·바꿔 쓸 문구). 0원으로 나온 것이라
+        // 사장님이 마음에 안 들면 바로 다른 문구로 바꾸실 수 있게 같이 보여드립니다.
+        const s = r.strategy || p.strategy;
+        const alts = (p.alternatives || []).filter((a) => a && a !== p.text);
         out.innerHTML = `
           <div class="ws-row good">
             <img src="${r.image}" alt="만들어진 썸네일"
               style="width:100%;max-width:260px;border-radius:9px;display:block;margin-bottom:8px" />
             <div style="font-size:11.5px;opacity:.8;margin-bottom:6px">${esc(p.why)}</div>
+            ${s ? `<div style="font-size:11.5px;opacity:.7;margin-bottom:4px">구성 — ${esc(s.composition)}${
+              p.mosaic && p.mosaic.on ? ` · 얼굴 가림${s.mosaicWho ? `(${esc(s.mosaicWho)})` : ""}` : ""
+            }</div>` : ""}
+            ${alts.length ? `<div style="font-size:11.5px;opacity:.7;margin-bottom:6px">바꿔 쓸 문구 — ${
+              alts.slice(0, 3).map(esc).join(" · ")
+            }</div>` : ""}
             ${p.warn.map((w) => `<div style="font-size:11.5px;color:#fbbf24;margin-bottom:4px">⚠ ${esc(w)}</div>`).join("")}
             <a class="ws-mini" href="${r.image}" download="홈판썸네일.jpg"
               style="display:inline-block;text-decoration:none">내려받기</a>
@@ -2721,10 +2763,32 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  /**
+   * ── 제목 띠 (2026-08-30 사장님 지시) ──────────────────
+   *
+   * 본문을 내려 쓰다 보면 제목이 화면 밖으로 올라가 버립니다. 무슨 제목으로 쓰던
+   * 글인지 잊은 채 소제목을 쓰게 되니, 편집기 도구줄(번역·맞춤법 줄) 바로 아래에
+   * 제목을 항상 띄워둡니다. 보기만 하는 띠라 편집기를 건드리지 않습니다.
+   *
+   * ⚠️ 제목이 비어 있으면 띠를 숨깁니다 — 빈 띠가 도구줄을 가리면 손해입니다.
+   */
+  const titleBar = HOST.createElement("div");
+  titleBar.id = "ws-title-bar";
+  titleBar.hidden = true;
+
+  function updateTitleBar() {
+    const t = getTitle();
+    if (!t) { titleBar.hidden = true; return; }
+    if (titleBar.textContent !== t) titleBar.textContent = t;
+    titleBar.hidden = false;
+  }
+
   // ── 시작 ──────────────────────────────────────────────
   function start() {
     if (!isWritePage()) return;
     if (HOST.getElementById("ws-tools-dock")) return;
+    HOST.body.appendChild(counts);
+    HOST.body.appendChild(titleBar);
     HOST.body.appendChild(bar);
     HOST.body.appendChild(panel);
 
@@ -2754,11 +2818,189 @@
     });
 
     updateCounts();
+    updateTitleBar();
     // 편집기 안에서 뭔가 바뀌면 다시 셉니다.
     const root = getEditorRoot();
     if (root) new MutationObserver(scheduleCount).observe(root, { childList: true, subtree: true, characterData: true });
     document.addEventListener("keyup", scheduleCount, true);
+    /**
+     * 제목은 편집기 바깥(제목 칸)에서 바뀌므로 따로 지켜봅니다.
+     * ⚠️ MutationObserver로 문서 전체를 보게 했다가 되돌렸습니다. 본문에 글자를 칠 때마다
+     * 수없이 불려서, 제목처럼 어쩌다 한 번 바뀌는 것에는 지나친 값이었습니다.
+     * 제목 칸이 늦게 생기는 경우도 있어서, 가볍게 주기로 확인하는 편이 맞습니다.
+     */
+    setInterval(updateTitleBar, 800);
   }
+
+  /**
+   * ── 골든 블로그 플로어 "통합 복사" 자동 처리 (1.27.16) ──
+   *
+   * 사장님 실제 동선: golden-blog-floor(다른 탭)에서 원고를 쓰고 저장해둔 뒤,
+   * 그 화면의 "통합 복사"를 누르고 → 여기(네이버 에디터) 본문 칸에 Ctrl+V.
+   * "원고 붙이기" 패널은 아예 열지 않습니다 — 그러니 window.__wsInsert의 draft
+   * 흐름(제목 자동·소제목 자동 클릭)이 안 걸렸습니다. 이게 실제 문제였습니다.
+   *
+   * golden-blog-floor가 클립보드 HTML에 data-wsu-title / data-wsu-subhead
+   * 표식을 붙여 보내면(app.js copyCombined 참고), 여기서 그 붙여넣기를 가로채서:
+   *   1) 표식 속 제목을 떼어 applyTitle()로 제목칸에 넣고
+   *   2) 나머지(제목 뺀 본문)만 지금 클릭된 칸에 진짜 붙여넣고
+   *   3) 표식 붙은 문단들을 applyOfficialSubheads로 네이버 공식 소제목 스타일로 전환
+   *   4) 임시저장까지 한다.
+   * 표식이 없는 보통 붙여넣기(다른 글 복사 등)는 그대로 두고 손 안 댄다.
+   */
+  /**
+   * ── 골든 블로그 플로어 "통합 복사" 자동 마무리 (1.27.16) ──
+   *
+   * 동선: 골든 블로그 플로어에서 [통합 복사] → 네이버 본문 칸에 Ctrl+V. 그게 전부다.
+   * 붙여넣기는 네이버가 알아서 하고, 여기서는 붙은 *뒤에* 제목·소제목·강조를 마무리한다.
+   *
+   * ⚠️ 왜 클립보드를 안 읽나: 클립보드 HTML에 표식을 심어 paste 이벤트에서 읽는 방식을
+   * 먼저 만들었는데, 붙여넣기 이벤트가 확장까지 오지 않는 경우가 있었다(실측 — 진단용
+   * alert조차 안 떴다). 그래서 **원고 구조는 서버에서 직접 받아온다.** 원고 원본을 아는 건
+   * 서버뿐이라 표식이 벗겨질 걱정도 없다. 클립보드는 본문 글자를 채우는 데만 쓴다.
+   *
+   * 흐름: [통합 복사]가 서버 인계함에 원고 id를 남김 → 여기서 그 인계함을 지켜봄 →
+   * 새 원고가 올라왔고 본문도 채워졌으면(=붙여넣기 끝) → 제목·소제목·강조를 건다.
+   */
+  /**
+   * ⚠️ 플로어(http://localhost:8485)는 **반드시 배경을 거쳐** 부릅니다.
+   * 여기(네이버)는 https라서 http를 직접 부르면 크롬이 막습니다(mixed content).
+   * 콘텐츠 스크립트에서 바로 fetch 했다가 "Failed to fetch"만 나고 조용히 죽었습니다.
+   */
+  function wsuFloorGet(pathname) {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ type: "floorGet", path: pathname }, (res) => {
+          if (chrome.runtime.lastError || !res || !res.ok) return resolve(null);
+          resolve(res.data);
+        });
+      } catch { resolve(null); }
+    });
+  }
+
+  let wsuSeenToken = null;
+  let wsuBusy = false;
+  let wsuArmed = false;              // 빈 본문에서 이 원고를 기다리는 중인가
+  let wsuArmedToken = null;
+  const WSU_LOADED_AT = Date.now();
+
+  async function wsuFetchCopied() {
+    const j = await wsuFloorGet("/api/last-copied");
+    return j && j.ok ? j.copied : null;   // 플로어가 안 떠 있으면 null — 조용히 지나간다
+  }
+
+  async function wsuFinish(postId) {
+    const I = window.__wsInsert;
+    if (!I) return;
+    const j = await wsuFloorGet("/api/posts/" + encodeURIComponent(postId));
+    const post = j && j.post;
+    if (!post || !post.body) return;
+
+    /**
+     * ⚠️ 굵게·형광·색·글자크기는 **여기서 손대지 않습니다.**
+     * 그건 클립보드 HTML에 실려서 붙여넣기만으로 이미 잘 들어옵니다(사장님 화면에서 확인).
+     * 한때 여기서 한 번 더 걸려고 했는데, 굵게는 **토글**이라 이미 걸린 글자에 또 걸면
+     * 오히려 풀립니다. 잘 되던 것을 망가뜨릴 뻔했습니다.
+     *
+     * 붙여넣기로 안 되는 건 딱 두 가지입니다 — 제목 칸과 네이버 공식 소제목 스타일.
+     * 둘 다 네이버가 **진짜 클릭**을 요구해서 클립보드로는 절대 안 됩니다. 그 둘만 합니다.
+     */
+    const title = String(post.title || "").trim();
+    const subheads = [];
+    for (const raw of String(post.body).split("\n")) {
+      const ln = raw.trim();
+      if (ln.startsWith("[소제목]")) {
+        const t = ln.replace("[소제목]", "").trim();
+        if (t) subheads.push(t);
+      }
+    }
+
+    /**
+     * ⚠️ 남의 글을 건드리지 않기 — 실제로 사고가 났던 부분입니다.
+     * 사장님이 **예전에 쓴 다른 포스팅**을 열어둔 창에서 이게 돌아, 소제목은 하나도 못 찾고
+     * (0/6) 제목만 그 글에 덮어써졌습니다. 원고와 화면이 다른 글이면 아무것도 안 하는 게 맞습니다.
+     *
+     * 판단 기준: 원고의 소제목 중 **하나라도** 지금 본문에 있는가. 붙여넣기가 제대로 됐다면
+     * 반드시 있습니다. 하나도 없으면 다른 글이거나 아직 안 붙여넣은 것입니다.
+     */
+    const norm = (s) => String(s || "").replace(/[\s​]/g, "");
+    if (subheads.length) {
+      const bodyText = norm(I.bodyParagraphs().map((p) => p.innerText || "").join(" "));
+      const matched = subheads.filter((t) => bodyText.includes(norm(t))).length;
+      if (matched === 0) {
+        showPanel(`<h4>통합 복사 마무리</h4>
+          <div class="ws-row warn">지금 열려 있는 글이 복사한 원고와 달라서 <b>아무것도 건드리지 않았습니다.</b><br>
+          복사한 원고: <b>${esc(title.slice(0, 40))}…</b><br>
+          이 글에 넣으실 거면 본문 칸에 <b>Ctrl+V</b> 먼저 해주세요.</div>`);
+        return;
+      }
+    }
+
+    showPanel(`<h4>통합 복사 마무리</h4><div class="ws-row">제목과 소제목을 넣는 중입니다…</div>`);
+
+    if (title) {
+      try { await applyTitle(title); } catch {}
+      // 본문 맨 위에 그대로 붙은 제목 줄은 지운다 — 제목칸에 따로 들어갔으니 중복이다.
+      try {
+        const dup = I.bodyParagraphs().find((p) => norm(p.innerText || "") === norm(title));
+        if (dup) dup.remove();
+      } catch {}
+    }
+    let os = { done: 0, total: subheads.length, failed: [] };
+    if (subheads.length) {
+      try { os = await I.applyOfficialSubheads({ blocks: subheads.map((text) => ({ kind: "subhead", text })) }, () => {}); } catch {}
+    }
+    try { await I.saveDraft(); } catch {}
+    scheduleCount();
+
+    showPanel(`<h4>통합 복사 마무리</h4>
+      <div class="ws-row good">제목 ${title ? "넣음" : "없음"} · 소제목 ${os.done}/${os.total} · 임시저장됨</div>
+      <div class="ws-dim" style="font-size:11.5px">굵게·형광·색은 붙여넣기에 이미 실려 있어 따로 손대지 않습니다.</div>
+      ${os.failed && os.failed.length ? `<div class="ws-dim" style="font-size:11.5px">소제목 ${os.failed.join(", ")}는 문단을 클릭하고 왼쪽 위에서 직접 바꿔주세요.</div>` : ""}`);
+  }
+
+  /**
+   * 인계함 지켜보기 — 붙여넣기가 끝났을 때(본문이 채워졌을 때) 한 번만 마무리한다.
+   *
+   * ⚠️ 남의 글을 덮어쓰지 않게 하는 장치: "본문이 차 있다"만 보고 실행하면, 사장님이
+   * 예전에 쓰던 글이 열려 있는 창에서도 지난번 복사본이 그 위에 걸려버린다. 그래서
+   *   ① 빈 본문에서 이 원고를 기다리다가 글이 채워졌을 때(=방금 붙여넣음), 또는
+   *   ② 이 창이 열린 뒤에 복사한 원고일 때
+   * 두 경우에만 손댄다. 그 외에는 이미 처리한 것으로 넘겨 조용히 지나간다.
+   */
+  setInterval(async () => {
+    if (wsuBusy) return;
+    // ⚠️ 이 스크립트는 바깥 창과 편집기 iframe 양쪽에서 돈다(all_frames). 편집기가 있는
+    // 쪽에서만 손대야 한다 — 양쪽이 같이 걸면 제목이 두 번 들어가거나 서로 엉킨다.
+    if (!getEditorRoot()) return;
+    const I = window.__wsInsert;
+    if (!I) return;
+    const copied = await wsuFetchCopied();
+    if (!copied || !copied.token) return;
+    if (copied.token === wsuSeenToken) return;      // 이미 처리(또는 넘기기로 한) 원고
+
+    const empty = I.isEmpty().empty;
+
+    // ① 아직 안 붙여넣음 — 이 원고를 기다리는 상태로 걸어두고 계속 지켜본다.
+    if (empty) {
+      wsuArmed = true;
+      wsuArmedToken = copied.token;
+      return;
+    }
+
+    // ② 본문이 차 있다. 방금 붙여넣은 것이거나, 이 창이 열린 뒤에 복사한 원고일 때만 손댄다.
+    const justPasted = wsuArmed && wsuArmedToken === copied.token;
+    const copiedAfterLoad = Number(copied.ts) > WSU_LOADED_AT;
+    if (!justPasted && !copiedAfterLoad) {
+      wsuSeenToken = copied.token;                  // 예전 복사본 — 기존 글을 건드리지 않는다
+      return;
+    }
+
+    wsuSeenToken = copied.token;
+    wsuArmed = false;
+    wsuBusy = true;
+    try { await wsuFinish(copied.id); } finally { wsuBusy = false; }
+  }, 1500);
 
   // 에디터가 늦게 뜨는 경우가 많아서 잠깐 기다렸다가 다시 시도합니다.
   start();

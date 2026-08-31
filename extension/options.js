@@ -7,11 +7,12 @@ function say(html, kind) {
 }
 
 (async () => {
-  const s = await chrome.storage.sync.get(["code", "blogId", "server", "wsToken"]);
+  const s = await chrome.storage.sync.get(["code", "blogId", "server", "wsToken", "useLocal"]);
   $("#code").value = s.code || "";
   $("#blogId").value = s.blogId || "";
   $("#server").value = s.server || "";
   $("#token").value = s.wsToken || "";
+  $("#useLocal").checked = !!s.useLocal;
   $("#server").placeholder = DEFAULT_SERVER;
 })();
 
@@ -29,8 +30,11 @@ $("#save").onclick = async () => {
     blogId: id,
     server: $("#server").value.trim().replace(/\/+$/, ""),
     wsToken: $("#token").value.trim(),
+    useLocal: $("#useLocal").checked,
   });
-  say("저장했습니다.", "good");
+
+  const mode = $("#useLocal").checked ? "🖥️ 개발 모드 (로컬)" : "☁️ 배포 서버";
+  say(`저장했습니다. (${mode})`, "good");
 };
 
 $("#test").onclick = async () => {

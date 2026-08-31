@@ -8,12 +8,20 @@
 // 3) 원고 쓰기는 1분 가까이 걸립니다. 팝업은 닫히면 죽어버리는데,
 //    여기서 돌리면 팝업을 닫아도 살아남습니다.
 
+// 배포 서버 (기본값)
 const DEFAULT_SERVER = "https://woosurimi-trend-api.onrender.com";
 
+// 로컬 블로그 서버 주소 (개발 중일 때)
+const LOCAL_SERVER = "http://localhost:8485";
+
 async function cfg() {
-  const s = await chrome.storage.sync.get(["server", "code"]);
+  const s = await chrome.storage.sync.get(["server", "code", "useLocal"]);
+
+  // useLocal 플래그가 true면 로컬 서버 사용 (개발 모드)
+  const server = s.useLocal ? LOCAL_SERVER : (s.server || DEFAULT_SERVER);
+
   return {
-    server: (s.server || DEFAULT_SERVER).replace(/\/+$/, ""),
+    server: server.replace(/\/+$/, ""),
     code: s.code || "",
   };
 }
@@ -141,12 +149,66 @@ async function pressPaste(tabId, { useCommands = false } = {}) {
   }
 }
 
+/**
+ * 골든 블로그 플로어(로컬 8485)에서 원고를 받아옵니다.
+ *
+ * ⚠️ 왜 배경을 거치나 — 실측으로 확인한 사실입니다.
+ * 네이버 글쓰기는 **https**인데 플로어는 **http://localhost**입니다. https 화면에서
+ * http를 부르면 크롬이 통째로 막습니다(mixed content). 콘텐츠 스크립트에서 바로 부르면
+ * "Failed to fetch"만 나오고 아무 일도 안 일어납니다 — 통합 복사 마무리가 조용히
+ * 죽어 있던 원인이 이것이었습니다.
+ *
+ * 배경(서비스 워커)은 확장 자신의 자리에서 돌아서 이 제한을 받지 않습니다.
+ * 그래서 플로어에 말을 거는 일은 전부 여기를 지나갑니다.
+ */
+async function floorFetch(pathname) {
+  const base = "http://localhost:8485";
+  const res = await fetch(base + pathname, { cache: "no-store" });
+  if (!res.ok) throw new Error(`플로어가 ${res.status}로 답했습니다.`);
+  return res.json();
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || !msg.type) return;
 
   if (msg.type === "openOptions") {
     chrome.runtime.openOptionsPage();
     return;
+  }
+
+  if (msg.type === "floorGet") {
+    // 플로어가 안 떠 있으면 실패가 정상입니다 — 부르는 쪽에서 조용히 넘어갑니다.
+    floorFetch(String(msg.path || ""))
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((err) => sendResponse({ ok: false, message: err.message }));
+    return true;
+  }
+
+  if (msg.type === "fetchImage") {
+    /**
+     * 워드 내려받기용 사진 받기 (1.27.17).
+     *
+     * ⚠️ 왜 배경에서 받나: 네이버 본문 사진은 pstatic.net(다른 도메인)에 삽니다.
+     * 콘텐츠 스크립트의 fetch는 페이지와 같은 CORS 제약을 받아서 전부 막혔고,
+     * 그래서 워드 파일에 사진이 하나도 안 들어갔습니다. 배경은 host_permissions로
+     * 이 제약을 안 받습니다. (플로어 호출을 배경으로 돌린 것과 같은 이유입니다.)
+     *
+     * ⚠️ 서비스 워커에는 FileReader가 없습니다 — arrayBuffer→base64로 직접 바꿉니다.
+     */
+    (async () => {
+      const r = await fetch(String(msg.url || ""), { credentials: "include" });
+      if (!r.ok) throw new Error(`사진 서버가 ${r.status}로 답했습니다.`);
+      const blob = await r.blob();
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return `data:${blob.type || "image/jpeg"};base64,${btoa(bin)}`;
+    })()
+      .then((dataUri) => sendResponse({ ok: true, dataUri }))
+      .catch((err) => sendResponse({ ok: false, message: err.message }));
+    return true;
   }
 
   if (msg.type === "uiClick") {

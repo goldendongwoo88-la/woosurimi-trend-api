@@ -40,24 +40,238 @@ const THEMES = {
 };
 
 /**
- * 얼굴이 있을 만한 쪽으로 잘라냅니다.
+ * 얼굴이 **어디 있는지** 찾습니다 — 살색 덩어리를 찾는 방식입니다.
  *
- * ⚠️ 얼굴 인식은 안 합니다. 그러려면 별도 모델이 필요하고, 틀리면 엉뚱한 곳을
- * 잘라서 오히려 나빠집니다. 대신 **위쪽 중앙**을 남깁니다.
- * 인물 사진은 얼굴이 위쪽 가운데 있는 경우가 압도적으로 많습니다.
+ * ⚠️ 얼굴 인식 모델이 아닙니다. 사진을 64칸으로 줄여서 살색인 칸을 표시하고,
+ * 서로 붙어 있는 살색 덩어리 중 제일 큰 것을 얼굴로 봅니다. 모델을 받아 쓰면
+ * 정확하지만 설치가 무겁고(수백 MB) 서버가 느려집니다. 이건 순수 계산이라 0원·즉시입니다.
  *
- * ⚠️ 처음엔 sharp의 attention(대비가 제일 큰 곳을 찾아 남기는 방식)을 썼습니다.
- * 실제로 돌려보니 **얼굴이 옆으로 잘려나갔습니다.** 배경이 화려하면 얼굴 대신
- * 배경을 골라버립니다. 똑똑한 방식이 늘 나은 게 아닙니다.
- * north(위쪽 가운데)는 단순하지만 인물 사진에서 틀릴 일이 거의 없습니다.
+ * ⚠️ 왜 이걸 만들었나: 전에는 "위쪽 가운데가 얼굴"이라고 **가정**했습니다.
+ * 실제로 그려보니 얼굴이 가운데나 옆에 있는 사진에서 **배경만 가리고 얼굴은 그대로** 나왔습니다.
+ * 가려서 궁금하게 만들려던 게 그냥 사진 망가진 것처럼 보였습니다.
+ *
+ * ⚠️ 목·팔까지 한 덩어리로 잡히는 걸 막으려고, 덩어리 **위쪽**만 얼굴 비율(가로:세로 1:1.4)로
+ * 잘라 씁니다. 살구색 벽·나무 가구가 얼굴로 잡히는 일은 여전히 있을 수 있습니다.
+ *
+ * @returns {{left:number,top:number,width:number,height:number}|null} 원본 사진 좌표. 못 찾으면 null.
  */
-async function cropFace(buf, w, h) {
-  return sharp(buf).resize(w, h, { fit: "cover", position: "north" }).toBuffer();
+async function findFace(buf) {
+  const GRID = 64;
+  const meta = await sharp(buf).metadata();
+  if (!meta.width || !meta.height) return null;
+
+  const { data, info } = await sharp(buf)
+    .resize(GRID, null, { fit: "inside" })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const W = info.width, H = info.height, C = info.channels;
+  if (!W || !H) return null;
+
+  // 살색 판정 — 방송·인쇄에서 쓰는 YCbCr 색 좌표의 살색 범위입니다.
+  // (밝기와 상관없이 "색조"만 보기 때문에 조명이 달라도 비교적 버팁니다)
+  const skin = new Uint8Array(W * H);
+  let skinCount = 0;
+  for (let i = 0; i < W * H; i++) {
+    const r = data[i * C], g = data[i * C + 1], b = data[i * C + 2];
+    if (r < 60) continue;                       // 너무 어두우면 색을 못 믿습니다
+    if (!(r > g && r > b)) continue;            // 살색은 빨강이 가장 셉니다
+    const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+    const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+    if (cr >= 133 && cr <= 178 && cb >= 77 && cb <= 130) { skin[i] = 1; skinCount++; }
+  }
+  if (skinCount < W * H * 0.012) return null;   // 살색이 거의 없으면 인물 사진이 아닙니다
+
+  // 붙어 있는 덩어리 찾기 (상하좌우 4방향). 제일 큰 덩어리를 얼굴로 봅니다.
+  const seen = new Uint8Array(W * H);
+  let best = null;
+  const stack = [];
+  for (let s = 0; s < W * H; s++) {
+    if (!skin[s] || seen[s]) continue;
+    stack.length = 0;
+    stack.push(s);
+    seen[s] = 1;
+    let area = 0, x0 = W, x1 = 0, y0 = H, y1 = 0;
+    while (stack.length) {
+      const p = stack.pop();
+      const x = p % W, y = (p - x) / W;
+      area++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (x > 0 && skin[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack.push(p - 1); }
+      if (x < W - 1 && skin[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack.push(p + 1); }
+      if (y > 0 && skin[p - W] && !seen[p - W]) { seen[p - W] = 1; stack.push(p - W); }
+      if (y < H - 1 && skin[p + W] && !seen[p + W]) { seen[p + W] = 1; stack.push(p + W); }
+    }
+    if (!best || area > best.area) best = { area, x0, x1, y0, y1 };
+  }
+  if (!best || best.area < W * H * 0.008) return null;
+
+  /**
+   * ⚠️ 살구색 벽·나무 책상처럼 **넓게 깔린 것**은 얼굴이 아닙니다.
+   * 가로로 길게 퍼졌거나(가로가 세로의 2.2배 넘음) 사진 폭을 거의 다 차지하면 버립니다.
+   * 버리면 예전 방식(위쪽 가운데)으로 물러서니, 잘못 가리는 것보다 안전합니다.
+   */
+  const bw = best.x1 - best.x0 + 1;
+  const bh = best.y1 - best.y0 + 1;
+  if (bw > bh * 2.2 || bw > W * 0.92) return null;
+
+  // 덩어리 위쪽만 얼굴 비율로 자릅니다 (목·어깨·팔이 딸려온 경우 대비).
+  const gw = best.x1 - best.x0 + 1;
+  const gh = Math.min(best.y1 - best.y0 + 1, Math.round(gw * 1.4));
+  const k = meta.width / W;                     // 줄인 격자 → 원본 좌표 배율
+  return {
+    left: Math.round(best.x0 * k),
+    top: Math.round(best.y0 * k),
+    width: Math.round(gw * k),
+    height: Math.round(gh * k),
+  };
 }
+
+/**
+ * 자르기 계획을 세웁니다 — 얼마나 당길지(scale), 어디를 뗄지(left/top).
+ * 계산만 하고 그림은 안 건드립니다. 두 장을 나란히 붙일 때 **먼저 계획만 비교**해서
+ * 얼굴 크기를 맞추려고 따로 뺐습니다.
+ *
+ * @param minFaceRatio 얼굴 높이가 화면의 이 비율은 되게 (두 장 크기 맞출 때 씀)
+ */
+function planFaceCrop({ iw, ih, box, w, h, eye = 0.38, minFaceRatio = 0 }) {
+  const cover = Math.max(w / iw, h / ih);
+  const cx0 = box.left + box.width / 2;
+  const cy0 = box.top + box.height / 2;
+
+  let scale = cover;
+  // ① 얼굴이 작게 나온 사진이면 얼굴 높이가 42%쯤 되게 당깁니다.
+  const faceOut = box.height * cover;
+  if (faceOut > 0 && faceOut < h * 0.30) scale = Math.max(scale, cover * ((h * 0.42) / faceOut));
+  // ①-2 두 장의 얼굴 크기를 맞추라는 주문이 있으면 그만큼 당깁니다.
+  if (minFaceRatio > 0 && box.height > 0) scale = Math.max(scale, (h * minFaceRatio) / box.height);
+  /**
+   * ② 얼굴을 eye(기본 38%) 자리에 **놓을 여유가 없으면** 그만큼 더 당깁니다.
+   *
+   * ⚠️ 왜 필요한가: 두 장을 나란히 붙였을 때 얼굴 높이가 서로 어긋났습니다.
+   * 얼굴이 사진 **위쪽**에 있으면 아무리 내려도 38%까지 안 내려오고,
+   * **아래쪽**에 있으면 위로 올릴 여유(잘라낼 아랫부분)가 없어서 그대로 처집니다.
+   * 두 방향 다 조금 당기면 여유가 생기고, 그제서야 두 장의 눈높이가 맞습니다.
+   */
+  if (cy0 > 0) scale = Math.max(scale, (h * eye) / cy0);
+  if (ih - cy0 > 0) scale = Math.max(scale, (h * (1 - eye)) / (ih - cy0));
+  /**
+   * ③ 한계 세 가지.
+   *   - 얼굴이 화면 높이의 55%를 넘게 크면 답답합니다(머리 위·턱이 잘려 보입니다).
+   *   - 원본에서 잘라내는 폭이 420px 밑으로 내려가면 확대 티가 납니다.
+   *   - 어떤 경우에도 cover(화면을 채우는 최소 배율)보다 작아지면 안 됩니다.
+   */
+  if (box.height > 0) scale = Math.min(scale, (h * 0.55) / box.height);
+  scale = Math.max(cover, Math.min(scale, cover * 1.8, Math.max(cover, w / 420)));
+
+  const sw = iw * scale, sh = ih * scale;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  return {
+    scale,
+    sw: Math.round(sw),
+    sh: Math.round(sh),
+    left: clamp(Math.round(cx0 * scale - w / 2), 0, Math.max(0, Math.round(sw - w))),
+    top: clamp(Math.round(cy0 * scale - h * eye), 0, Math.max(0, Math.round(sh - h))),
+    faceRatio: (box.height * scale) / h,   // 이 계획대로 자르면 얼굴이 화면의 몇 %가 되는지
+  };
+}
+
+/** 사진 하나의 자르기 계획 (얼굴을 못 찾으면 null). */
+async function faceCropPlan(buf, w, h, opts = {}) {
+  const box = await findFace(buf).catch(() => null);
+  if (!box) return null;
+  const meta = await sharp(buf).metadata();
+  if (!meta.width || !meta.height) return null;
+  return { box, ...planFaceCrop({ iw: meta.width, ih: meta.height, box, w, h, ...opts }) };
+}
+
+/**
+ * 얼굴이 화면에 잘 들어오게 잘라냅니다.
+ *
+ * ⚠️ 얼굴을 못 찾으면 **위쪽 중앙**(north)을 남깁니다 — 인물 사진은 얼굴이 위쪽 가운데
+ * 있는 경우가 압도적으로 많습니다. 예전에는 sharp의 attention(대비가 제일 큰 곳을 남기는
+ * 방식)을 썼는데, 배경이 화려하면 배경을 골라서 **얼굴이 옆으로 잘려나갔습니다.**
+ */
+async function cropFace(buf, w, h, { eye = 0.38, minFaceRatio = 0 } = {}) {
+  const plan = await faceCropPlan(buf, w, h, { eye, minFaceRatio });
+  if (!plan) return sharp(buf).resize(w, h, { fit: "cover", position: "north" }).toBuffer();
+
+  return sharp(buf)
+    .resize(plan.sw, plan.sh, { fit: "fill" })
+    .extract({ left: plan.left, top: plan.top, width: w, height: h })
+    .toBuffer();
+}
+
 
 /** 흑백으로 — 비포 쪽에 씁니다. 살짝 어둡게 해서 애프터가 더 살아나게. */
 async function toMono(buf) {
   return sharp(buf).grayscale().modulate({ brightness: 0.88 }).toBuffer();
+}
+
+/**
+ * 얼굴이 있을 자리를 모자이크로 가립니다 — "누구지?"를 만드는 장치입니다.
+ *
+ * ⚠️ 여기도 얼굴 인식을 안 합니다(cropFace와 같은 이유). cropFace가 **위쪽 중앙**을
+ * 남기니까, 그 자리(가로 가운데, 위에서 6~36%)를 가립니다. 인물 사진에서는 거의
+ * 맞고, 인물이 아닌 사진에서는 엉뚱한 데를 가립니다.
+ * → 그래서 **부르는 쪽에서 인물 사진인지 확인하고** 부르셔야 합니다 (thumbAuto가 확인합니다).
+ *
+ * ⚠️ 흐리게(blur) 하지 않고 네모칸(pixelate)으로 가립니다. 흐린 건 "사진이 잘못됐나"로
+ * 보이고, 네모칸은 "일부러 가렸구나"로 읽힙니다. 궁금증은 후자에서 생깁니다.
+ */
+// ⚠️ 처음엔 위에서 6~36%만 가렸습니다. 실제로 그려보니 **눈만 가려진 띠**가 되어서
+// (증명사진 검은 띠 같은 모양) 정체가 그대로 보였습니다. 코·입까지 덮이도록 넓혔습니다.
+const FACE_ZONE = { cx: 0.5, top: 0.08, w: 0.46, h: 0.38 };
+
+async function applyMosaic(buf, w, h, { zone = null, blocks = 11 } = {}) {
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let rx, ry, rw, rh;
+
+  // 1순위 — 잘라놓은 그림에서 얼굴을 직접 찾습니다(자른 뒤라 좌표가 그대로 맞습니다).
+  const found = zone ? null : await findFace(buf).catch(() => null);
+  if (found) {
+    // 머리카락·턱선까지 덮이도록 조금 넓힙니다. 딱 얼굴만 덮으면 가장자리로 누군지 보입니다.
+    const padX = Math.round(found.width * 0.14);
+    const padY = Math.round(found.height * 0.18);
+    rw = clamp(found.width + padX * 2, 8, w);
+    rh = clamp(found.height + padY * 2, 8, h);
+    rx = clamp(found.left - padX, 0, w - rw);
+    ry = clamp(found.top - padY, 0, h - rh);
+  } else {
+    // 2순위 — 못 찾으면 인물 사진의 통계적 얼굴 자리(위쪽 가운데).
+    const z = zone || FACE_ZONE;
+    rw = clamp(Math.round(w * z.w), 8, w);
+    rh = clamp(Math.round(h * z.h), 8, h);
+    rx = clamp(Math.round(w * z.cx - rw / 2), 0, w - rw);
+    ry = clamp(Math.round(h * z.top), 0, h - rh);
+  }
+
+  // 잘라내서 아주 작게 줄였다가 원래 크기로 되돌리면 네모칸 모자이크가 됩니다.
+  // nearest(가장 가까운 점)로 늘려야 네모가 뭉개지지 않고 각지게 남습니다.
+  const tiny = await sharp(buf)
+    .extract({ left: rx, top: ry, width: rw, height: rh })
+    .resize(blocks, Math.max(1, Math.round((blocks * rh) / rw)), { kernel: "nearest" })
+    .toBuffer();
+  const block = await sharp(tiny).resize(rw, rh, { kernel: "nearest" }).toBuffer();
+
+  /**
+   * ⚠️ 네모로 가리면 **사진이 깨진 것처럼** 보입니다. 실제로 그려보고 알았습니다.
+   * 얼굴은 둥그니까 타원으로 가립니다. 그래야 "일부러 가렸구나"로 읽히고,
+   * 배경까지 뭉텅이로 지워지지 않습니다.
+   */
+  const oval = await sharp(block)
+    .composite([{
+      input: Buffer.from(
+        `<svg width="${rw}" height="${rh}" xmlns="http://www.w3.org/2000/svg">` +
+        `<ellipse cx="${rw / 2}" cy="${rh / 2}" rx="${rw / 2}" ry="${rh / 2}" fill="#fff"/></svg>`
+      ),
+      blend: "dest-in",
+    }])
+    .png()
+    .toBuffer();
+
+  return sharp(buf).composite([{ input: oval, left: rx, top: ry }]).toBuffer();
 }
 
 /**
@@ -121,14 +335,39 @@ async function beforeAfter({
   size = "square",
   theme = "black",
   labels = { left: "BEFORE", right: "AFTER" },
+  // "left" | "right" — 한쪽만 얼굴을 가려 "누구?"로 끌 때 (thumbStrategy의 두 명 중 1명 모자이크)
+  mosaicSide = null,
 }) {
   const S = SIZES[size] || SIZES.square;
   const halfW = Math.round(S.w / 2);
 
-  const [left, right] = await Promise.all([
-    cropFace(beforeBuf, halfW, S.h).then(toMono),
-    cropFace(afterBuf, halfW, S.h),
+  /**
+   * ⚠️ 순서가 중요합니다 — **모자이크를 먼저, 흑백은 나중에.**
+   * 처음엔 흑백으로 바꾼 뒤에 모자이크를 걸었는데, 얼굴 찾기가 살색을 보기 때문에
+   * 흑백 사진에서는 얼굴을 못 찾아서 엉뚱한 자리를 가렸습니다(왼쪽만 그랬습니다).
+   */
+  /**
+   * 두 장의 **얼굴 크기를 맞춥니다.**
+   *
+   * ⚠️ 눈높이만 맞췄더니 한쪽 얼굴이 눈에 띄게 크게 나와서 짝이 안 맞아 보였습니다.
+   * 먼저 각각 어떻게 잘릴지 계획만 뽑아서, 둘 중 **더 큰 쪽에 맞춰** 작은 쪽을 당깁니다.
+   * (작은 쪽으로 맞추려면 큰 쪽을 줄여야 하는데, 줄이면 화면에 빈 자리가 생깁니다.)
+   */
+  const [planB, planA] = await Promise.all([
+    faceCropPlan(beforeBuf, halfW, S.h).catch(() => null),
+    faceCropPlan(afterBuf, halfW, S.h).catch(() => null),
   ]);
+  const sameFace = planB && planA
+    ? Math.min(0.5, Math.max(planB.faceRatio, planA.faceRatio))
+    : 0;
+
+  let [left, right] = await Promise.all([
+    cropFace(beforeBuf, halfW, S.h, { minFaceRatio: sameFace }),
+    cropFace(afterBuf, halfW, S.h, { minFaceRatio: sameFace }),
+  ]);
+  if (mosaicSide === "left") left = await applyMosaic(left, halfW, S.h);
+  if (mosaicSide === "right") right = await applyMosaic(right, halfW, S.h);
+  left = await toMono(left);
 
   const layers = [
     { input: left, left: 0, top: 0 },
@@ -151,10 +390,11 @@ async function beforeAfter({
     .toBuffer();
 }
 
-/** 한 장짜리 — 오버레이만 얹습니다. */
-async function single({ buf, text = "", sub = "", size = "square", theme = "black", position = "bottom" }) {
+/** 한 장짜리 — 오버레이만 얹습니다. mosaic를 켜면 얼굴 자리를 가립니다. */
+async function single({ buf, text = "", sub = "", size = "square", theme = "black", position = "bottom", mosaic = false }) {
   const S = SIZES[size] || SIZES.square;
-  const base = await cropFace(buf, S.w, S.h);
+  let base = await cropFace(buf, S.w, S.h, { eye: position === "top" ? 0.52 : 0.38 });
+  if (mosaic) base = await applyMosaic(base, S.w, S.h);
   const layers = [];
   if (text) layers.push({ input: overlaySvg({ w: S.w, h: S.h, text, sub, theme, position }), left: 0, top: 0 });
   return sharp(base).composite(layers).jpeg({ quality: 90 }).toBuffer();
@@ -192,4 +432,4 @@ function suggestText(title = "") {
   return [...new Set(out)].filter((s) => s.length >= 2).slice(0, 5);
 }
 
-module.exports = { beforeAfter, single, suggestText, SIZES, THEMES };
+module.exports = { beforeAfter, single, suggestText, applyMosaic, findFace, cropFace, faceCropPlan, FACE_ZONE, SIZES, THEMES };

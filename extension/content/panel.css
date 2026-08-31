@@ -254,52 +254,41 @@
 
 
 
-/* ── 글쓰기 창 아래 도구 막대 ─────────────────────────────
-   ⚠️ 자리를 세 번 옮겼습니다.
+/* ── 도구 막대 ────────────────────────────────────────────
+   ⚠️ 자리를 네 번 옮겼습니다.
      1) 오른쪽 위 가로 — 네이버 에디터 도구줄을 가림. 사장님이 불편하다고 하심
      2) 오른쪽 세로   — 안 가리지만 글 쓰는 손과 멂
-     3) 아래 가로     — 지금. 네이버 글감 바 바로 위
+     3) 아래 가로     — 사진을 넣을 때 본문 아랫부분을 가려서 또 불편
+     4) 지금 — 둘로 나눔. 버튼은 오른쪽 세로 여백, 글자수는 왼쪽 아래.
+        네이버 본문은 가운데 정렬이라 좌우가 늘 비어 있습니다. 거기를 씁니다.
+        글자수만 왼쪽 아래에 따로 두는 건, 타자 치는 내내 곁눈으로 보는 숫자라
+        버튼과 같이 접히면 안 되기 때문입니다.
    위쪽은 네이버가 도구를 두는 자리라 무엇을 올려도 가립니다.
 
    ⚠️ 네이버 CSS에 물들지 않도록 상속값을 전부 직접 지정합니다. */
+
+/* 버튼 — 오른쪽 세로 */
 #ws-tools-dock {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  /* 네이버 글감 바가 아래에 있습니다. 그 위로 올라가도록 띄웁니다. */
-  /* 네이버 글감 바가 아래 가운데에 있습니다(높이 약 50px + 여백 12px).
-     그 위로 확실히 뜨도록 92px를 띄웁니다. 붙으면 눌러야 할 걸 잘못 누릅니다. */
-  bottom: 92px; z-index: 2147483000;
-  display: flex; align-items: center; gap: 18px;
-  /* ⚠️ 줄바꿈을 허용하면 화면이 좁을 때 세로로 쌓여서 '막대'가 아니게 됩니다.
-     한 줄을 유지하고, 모자라면 가로로 밀어서 봅니다. */
-  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
-  /* ⚠️ vw가 0으로 계산되는 환경이 있습니다(테스트 중 실제로 겪음).
-     그러면 max-width가 음수가 되어 막대가 세로로 접힙니다.
-     바닥값을 둬서 어떤 경우에도 가로로 펴지게 합니다. */
-  max-width: max(600px, calc(100vw - 40px));
-  padding: 14px 20px;
+  position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+  z-index: 2147483000;
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+  /* 버튼이 많아 화면보다 길어질 수 있습니다. 세로로 밀어서 봅니다. */
+  max-height: calc(100vh - 140px); overflow-y: auto; overflow-x: hidden;
+  width: 132px;
+  padding: 12px 10px;
   background: rgba(24, 26, 32, .97);
   border-radius: 12px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, .3);
   font-family: -apple-system, "Malgun Gothic", sans-serif;
   color: #f3f4f6; line-height: 1.4;
 }
-
-#ws-tools-dock .ws-dock-counts {
-  display: flex; align-items: baseline; gap: 10px; white-space: nowrap; flex: none;
-  padding-right: 12px; border-right: 1px solid rgba(255,255,255,.14);
+#ws-tools-dock .ws-dock-acts {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
 }
-#ws-tools-dock .ws-dock-num b {
-  font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f3f4f6;
-}
-#ws-tools-dock .ws-dock-num { font-size: 15px; color: #b6bcc6; }
-#ws-tools-dock .ws-dock-sub { display: flex; gap: 14px; font-size: 14px; color: #b6bcc6; }
-#ws-tools-dock .ws-dock-sub b { color: #e5e7eb; font-variant-numeric: tabular-nums; }
-
-#ws-tools-dock .ws-dock-acts { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; }
 #ws-tools-dock .ws-dock-btn {
-  font-family: inherit; font-size: 16px; font-weight: 600; white-space: nowrap;
-  padding: 12px 18px; cursor: pointer; line-height: 1.3;
-  border: 1px solid rgba(255,255,255,.16); border-radius: 9px;
+  font-family: inherit; font-size: 14px; font-weight: 600; white-space: nowrap;
+  padding: 10px 8px; cursor: pointer; line-height: 1.3; text-align: center;
+  border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
   background: rgba(255,255,255,.07); color: #e5e7eb;
 }
 #ws-tools-dock .ws-dock-btn:hover { background: rgba(255,255,255,.15); }
@@ -307,25 +296,63 @@
 #ws-tools-dock .ws-dock-btn.primary:hover { background: #0a7d44; }
 
 #ws-tools-dock .ws-dock-min {
-  font-family: inherit; font-size: 18px; padding: 10px 14px; cursor: pointer;
+  font-family: inherit; font-size: 16px; padding: 6px; cursor: pointer;
   border: none; border-radius: 7px; background: none; color: #9ca3af;
 }
 #ws-tools-dock .ws-dock-min:hover { color: #e5e7eb; }
 
-/* 접으면 글자수만 남깁니다 — 타자 치는 내내 보는 숫자라 이것만은 남깁니다 */
-#ws-tools-dock.ws-dock-collapsed .ws-dock-sub,
+/* 접으면 버튼을 숨기고 펴는 손잡이만 남깁니다 */
+#ws-tools-dock.ws-dock-collapsed { width: auto; padding: 8px; }
 #ws-tools-dock.ws-dock-collapsed .ws-dock-btn { display: none; }
-#ws-tools-dock.ws-dock-collapsed .ws-dock-counts { border-right: none; padding-right: 0; }
 #ws-tools-dock.ws-dock-collapsed .ws-dock-min { transform: rotate(180deg); }
 
-/* 결과 창은 막대 위로 뜹니다 */
-#ws-tools-panel {
-  left: 50%; right: auto; transform: translateX(-50%);
-  top: auto; bottom: 180px;
-}
+#ws-tools-dock::-webkit-scrollbar { width: 0; }
 
-/* 가로 스크롤 막대는 숨깁니다 — 있으면 막대가 두꺼워 보입니다 */
-#ws-tools-dock::-webkit-scrollbar { height: 0; }
+/* 제목 띠 — 편집기 도구줄 바로 아래, 가운데
+   ⚠️ 스크롤을 내려도 지금 무슨 제목으로 쓰던 글인지 보이게 하는 게 전부입니다.
+   누를 것이 없으니 pointer-events를 꺼서 밑에 있는 편집기를 그대로 쓸 수 있게 합니다. */
+#ws-title-bar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  /* 네이버 도구줄이 위쪽 두 줄(약 56px)을 씁니다. 그 바로 밑에 붙입니다. */
+  top: 60px; z-index: 2147482000;
+  max-width: min(760px, calc(100vw - 320px));
+  padding: 7px 18px;
+  background: rgba(24, 26, 32, .93);
+  border-radius: 8px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .22);
+  font-family: -apple-system, "Malgun Gothic", sans-serif;
+  font-size: 14px; font-weight: 600; line-height: 1.5;
+  color: #f3f4f6; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none;
+}
+#ws-title-bar[hidden] { display: none; }
+
+/* 글자수 — 왼쪽 아래 */
+#ws-tools-counts {
+  position: fixed; left: 16px; bottom: 16px; z-index: 2147483000;
+  padding: 10px 14px;
+  background: rgba(24, 26, 32, .97);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .3);
+  font-family: -apple-system, "Malgun Gothic", sans-serif;
+  color: #f3f4f6; line-height: 1.4;
+}
+#ws-tools-counts .ws-dock-counts {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; white-space: nowrap;
+}
+#ws-tools-counts .ws-dock-num b {
+  font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: #f3f4f6;
+}
+#ws-tools-counts .ws-dock-num { font-size: 14px; color: #b6bcc6; }
+#ws-tools-counts .ws-dock-sub { display: flex; gap: 10px; font-size: 12.5px; color: #b6bcc6; }
+#ws-tools-counts .ws-dock-sub b { color: #e5e7eb; font-variant-numeric: tabular-nums; }
+
+/* 결과 창은 오른쪽 막대 왼편에 붙여 띄웁니다 — 막대를 가리지 않게 */
+#ws-tools-panel {
+  left: auto; right: 160px; transform: none;
+  top: 50%; bottom: auto; margin-top: -180px;
+}
 
 /* 찾은 사실 고르기 */
 #ws-tools-panel .ws-fact-row {

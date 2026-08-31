@@ -325,23 +325,28 @@ function buildCoverCropFilter(targetW, targetH) {
   return `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase:flags=lanczos,crop=${targetW}:${targetH}`;
 }
 
-// 장면 인덱스에 따라 "확대"와 "축소", 좌/우 살짝 팬을 번갈아 적용해서 장면마다
-// 조금씩 다른 느낌의 켄번즈(Ken Burns) 애니메이션 필터를 만듭니다. width/height는 이
-// 필터가 최종적으로 출력할 크기(예: 배경은 화면 전체, 카드는 카드 안쪽 크기)입니다.
+// 장면 인덱스에 따라 "확대"와 "축소"를 번갈아 적용하고, 팬도 가로 한 방향이 아니라
+// 대각선(좌상/좌하/우상/우하) 네 방향을 돌아가며 써서 장면마다 다른 느낌의 켄번즈
+// (Ken Burns) 애니메이션 필터를 만듭니다. width/height는 이 필터가 최종적으로 출력할
+// 크기(예: 배경은 화면 전체, 카드는 카드 안쪽 크기)입니다.
 function buildKenBurnsFilter(index, duration, { width, height, maxZoom = 1.18, driftRatio = 0.07 } = {}) {
   const totalFrames = Math.max(Math.round(duration * FPS), 1);
   const rate = (maxZoom - 1) / totalFrames;
   const zoomIn = index % 2 === 0;
-  const panDir = Math.floor(index / 2) % 2 === 0 ? 1 : -1;
-  const driftPx = Math.round(width * driftRatio);
+  // dirX/dirY를 서로 다른 주기로 순환시켜서(4칸 주기를 한 칸 어긋나게) 확대/축소
+  // 여부와 상관없이 대각선 방향이 장면마다 다양하게 나오도록 합니다.
+  const dirX = index % 4 < 2 ? 1 : -1;
+  const dirY = (index + 1) % 4 < 2 ? 1 : -1;
+  const driftPxX = Math.round(width * driftRatio);
+  const driftPxY = Math.round(height * driftRatio * 0.6); // 세로는 화면비 특성상 살짝 덜 흔들리게
 
   // z='...' 처럼 필터 옵션 값을 작은따옴표로 감쌌기 때문에, 그 안의 쉼표(,)는
   // 필터 구분자로 해석되지 않고 그대로 문자로 들어갑니다 — 따로 이스케이프하지 않습니다.
   const zExpr = zoomIn
     ? `min(zoom+${rate.toFixed(6)},${maxZoom})`
     : `if(eq(on,0),${maxZoom},max(zoom-${rate.toFixed(6)},1.0))`;
-  const xExpr = `(iw-iw/zoom)/2+(${panDir}*${driftPx}*on/${totalFrames})`;
-  const yExpr = `(ih-ih/zoom)/2`;
+  const xExpr = `(iw-iw/zoom)/2+(${dirX}*${driftPxX}*on/${totalFrames})`;
+  const yExpr = `(ih-ih/zoom)/2+(${dirY}*${driftPxY}*on/${totalFrames})`;
 
   return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=1:s=${width}x${height}:fps=${FPS}`;
 }

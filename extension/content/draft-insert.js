@@ -437,7 +437,8 @@
   /** 화면에 실제로 보이는 요소 중, 글자가 딱 이걸로 시작하는 것을 찾습니다. */
   function visibleByText(startsWith, { top = null } = {}) {
     for (const el of document.querySelectorAll("button, [role='button'], li, span, div")) {
-      if (el.closest("#ws-tools-panel, #ws-tools-dock")) continue;
+      // 우리 도구 화면은 건너뜁니다 — 우리 버튼을 네이버 버튼으로 착각하면 엉뚱한 걸 누릅니다.
+      if (el.closest("#ws-tools-panel, #ws-tools-dock, #ws-tools-counts, #ws-title-bar")) continue;
       const t = (el.innerText || "").trim();
       if (!t || !t.startsWith(startsWith) || t.length > startsWith.length + 3) continue;
       const r = el.getBoundingClientRect();
@@ -457,6 +458,17 @@
       const p = bodyParagraphs({ includeGuide: true })
         .find((n) => norm(n.innerText || "").includes(norm(b.text)));
       if (!p) { failed.push(b.text.slice(0, 14)); continue; }
+
+      /**
+       * 0) 그 문단을 화면 안으로 끌어옵니다.
+       *
+       * ⚠️ 이게 없어서 소제목이 통째로 실패했습니다(0/6). 클릭 좌표는 **화면 기준**이라
+       * 문단이 스크롤 밖에 있으면 좌표가 화면을 벗어나고, 그 자리엔 아무것도 없어서
+       * 클릭이 허공을 칩니다. 긴 글은 소제목 대부분이 화면 밖이라 거의 다 놓쳤습니다.
+       * 가운데로 끌어와야 위쪽 도구줄이나 아래 글감 바에 가리지도 않습니다.
+       */
+      try { p.scrollIntoView({ block: "center" }); } catch {}
+      await settle(300);
 
       // 1) 그 문단을 진짜로 클릭 — 편집기 커서가 그 문단에 섭니다.
       if (!(await realClick(p, { dxCap: 30 }))) { failed.push(b.text.slice(0, 14)); continue; }
@@ -643,8 +655,42 @@
      * 모든 소제목 **직전에 [빈 줄 + 사진 자리 + 빈 줄]을 보장**합니다.
      * 원고에 이미 그 자리 사진이 있으면 중복으로 안 넣습니다.
      */
+    /**
+     * 긴 문단을 넣기 전에 잘라둡니다 (2026-08-31 신설).
+     *
+     * ⚠️ 왜 필요한가: 줄바꿈 도구는 있었지만 **버튼이라 안 눌렸습니다.**
+     * 그래서 실측에서 사장님 글은 문단 중앙 41자, 45자 넘는 문단이 43%였습니다.
+     * 벤치마킹(홈판·뷰티·패션 메이트 25곳)은 16~24자에 45자 초과가 0~7%입니다.
+     * 모바일 한 줄이 20자라, 41자면 두 줄이 넘어가고 두 줄이 넘으면 벽으로 보입니다.
+     * 지침에 적어두는 것만으로는 안 바뀝니다. 넣을 때 코드가 잘라야 바뀝니다.
+     *
+     * ⚠️ 글자는 하나도 안 바꿉니다. 자를 뿐입니다(breakOne 규칙 — 국어 문법 기준).
+     * ⚠️ 서식 표기([강조]…[/강조] 등)가 조각 사이에서 끊기면 **그 문단은 안 자릅니다.**
+     *    표기가 반쪽만 남으면 서식이 통째로 깨져서, 자르는 이득보다 손해가 큽니다.
+     */
+    const B = typeof window !== "undefined" && window.__wsBreak;
+    const MARKS = ["강조", "형광", "밑줄", "색", "크게"];
+    const marksBalanced = (s) =>
+      MARKS.every((m) => (s.split(`[${m}]`).length - 1) === (s.split(`[/${m}]`).length - 1));
+
+    const splitLongText = (b) => {
+      if (!B || b.kind !== "text" || !b.text) return [b];
+      const pieces = B.breakOne(b.text);
+      if (pieces.length <= 1) return [b];
+      // 표기가 반쪽만 남는 조각이 하나라도 있으면 자르지 않습니다.
+      if (!pieces.every(marksBalanced)) return [b];
+      /**
+       * ⚠️ 굵게 표시(marks)가 조각 두 개에 걸쳐 있으면 자르지 않습니다.
+       * 아래 서식 거는 자리는 `h.includes(m)`으로만 붙이기 때문에, 걸친 표시는
+       * 조용히 사라집니다. 사라진 줄도 모르는 게 제일 나쁩니다.
+       */
+      if ((b.marks || []).some((m) => !pieces.some((p) => p.includes(m)))) return [b];
+      // 조각마다 자기 안에 실제로 있는 표시만 들고 갑니다.
+      return pieces.map((t) => ({ ...b, text: t, marks: (b.marks || []).filter((m) => t.includes(m)) }));
+    };
+
     const blocksOut = [];
-    for (const b of draft.blocks) {
+    for (const b of draft.blocks.flatMap(splitLongText)) {
       if (b.kind === "subhead") {
         // 바로 앞(빈 줄 건너뛰고)에 사진 자리가 이미 있는지 봅니다.
         let j = blocksOut.length - 1;
@@ -847,7 +893,8 @@
       // 그걸 먼저 집어서, 자기가 자기를 누르고 ok:true 를 돌려줬습니다.
       // 네이버 저장은 한 번도 안 눌렸는데 "저장했습니다"라고 말했습니다.
       // 흉내 편집기 시험에서 잡았습니다.
-      if (el.closest("#ws-tools-panel, #ws-tools-dock")) continue;
+      // 우리 도구 화면은 건너뜁니다 — 우리 버튼을 네이버 버튼으로 착각하면 엉뚱한 걸 누릅니다.
+      if (el.closest("#ws-tools-panel, #ws-tools-dock, #ws-tools-counts, #ws-title-bar")) continue;
       const t = (el.innerText || el.textContent || "").trim();
       if (!/^저장$|^임시저장$|저장\s*\d*$/.test(t)) continue;
       if (bad.test(t)) continue;
