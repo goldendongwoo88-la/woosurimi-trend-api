@@ -930,9 +930,17 @@
       const t = (el.innerText || el.textContent || "").trim();
       if (!/^저장$|^임시저장$|저장\s*\d*$/.test(t)) continue;
       if (bad.test(t)) continue;
-      if (el.offsetParent === null) continue;
+      /**
+       * ⚠️ 2026-09-01: 예전엔 offsetParent === null 로 걸렀습니다. 그게 함정입니다 —
+       * 네이버 저장 버튼은 상단에 **고정(position:fixed)**돼 있어서, 화면에 멀쩡히
+       * 보여도 offsetParent가 null입니다. 그래서 "저장 버튼을 못 찾았습니다"가 났습니다.
+       * 자동 서식에서 똑같은 원인을 잡았고, 여기도 같은 자리였습니다.
+       */
       const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.width < 200 && r.height < 60) { btn = el; break; }
+      if (r.width <= 0 || r.height <= 0) continue;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") continue;
+      if (r.width < 200 && r.height < 60) { btn = el; break; }
     }
     if (!btn) return { ok: false, why: "저장 버튼을 못 찾았습니다. 직접 눌러주세요." };
 
