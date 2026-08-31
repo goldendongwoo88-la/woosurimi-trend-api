@@ -516,7 +516,7 @@
       if (!p) { failed.push({ what: `소제목 "${b.text.slice(0, 18)}"`, why: "본문에서 그 줄을 못 찾았습니다" }); continue; }
       (await F.setParagraphStyle(p, "소제목"))
         ? done.push(`소제목: ${b.text.slice(0, 18)}`)
-        : failed.push({ what: `소제목 "${b.text.slice(0, 18)}"`, why: "편집기가 안 바꿔줬습니다" });
+        : failed.push({ what: `소제목 "${b.text.slice(0, 18)}"`, why: (F.getLastWhy && F.getLastWhy()) || "편집기가 안 바꿔줬습니다" });
     }
 
     for (const b of quotes) {
@@ -525,7 +525,7 @@
       if (!p) { failed.push({ what: `인용구 "${b.text.slice(0, 18)}"`, why: "본문에서 그 문장을 못 찾았습니다" }); continue; }
       (await F.setParagraphStyle(p, "인용구"))
         ? done.push(`인용구: ${b.text.slice(0, 18)}`)
-        : failed.push({ what: `인용구 "${b.text.slice(0, 18)}"`, why: "편집기가 안 바꿔줬습니다" });
+        : failed.push({ what: `인용구 "${b.text.slice(0, 18)}"`, why: (F.getLastWhy && F.getLastWhy()) || "편집기가 안 바꿔줬습니다" });
     }
 
     // 굵게 — ⚠️ 클로드가 이미 골라준 것만 넣습니다. AI를 다시 안 부릅니다. 0원.

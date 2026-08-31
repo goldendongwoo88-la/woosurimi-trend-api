@@ -81,6 +81,14 @@
     return null;
   }
 
+  /**
+   * 마지막 실패 이유. 실패한 자리에서 남기고, 부르는 쪽이 화면에 보여줍니다.
+   * (이유 없이 "안 바꿔줬습니다"만 나오면 고칠 자리를 못 찾습니다)
+   */
+  let lastWhy = "";
+  const fail = (why) => { lastWhy = why; return false; };
+  const getLastWhy = () => lastWhy;
+
   /** 문단 안에 커서를 놓습니다. 스타일 바꾸기는 커서가 있어야 먹습니다. */
   function putCaret(paragraph) {
     try {
@@ -356,5 +364,5 @@
   }
 
   // 다른 파일에서 쓸 수 있게 내놓습니다.
-  window.__wsFormat = { setParagraphStyle, applyMark, selectPhrase, findStyleDropdown, settle, norm, setEditableText, charOffset };
+  window.__wsFormat = { setParagraphStyle, applyMark, selectPhrase, findStyleDropdown, settle, norm, setEditableText, charOffset, getLastWhy, isVisible };
 })();
