@@ -55,18 +55,45 @@
     return s.visibility !== "hidden" && s.display !== "none" && s.opacity !== "0";
   }
 
-  function findStyleDropdown() {
-    const wanted = ["본문", "소제목", "인용구"];
-    // 도구줄 안에서 저 셋 중 하나를 글자로 가진 작은 버튼을 찾습니다.
-    for (const el of document.querySelectorAll("button, [role='button'], .se-toolbar-option-text-button, a, span")) {
-      const t = (el.innerText || el.textContent || "").trim();
-      if (wanted.includes(t) && isVisible(el)) {
-        // 너무 큰 요소면 드롭다운이 아니라 감싸는 상자입니다.
+  /**
+   * 글자만 있는 라벨을 **진짜 눌리는 버튼**으로 바꿉니다.
+   *
+   * ⚠️ 2026-08-31 실측으로 잡은 결정적 원인입니다.
+   * 네이버 도구줄은 <button><span class="se-toolbar-label">굵게</span></button> 구조라
+   * 글자로 찾으면 항상 안쪽 span이 잡힙니다. 그 span을 눌러봤자 아무 일도 안 납니다.
+   * (드롭다운이 안 열려서 "항목이 안 보인다"고 나왔던 겁니다)
+   */
+  function clickable(el) {
+    if (!el) return null;
+    return el.closest(
+      "button, [role='button'], [role='menuitem'], [role='option'], a, li, " +
+      "[class*='se-toolbar-button'], [class*='se-toolbar-option'], [class*='se-toolbar-item']"
+    ) || el;
+  }
+
+  /**
+   * 도구줄에서 이름으로 버튼을 찾습니다. 글자든 aria-label이든.
+   * @param {string[]} names 찾을 이름들 (먼저 나온 걸 우선)
+   */
+  function findToolbarButton(names) {
+    const want = Array.isArray(names) ? names : [names];
+    for (const name of want) {
+      for (const el of document.querySelectorAll("button, [role='button'], a, span, li, [aria-label]")) {
+        const t = (el.innerText || el.textContent || "").trim();
+        const aria = (el.getAttribute && el.getAttribute("aria-label") || "").trim();
+        if (t !== name && aria !== name) continue;
+        if (!isVisible(el)) continue;
         const r = el.getBoundingClientRect();
-        if (r.width < 260 && r.height < 70) return el;
+        if (r.width >= 260 || r.height >= 70) continue;
+        return clickable(el);
       }
     }
     return null;
+  }
+
+  function findStyleDropdown() {
+    // 문단 스타일 드롭다운은 지금 상태를 글자로 보여줍니다 — 보통 "본문".
+    return findToolbarButton(["본문", "소제목", "인용구"]);
   }
 
   /** 드롭다운이 열린 뒤, 원하는 항목을 찾습니다. */
@@ -76,7 +103,7 @@
       if (t !== label) continue;
       if (!isVisible(el)) continue;
       const r = el.getBoundingClientRect();
-      if (r.width < 260 && r.height < 70) return el;
+      if (r.width < 260 && r.height < 70) return clickable(el);
     }
     return null;
   }
@@ -270,8 +297,31 @@
     }
   }
 
+  /**
+   * 색 고르는 판에서 색 한 칸을 찾습니다.
+   * 네이버는 색 칸을 배경색이 칠해진 작은 네모로 그립니다.
+   * 어떤 색인지 고집하지 않습니다 — 판에서 눈에 띄는 진한 색이면 됩니다.
+   */
+  function findColorSwatch() {
+    const cands = [];
+    for (const el of document.querySelectorAll("button, a, li, span, [role='option']")) {
+      if (!isVisible(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.width > 40 || r.height < 8 || r.height > 40) continue;
+      const bg = getComputedStyle(el).backgroundColor || "";
+      const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!m) continue;
+      const [r0, g0, b0] = [+m[1], +m[2], +m[3]];
+      if (r0 > 235 && g0 > 235 && b0 > 235) continue; // 흰색 계열은 건너뜁니다
+      cands.push({ el, score: Math.abs(r0 - g0) + Math.abs(g0 - b0) }); // 무채색보다 유채색 우선
+    }
+    cands.sort((a, b) => b.score - a.score);
+    return cands.length ? cands[0].el : null;
+  }
+
   const COMMANDS = {
     bold: {
+      btn: ["굵게"],
       // ⚠️ bold와 underline은 **토글**입니다. 이미 굵은 글자에 또 걸면 **풀립니다.**
       // 실제로 이것 때문에 "반환값은 true인데 굵게가 안 들어간" 일이 있었습니다.
       // 그래서 먼저 지금 상태를 보고, 이미 되어 있으면 건드리지 않습니다.
@@ -282,6 +332,7 @@
       landed: (el) => /<b[\s>]|<strong[\s>]|font-weight:\s*(bold|[6-9]00)/i.test(el.innerHTML),
     },
     underline: {
+      btn: ["밑줄"],
       toggle: true,
       key: "u",
       state: () => document.queryCommandState("underline"),
@@ -289,11 +340,15 @@
       landed: (el) => /<u[\s>]|text-decoration[^;"]*underline/i.test(el.innerHTML),
     },
     color: {
+      btn: ["글자색"],
+      palette: true, // 누르면 색 고르는 판이 열립니다 — 한 번 더 골라야 합니다
       toggle: false,
       run: () => document.execCommand("foreColor", false, "#c0392b"),
       landed: (el) => /<font[^>]*color|(?<!background-)color:\s*(?!inherit)/i.test(el.innerHTML),
     },
     highlight: {
+      btn: ["배경색"],
+      palette: true,
       toggle: false,
       // hiliteColor가 안 먹는 브라우저가 있어서 backColor로 한 번 더 시도합니다.
       run: () => document.execCommand("hiliteColor", false, "#fff3a3") ||
@@ -323,11 +378,32 @@
       return { ok: true, already: true, why: "" };
     }
 
-    try { cmd.run(); } catch {}
-    await settle(140);
+    // ── 1순위: 도구줄의 진짜 버튼 ──
+    // ⚠️ 2026-09-01 실측: 도구줄에 굵게·밑줄·글자색·배경색 버튼이 그대로 있습니다.
+    // 사람이 하는 것과 똑같이 그 버튼을 누르는 게 가장 확실합니다.
+    // execCommand는 스마트에디터가 통째로 무시할 수 있어서(오류도 안 냅니다) 예비로 내렸습니다.
+    let usedBtn = false;
+    if (cmd.btn) {
+      const b = findToolbarButton(cmd.btn);
+      if (b) {
+        realClick(b);
+        await settle(cmd.palette ? 260 : 160);
+        // 색은 판이 열립니다. 판에서 색 하나를 더 골라야 실제로 들어갑니다.
+        if (cmd.palette) {
+          const swatch = findColorSwatch();
+          if (swatch) { realClick(swatch); await settle(200); }
+        }
+        usedBtn = true;
+      }
+    }
 
-    // ⚠️ 스마트에디터는 자기가 직접 편집을 관리해서 execCommand를 통째로 무시할 수 있습니다.
-    // (오류도 안 내고 조용히 지나갑니다) 그럴 땐 편집기가 직접 듣고 있는 **단축키**로 한 번 더.
+    // ── 2순위: execCommand ── (버튼을 못 찾았거나 버튼이 안 먹었을 때)
+    if (!usedBtn || root.innerHTML === beforeHtml) {
+      try { cmd.run(); } catch {}
+      await settle(140);
+    }
+
+    // ── 3순위: 편집기가 직접 듣는 단축키 ──
     if (root.innerHTML === beforeHtml && cmd.key) {
       pressKey(root, cmd.key);
       await settle(180);
