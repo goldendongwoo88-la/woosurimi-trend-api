@@ -267,9 +267,16 @@
 
    ⚠️ 네이버 CSS에 물들지 않도록 상속값을 전부 직접 지정합니다. */
 
-/* 버튼 — 오른쪽 세로 */
+/* 버튼 — 오른쪽 흰 여백의 정중앙 세로
+   ⚠️ 화면 맨 오른쪽(right:16px)에 붙였더니 네이버 자기 버튼들(내 클립·라이브러리·템플릿,
+   물음표)과 스크롤바를 가렸습니다(2026-08-31 사장님 지적). 네이버 본문은 가운데 정렬이라
+   본문 오른쪽 끝(약 50vw+350px)부터 창 끝까지가 빈 여백입니다 — 그 여백의 한가운데
+   (75vw+175px)에 세웁니다. 창이 좁으면 오른쪽 끝에서 74px 안쪽까지만 갑니다. */
 #ws-tools-dock {
-  position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+  position: fixed;
+  right: auto;
+  left: min(calc(75vw + 175px), calc(100vw - 74px));
+  top: 50%; transform: translate(-50%, -50%);
   z-index: 2147483000;
   display: flex; flex-direction: column; align-items: stretch; gap: 6px;
   /* 버튼이 많아 화면보다 길어질 수 있습니다. 세로로 밀어서 봅니다. */
@@ -348,9 +355,12 @@
 #ws-tools-counts .ws-dock-sub { display: flex; gap: 10px; font-size: 12.5px; color: #b6bcc6; }
 #ws-tools-counts .ws-dock-sub b { color: #e5e7eb; font-variant-numeric: tabular-nums; }
 
-/* 결과 창은 오른쪽 막대 왼편에 붙여 띄웁니다 — 막대를 가리지 않게 */
+/* 결과 창은 막대 왼편에 붙여 띄웁니다 — 막대와 같은 기준점에서 왼쪽으로 비켜서,
+   막대가 어디로 가든 서로 가리지 않습니다 */
 #ws-tools-panel {
-  left: auto; right: 160px; transform: none;
+  left: auto;
+  right: calc(100vw - min(calc(75vw + 175px), calc(100vw - 74px)) + 78px);
+  transform: none;
   top: 50%; bottom: auto; margin-top: -180px;
 }
 

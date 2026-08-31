@@ -22,9 +22,20 @@ const FONT_PATH = path.join(__dirname, "..", "assets", "fonts", "NotoSansKR-Bold
 const FONT = fontkit.openSync(FONT_PATH);
 const UPM = FONT.unitsPerEm;
 
+// 폰트에 없는 기호는 두부(□)로 나옵니다 — 대체가 있으면 바꾸고, 없으면 지웁니다.
+const SUBS = { "℃": "°C", "℉": "°F", "✓": "", "※": "", "→": "-" };
+function sanitize(t) {
+  let out = "";
+  for (const ch of String(t == null ? "" : t)) {
+    if (FONT.hasGlyphForCodePoint(ch.codePointAt(0))) { out += ch; continue; }
+    out += SUBS[ch] != null ? SUBS[ch] : "";
+  }
+  return out;
+}
+
 function measure(text, size) {
   let w = 0;
-  for (const ch of text || "") w += FONT.glyphForCodePoint(ch.codePointAt(0)).advanceWidth * (size / UPM);
+  for (const ch of sanitize(text)) w += FONT.glyphForCodePoint(ch.codePointAt(0)).advanceWidth * (size / UPM);
   return w;
 }
 
@@ -34,7 +45,7 @@ function glyphs(text, x, y, size, fill, opacity) {
   let cx = x;
   let out = "";
   const op = opacity != null ? ` opacity="${opacity}"` : "";
-  for (const ch of text || "") {
+  for (const ch of sanitize(text)) {
     const g = FONT.glyphForCodePoint(ch.codePointAt(0));
     if (ch !== " ") {
       const d = g.path.scale(s, -s).translate(cx, y).toSVG();

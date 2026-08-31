@@ -56,6 +56,12 @@
       "port": 8491
     },
     {
+      "name": "detail-portable",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "C:\\nodejs-portable\\node-v20.15.0-win-x64\\node.exe ..\\golden-detail-factory\\server.js"],
+      "port": 8491
+    },
+    {
       "name": "coupletube",
       "runtimeExecutable": "node",
       "runtimeArgs": ["golden-couple-tube/server.js"],
