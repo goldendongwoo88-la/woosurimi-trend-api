@@ -75,7 +75,7 @@ const idsOf = (r) => r.items.map((x) => x.pattern.id);
   console.log("\n[4] 10가지 틀이 전부 실제로 그려지는가");
   const bufs = [await photo({ hue: 22 }), await photo({ hue: 8, cx: 0.44 }), await photo({ hue: 300, r: 0.16 })];
   const ids = Object.keys(P.PATTERNS);
-  ok(ids.length === 10, "틀이 10가지다", ids.length + "가지");
+  ok(ids.length === 11, "틀이 11가지다  (말풍선 추가로 10 → 11)", ids.length + "가지");
   for (const id of ids) {
     const pat = P.PATTERNS[id];
     try {
@@ -109,6 +109,60 @@ const idsOf = (r) => r.items.map((x) => x.pattern.id);
   ok(accent("6억? 그럼 줘야지") === "6억?", "숫자가 있으면 숫자 낱말", accent("6억? 그럼 줘야지"));
   ok(accent("멤버 한 명이 소시오패스였다") === "소시오패스였다",
     "숫자가 없으면 제일 긴 낱말  (첫 낱말을 쓰다 '멤버'가 빨개졌던 것)", accent("멤버 한 명이 소시오패스였다"));
+
+  console.log("\n[7] 말풍선 — 제목에 있는 대사만 쓴다");
+  const withQ = '“공실 다 채워도 100만 원?”...이해인, 40억 건물주 되고 알게 된 현실';
+  ok(P.quoteOf(withQ) === "공실 다 채워도 100만 원?", "제목의 따옴표 대사를 그대로 뽑는다", P.quoteOf(withQ));
+  ok(P.quoteOf("따옴표가 없는 제목입니다") === "", "따옴표가 없으면 빈 값  (지어낸 대사 금지)");
+  ok(idsOf(P.pick(withQ, "", 3))[0] === "bubbleQuote", "대사가 있으면 말풍선 틀이 1위");
+  ok(!idsOf(P.pick("따옴표 없는 연예인 근황 논란", "", 3)).includes("bubbleQuote"),
+    "대사가 없으면 말풍선 틀을 아예 추천하지 않는다  (빈 말풍선 금지)");
+  {
+    const j = await T.renderPattern(P.PATTERNS.bubbleQuote, bufs, { text: "40억인데?", quote: P.quoteOf(withQ) });
+    const m = await sharp(j).metadata();
+    ok(m.width === 1200 && m.height === 1200 && j.length > 3000, "말풍선 틀이 그려진다", `${m.width}x${m.height}`);
+  }
+
+  console.log("\n[8] 채널 표식(워터마크)");
+  {
+    const plain = await T.renderPattern(P.PATTERNS.faceClose, bufs, {});
+    const marked = await T.renderPattern(P.PATTERNS.faceClose, bufs, { brand: "man_is_best" });
+    ok(!plain.equals(marked), "표식을 넣으면 그림이 달라진다");
+    // 오른쪽 아래 구석만 바뀌고 가운데는 그대로여야 합니다.
+    const cut = (b, rect) => sharp(b).extract(rect).raw().toBuffer();
+    const [c1, c2] = await Promise.all([
+      cut(plain, { left: 300, top: 300, width: 300, height: 300 }),
+      cut(marked, { left: 300, top: 300, width: 300, height: 300 }),
+    ]);
+    ok(c1.equals(c2), "가운데(사진)는 안 건드린다");
+    const [w1, w2] = await Promise.all([
+      cut(plain, { left: 950, top: 1100, width: 220, height: 70 }),
+      cut(marked, { left: 950, top: 1100, width: 220, height: 70 }),
+    ]);
+    ok(!w1.equals(w2), "오른쪽 아래 구석에 들어간다");
+    const empty = await T.renderPattern(P.PATTERNS.faceClose, bufs, { brand: "" });
+    ok(empty.equals(plain), "표식이 빈 값이면 아무것도 안 그린다");
+  }
+
+  console.log("\n[9] 얼굴 찾기 — 손을 얼굴로 잡지 않는가  ← 실제로 겪은 문제");
+  {
+    const svg = (s) => sharp(Buffer.from(s)).jpeg({ quality: 92 }).toBuffer();
+    // 큰 손(길쭉·눈 없음) + 작은 얼굴(눈 있음). 예전에는 손을 골랐습니다.
+    const handAndFace = await svg(`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200">
+      <rect width="900" height="1200" fill="#eeeeee"/>
+      <ellipse cx="300" cy="800" rx="150" ry="330" fill="#e8c4a8"/>
+      <ellipse cx="640" cy="250" rx="110" ry="135" fill="#e8c4a8"/>
+      <circle cx="600" cy="215" r="13" fill="#2b1d16"/><circle cx="680" cy="215" r="13" fill="#2b1d16"/></svg>`);
+    const f = await T.findFace(handAndFace);
+    ok(!!f, "얼굴을 찾긴 한다");
+    if (f) {
+      const cx = f.left + f.width / 2, cy = f.top + f.height / 2;
+      ok(cx > 500 && cy < 500, "큰 손이 아니라 작은 얼굴을 고른다  (눈으로 확인)", `x=${Math.round(cx)} y=${Math.round(cy)}`);
+    }
+    const monoBuf = await sharp(handAndFace).grayscale().jpeg().toBuffer();
+    ok((await T.findFace(monoBuf)) === null,
+      "흑백 사진은 못 찾는다고 정직하게 답한다  (살색이 없으니 — 부르는 쪽이 위쪽 중앙으로 물러섬)");
+  }
 
   console.log(`\n  통과 ${pass} · 실패 ${fail}`);
   process.exit(fail ? 1 : 0);

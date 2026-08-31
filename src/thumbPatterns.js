@@ -1,5 +1,5 @@
 /**
- * 썸네일 패턴 — **홈판 상위 블로그가 실제로 쓰는 10가지 틀**과, 글에 맞는 것을 골라주는 규칙.
+ * 썸네일 패턴 — **홈판 상위 블로그가 실제로 쓰는 11가지 틀**과, 글에 맞는 것을 골라주는 규칙.
  *
  * ⚠️ 근거: 홈판·뷰티·패션 메이트 블로그의 대표사진 **62장을 눈으로 보고** 분류했습니다
  * (2026-08-31, 픽셀 실측 280장과 별개). 왜 눈으로 봤냐면, "글씨를 얹었는가"를 픽셀로는
@@ -15,7 +15,7 @@
  */
 
 /**
- * 10가지 틀.
+ * 11가지 틀.
  *   needPhotos  최소 사진 수
  *   render      thumbnail.js에서 이 틀을 그리는 방법 (renderPattern이 해석)
  *   fits        어떤 글에 어울리는가 (사람이 읽을 설명)
@@ -30,6 +30,16 @@ const PATTERNS = {
     fits: "연예·가십·이슈. 화면 1/3을 글씨가 채우고 핵심 낱말만 빨강.",
     why: "홈판은 손톱만 하게 보입니다. 그 크기에서 읽히는 건 대여섯 글자뿐입니다.",
     seen: "nidle_831 — 일 7.4만",
+  },
+  bubbleQuote: {
+    id: "bubbleQuote",
+    label: "말풍선 + 큰 글씨",
+    needPhotos: 1,
+    needQuote: true,          // 제목에 따온 말이 없으면 추천하지 않습니다
+    render: { kind: "single", textSize: "big", bubble: true },
+    fits: "제목에 사람 말이 따옴표로 들어간 글.",
+    why: "말풍선은 **장면**을 만들고 큰 글씨는 **결론**을 던집니다. 역할이 달라서 같이 씁니다.",
+    seen: "nidle_831 — 얼굴 옆 말풍선 + 하단 큰 글씨",
   },
   bandQuestion: {
     id: "bandQuestion",
@@ -116,6 +126,17 @@ const PATTERNS = {
 
 const norm = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
+/**
+ * 제목에서 **따옴표 안의 말**을 뽑습니다 — 말풍선에 넣을 대사입니다.
+ *
+ * ⚠️ 제목에 없는 말을 말풍선에 넣으면 안 됩니다. 그건 지어낸 대사이고,
+ * 실제로 한 말이 아니면 명예훼손이 될 수 있습니다. **제목에 있는 그대로만** 씁니다.
+ */
+function quoteOf(title) {
+  const m = norm(title).match(/["'“”‘’]([^"'“”‘’]{2,24})["'“”‘’]/);
+  return m ? m[1].trim() : "";
+}
+
 /** 제목·본문에서 읽어내는 신호들. 전부 낱말 규칙입니다. */
 function readSignals(title, body = "") {
   const t = norm(title);
@@ -147,13 +168,18 @@ function readSignals(title, body = "") {
  */
 function rank(title, body = "", photoCount = 1) {
   const s = readSignals(title, body);
+  const quote = quoteOf(title);
   const out = [];
   const add = (id, score, reason) => {
     const p = PATTERNS[id];
     if (!p) return;
     if (photoCount < p.needPhotos) return;   // 못 만들 틀은 아예 안 올립니다
+    // ⚠️ 말풍선 틀은 **대사가 있어야** 만들어집니다. 없으면 빈 말풍선이 뜹니다.
+    if (p.needQuote && !quote) return;
     out.push({ pattern: p, score, reason });
   };
+
+  if (quote) add("bubbleQuote", 94, `제목에 따온 말("${quote.slice(0, 12)}")이 있어 말풍선으로 장면을 만들 수 있습니다.`);
 
   // 전후 신호는 제일 강합니다 — 다른 무엇보다 먼저 봅니다.
   if (s.beforeAfter) add("beforeAfter", 100, "제목에 변화·전후를 뜻하는 말이 있습니다.");
@@ -236,4 +262,4 @@ function pick(title, body = "", photoCount = 1, page = 0) {
   return { items, pages, page: p, total: ranked.length };
 }
 
-module.exports = { PATTERNS, rank, pick, readSignals };
+module.exports = { PATTERNS, rank, pick, readSignals, quoteOf };

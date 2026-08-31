@@ -2694,6 +2694,10 @@
       <div class="ws-row">
         <div style="margin-bottom:6px"><b>틀 추천</b> — 홈판 상위가 쓰는 10가지 중 고르기</div>
         <div style="font-size:11.5px;opacity:.75;margin-bottom:8px">이 글에 맞는 틀 4개를 만들어 보여드립니다. AI를 안 써서 값이 안 나갑니다.</div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-bottom:8px;cursor:pointer">
+          <input type="checkbox" id="ws-th-brand" checked style="margin:0" />
+          채널 표식 넣기 <span style="opacity:.65">(오른쪽 아래에 @블로그아이디 — 퍼가도 출처가 남습니다)</span>
+        </label>
         <button class="ws-mini" id="ws-th-pat">4개 만들어보기</button>
       </div>
       <div class="ws-row">
@@ -2734,9 +2738,14 @@
       const drawPatterns = async () => {
         const out = panel.querySelector("#ws-th-out");
         out.innerHTML = `<p class="ws-note">틀 4개를 그리는 중입니다… (사진 ${urls.length}장)</p>`;
+        // 채널 표식 — 켜져 있으면 블로그 아이디를 넘깁니다. 서버는 받은 것만 그립니다.
+        const wantBrand = (panel.querySelector("#ws-th-brand") || {}).checked;
+        const cfg2 = await new Promise((r2) => chrome.storage.sync.get(["blogId"], r2));
+        const brand = wantBrand ? String(cfg2.blogId || "").trim() : "";
+
         let r;
         try {
-          r = await server("/api/thumb/patterns", { imageUrls: urls, title, body, page });
+          r = await server("/api/thumb/patterns", { imageUrls: urls, title, body, page, brand });
         } catch (e) {
           out.innerHTML = `<div class="ws-row bad">${esc(e.message)}</div>`;
           return;

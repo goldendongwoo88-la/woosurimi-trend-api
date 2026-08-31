@@ -82,9 +82,9 @@ async function findFace(buf) {
   }
   if (skinCount < W * H * 0.012) return null;   // 살색이 거의 없으면 인물 사진이 아닙니다
 
-  // 붙어 있는 덩어리 찾기 (상하좌우 4방향). 제일 큰 덩어리를 얼굴로 봅니다.
+  // 붙어 있는 살색 덩어리를 전부 찾습니다 (상하좌우 4방향).
   const seen = new Uint8Array(W * H);
-  let best = null;
+  const blobs = [];
   const stack = [];
   for (let s = 0; s < W * H; s++) {
     if (!skin[s] || seen[s]) continue;
@@ -103,29 +103,139 @@ async function findFace(buf) {
       if (y > 0 && skin[p - W] && !seen[p - W]) { seen[p - W] = 1; stack.push(p - W); }
       if (y < H - 1 && skin[p + W] && !seen[p + W]) { seen[p + W] = 1; stack.push(p + W); }
     }
-    if (!best || area > best.area) best = { area, x0, x1, y0, y1 };
+    if (area >= W * H * 0.008) blobs.push({ area, x0, x1, y0, y1 });
   }
-  if (!best || best.area < W * H * 0.008) return null;
+  if (!blobs.length) return null;
 
   /**
-   * ⚠️ 살구색 벽·나무 책상처럼 **넓게 깔린 것**은 얼굴이 아닙니다.
-   * 가로로 길게 퍼졌거나(가로가 세로의 2.2배 넘음) 사진 폭을 거의 다 차지하면 버립니다.
-   * 버리면 예전 방식(위쪽 가운데)으로 물러서니, 잘못 가리는 것보다 안전합니다.
+   * 덩어리마다 **얼굴다움 점수**를 매깁니다.
+   *
+   * ⚠️ 예전에는 **제일 큰 덩어리**를 그냥 얼굴로 봤습니다. 그래서 사장님 바디워시
+   * 사진에서 **제품을 든 손**을 얼굴로 잡았습니다. 손이 화면에서 제일 큰 살색이었으니까요.
+   * 크기만으로는 얼굴과 손·팔·목이 안 갈립니다.
+   *
+   * 그래서 네 가지를 같이 봅니다:
+   *   모양   얼굴은 세로로 살짝 긴 타원(가로/세로 0.6~1.0). 손·팔은 길쭉합니다.
+   *   채움   타원은 자기 사각형의 78%쯤을 채웁니다. 손가락 편 손은 절반도 안 됩니다.
+   *   위치   얼굴은 사진 위쪽에 있는 경우가 압도적입니다.
+   *   크기   너무 작으면 얼굴이라도 쓸 수 없습니다.
    */
-  const bw = best.x1 - best.x0 + 1;
-  const bh = best.y1 - best.y0 + 1;
-  if (bw > bh * 2.2 || bw > W * 0.92) return null;
+  const scored = blobs.map((b) => {
+    const bw = b.x1 - b.x0 + 1;
+    const bh = b.y1 - b.y0 + 1;
+    const ratio = bw / bh;                       // 얼굴은 0.6~1.0
+    const fill = b.area / (bw * bh);             // 타원이면 0.78 근처
+    const cy = (b.y0 + b.y1) / 2 / H;
+
+    // 가로로 길게 퍼진 것(책상·벽), 사진 폭을 거의 다 차지하는 것은 얼굴이 아닙니다.
+    if (ratio > 2.2 || bw > W * 0.92) return { ...b, bw, bh, score: -1, why: "가로로 너무 넓음" };
+
+    const shape = ratio >= 0.55 && ratio <= 1.15 ? 1 : ratio < 0.55 ? 0.45 : 0.5;
+    const solid = fill >= 0.62 ? 1 : fill >= 0.45 ? 0.6 : 0.25;
+    const high = 1 + 0.5 * (1 - Math.min(1, cy));  // 위쪽일수록 가산
+    const size = Math.min(1, b.area / (W * H * 0.05));
+    return { ...b, bw, bh, ratio, fill, score: shape * solid * high * (0.4 + 0.6 * size), why: "" };
+  }).filter((b) => b.score > 0);
+
+  if (!scored.length) return null;
+  scored.sort((a, b) => b.score - a.score);
+
+  /**
+   * **눈이 있는지 봅니다.** 이게 손과 얼굴을 가르는 결정적인 신호입니다.
+   *
+   * ⚠️ 손·팔·목에는 어두운 점 두 개가 가로로 나란히 있지 않습니다. 얼굴에는 있습니다.
+   * 위쪽 후보부터 확인해서, 눈이 보이는 첫 덩어리를 고릅니다.
+   * 아무 데서도 눈을 못 찾으면 점수 1등을 씁니다(눈이 감겼거나 옆얼굴일 수 있으니
+   * 눈이 없다고 얼굴이 아니라고 단정하지는 않습니다).
+   */
+  let chosen = scored[0];
+  for (const cand of scored.slice(0, 3)) {
+    if (await hasEyes(buf, cand, W, H, meta).catch(() => false)) { chosen = cand; break; }
+  }
 
   // 덩어리 위쪽만 얼굴 비율로 자릅니다 (목·어깨·팔이 딸려온 경우 대비).
-  const gw = best.x1 - best.x0 + 1;
-  const gh = Math.min(best.y1 - best.y0 + 1, Math.round(gw * 1.4));
+  const gw = chosen.x1 - chosen.x0 + 1;
+  const gh = Math.min(chosen.y1 - chosen.y0 + 1, Math.round(gw * 1.4));
   const k = meta.width / W;                     // 줄인 격자 → 원본 좌표 배율
   return {
-    left: Math.round(best.x0 * k),
-    top: Math.round(best.y0 * k),
+    left: Math.round(chosen.x0 * k),
+    top: Math.round(chosen.y0 * k),
     width: Math.round(gw * k),
     height: Math.round(gh * k),
   };
+}
+
+/**
+ * 이 덩어리 안에 **눈처럼 보이는 어두운 점 두 개**가 가로로 나란히 있는가.
+ *
+ * ⚠️ 눈동자·눈썹은 살색보다 훨씬 어둡습니다. 그 어두운 점이 **위쪽 절반**에
+ * **좌우로 떨어져** 두 개 있으면 얼굴일 가능성이 아주 높습니다.
+ * 손등·팔뚝에는 이런 게 없습니다.
+ *
+ * ⚠️ 눈이 없다고 얼굴이 아니라고 단정하지 않습니다 — 선글라스·옆얼굴·감은 눈이 있습니다.
+ * 이건 "맞다"를 확인하는 용도지 "아니다"를 판정하는 용도가 아닙니다.
+ */
+async function hasEyes(buf, blob, gridW, gridH, meta) {
+  const k = meta.width / gridW;
+  const left = Math.max(0, Math.round(blob.x0 * k));
+  const top = Math.max(0, Math.round(blob.y0 * k));
+  const width = Math.min(meta.width - left, Math.round((blob.x1 - blob.x0 + 1) * k));
+  const height = Math.min(meta.height - top, Math.round((blob.y1 - blob.y0 + 1) * k));
+  if (width < 24 || height < 24) return false;
+
+  const W = 44;
+  const { data, info } = await sharp(buf)
+    .extract({ left, top, width, height })
+    .resize(W, null, { fit: "inside" })
+    .grayscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const w = info.width, h = info.height;
+  if (!w || !h) return false;
+
+  let sum = 0;
+  for (let i = 0; i < w * h; i++) sum += data[i];
+  const mean = sum / (w * h);
+  const dark = (i) => data[i] < mean - 28;
+
+  // 위쪽 55%에서 어두운 덩어리를 찾습니다 (눈·눈썹 자리).
+  const top55 = Math.max(1, Math.round(h * 0.55));
+  const seen = new Uint8Array(w * h);
+  const spots = [];
+  const st = [];
+  for (let y = 0; y < top55; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!dark(i) || seen[i]) continue;
+      st.length = 0; st.push(i); seen[i] = 1;
+      let n = 0, sx = 0, sy = 0;
+      while (st.length) {
+        const p = st.pop();
+        const px = p % w, py = (p - px) / w;
+        n++; sx += px; sy += py;
+        for (const q of [p - 1, p + 1, p - w, p + w]) {
+          if (q < 0 || q >= w * top55 || seen[q] || !dark(q)) continue;
+          if ((q === p - 1 && px === 0) || (q === p + 1 && px === w - 1)) continue;
+          seen[q] = 1; st.push(q);
+        }
+      }
+      // 눈은 아주 작지도, 얼굴 절반을 덮지도 않습니다.
+      if (n >= 2 && n <= w * top55 * 0.12) spots.push({ x: sx / n, y: sy / n, n });
+    }
+  }
+  if (spots.length < 2) return false;
+
+  // 좌우로 떨어져 있고 높이가 비슷한 짝이 있는가
+  spots.sort((a, b) => b.n - a.n);
+  for (let i = 0; i < Math.min(spots.length, 6); i++) {
+    for (let j = i + 1; j < Math.min(spots.length, 6); j++) {
+      const a = spots[i], b = spots[j];
+      const dx = Math.abs(a.x - b.x) / w;
+      const dy = Math.abs(a.y - b.y) / h;
+      if (dx >= 0.18 && dx <= 0.7 && dy <= 0.12) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -348,10 +458,93 @@ function bigTextSvg({ w, h, text, theme = "black" }) {
 }
 
 /**
+ * 말풍선 — 홈판 최상위(nidle_831)가 큰 글씨와 **함께** 쓰는 장치입니다.
+ *
+ * ⚠️ 실제로 본 것: 얼굴 옆에 둥근 말풍선이 뜨고 그 안에 대사가 두 줄
+ * ("죄송해요... / 이길 자신이 없어요"). 아래에는 큰 글씨가 따로 있습니다.
+ * 말풍선은 **장면**을 만들고, 큰 글씨는 **결론**을 던집니다. 역할이 다릅니다.
+ *
+ * ⚠️ 얼굴을 가리면 안 됩니다. 얼굴은 위에서 38% 자리에 오도록 잘라놨으니
+ * 말풍선은 **위쪽 구석**에 놓고, 꼬리를 얼굴 쪽으로 냅니다.
+ *
+ * ⚠️ 대사가 없으면 그리지 않습니다. 빈 말풍선은 사진만 망칩니다.
+ */
+function bubbleSvg({ w, h, quote, side = "right" }) {
+  const text = String(quote || "").trim().replace(/^["'“‘]|["'”’]$/g, "");
+  if (!text || text.length < 2) return null;
+
+  const size = Math.round(w * 0.045);
+  const pad = Math.round(size * 0.9);
+  const maxW = Math.round(w * 0.44);
+
+  // 두 줄까지 나눕니다. 낱말 단위로.
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = "";
+  for (const word of words) {
+    const t = cur ? cur + " " + word : word;
+    if (measureText(t, size) > maxW - pad * 2 && cur) { lines.push(cur); cur = word; }
+    else cur = t;
+    if (lines.length === 2) break;
+  }
+  if (cur && lines.length < 2) lines.push(cur);
+  if (!lines.length) return null;
+
+  const lineH = Math.round(size * 1.34);
+  const bw = Math.min(maxW, Math.max(...lines.map((l) => measureText(l, size))) + pad * 2);
+  const bh = lines.length * lineH + pad * 1.4;
+  const bx = side === "right" ? Math.round(w * 0.52) : Math.round(w * 0.04);
+  const by = Math.round(h * 0.06);
+  const r = Math.round(bh * 0.24);
+
+  // 꼬리 — 얼굴(가운데 아래) 쪽을 가리킵니다.
+  const tailX = side === "right" ? bx + bw * 0.22 : bx + bw * 0.78;
+  const tail = `M${tailX - size * 0.5},${by + bh - 1} L${tailX + size * 0.35},${by + bh - 1} ` +
+               `L${tailX - size * 0.1},${by + bh + size * 0.95} Z`;
+
+  const body = lines
+    .map((l, i) => alignedText(l, bx + bw / 2, by + pad + lineH * (i + 0.72), size, "#17181c", { anchor: "middle" }))
+    .join("");
+
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="${r}" fill="#ffffff" opacity="0.96"/>
+      <path d="${tail}" fill="#ffffff" opacity="0.96"/>
+      ${body}
+    </svg>`
+  );
+}
+
+/**
+ * 채널 표식(워터마크) — 힐스터K가 오른쪽 아래에 "@힐스터K"를 답니다.
+ *
+ * ⚠️ 남이 내 썸네일을 퍼가도 출처가 남습니다. 그리고 같은 표식이 계속 보이면
+ * 홈판에서 "그 블로그"로 알아보게 됩니다.
+ * ⚠️ 작고 반투명하게. 크면 사진을 잡아먹습니다.
+ */
+function watermarkSvg({ w, h, brand }) {
+  const t = String(brand || "").trim().slice(0, 20);
+  if (!t) return null;
+  const size = Math.round(w * 0.028);
+  const label = t.startsWith("@") ? t : "@" + t;
+  const tw = measureText(label, size);
+  const padX = Math.round(size * 0.7);
+  const x = w - Math.round(w * 0.03) - tw - padX;
+  const y = h - Math.round(h * 0.028);
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="${x - padX}" y="${y - size * 1.15}" width="${tw + padX * 2}" height="${size * 1.6}"
+        rx="${size * 0.8}" fill="#000000" opacity="0.42"/>
+      ${alignedText(label, x, y, size, "#ffffff", { anchor: "start", opacity: 0.92 })}
+    </svg>`
+  );
+}
+
+/**
  * 여러 장을 세로 띠로 이어붙입니다 (3장 콜라주).
  * ⚠️ 뷰티·패션 메이트가 자주 쓰는 틀입니다. 글씨 없이 정보량으로 승부합니다.
  */
-async function collage({ bufs, text = "", sub = "", size = "square", theme = "black" }) {
+async function collage({ bufs, text = "", sub = "", size = "square", theme = "black", brand = "" }) {
   const S = SIZES[size] || SIZES.square;
   const list = (bufs || []).filter(Boolean).slice(0, 3);
   if (list.length < 2) throw new Error("콜라주는 사진이 두 장 이상 필요합니다.");
@@ -372,6 +565,11 @@ async function collage({ bufs, text = "", sub = "", size = "square", theme = "bl
     });
   }
   if (text) layers.push({ input: overlaySvg({ w: S.w, h: S.h, text, sub, theme }), left: 0, top: 0 });
+  // 채널 표식 — 남이 퍼가도 출처가 남고, 홈판에서 "그 블로그"로 알아보게 됩니다.
+  if (brand) {
+    const wm = watermarkSvg({ w: S.w, h: S.h, brand });
+    if (wm) layers.push({ input: wm, left: 0, top: 0 });
+  }
 
   return sharp({ create: { width: S.w, height: S.h, channels: 3, background: "#000" } })
     .composite(layers)
@@ -449,6 +647,7 @@ async function beforeAfter({
    * 같은 함수가 두 틀을 다 그리므로 끌 수 있어야 합니다.
    */
   mono = true,
+  brand = "",
 }) {
   const S = SIZES[size] || SIZES.square;
   const halfW = Math.round(S.w / 2);
@@ -495,6 +694,11 @@ async function beforeAfter({
   ];
   if (labels) layers.push({ input: labelSvg({ w: S.w, h: S.h, ...labels }), left: 0, top: 0 });
   if (text) layers.push({ input: overlaySvg({ w: S.w, h: S.h, text, sub, theme }), left: 0, top: 0 });
+  // 채널 표식 — 남이 퍼가도 출처가 남고, 홈판에서 "그 블로그"로 알아보게 됩니다.
+  if (brand) {
+    const wm = watermarkSvg({ w: S.w, h: S.h, brand });
+    if (wm) layers.push({ input: wm, left: 0, top: 0 });
+  }
 
   return sharp({ create: { width: S.w, height: S.h, channels: 3, background: "#000" } })
     .composite(layers)
@@ -509,16 +713,26 @@ async function beforeAfter({
 async function single({
   buf, text = "", sub = "", size = "square", theme = "black",
   position = "bottom", mosaic = false, style = "band",
+  quote = "", brand = "",
 }) {
   const S = SIZES[size] || SIZES.square;
   let base = await cropFace(buf, S.w, S.h, { eye: position === "top" ? 0.52 : 0.38 });
   if (mosaic) base = await applyMosaic(base, S.w, S.h);
   const layers = [];
+  // 말풍선이 먼저 — 큰 글씨가 그 위에 와야 겹쳐도 글씨가 이깁니다.
+  if (quote) {
+    const bub = bubbleSvg({ w: S.w, h: S.h, quote });
+    if (bub) layers.push({ input: bub, left: 0, top: 0 });
+  }
   if (text && style === "big") {
     const svg = bigTextSvg({ w: S.w, h: S.h, text, theme });
     if (svg) layers.push({ input: svg, left: 0, top: 0 });
   } else if (text && style !== "none") {
     layers.push({ input: overlaySvg({ w: S.w, h: S.h, text, sub, theme, position }), left: 0, top: 0 });
+  }
+  if (brand) {
+    const wm = watermarkSvg({ w: S.w, h: S.h, brand });
+    if (wm) layers.push({ input: wm, left: 0, top: 0 });
   }
   return sharp(base).composite(layers).jpeg({ quality: 90 }).toBuffer();
 }
@@ -529,13 +743,16 @@ async function single({
  * ⚠️ 못 만들면 **조용히 다른 걸 그리지 않고 던집니다.** 사장님이 고른 틀과 다른 게
  * 나오면 그게 더 나쁩니다. 부르는 쪽에서 걸러야 합니다(thumbPatterns가 사진 수로 거릅니다).
  */
-async function renderPattern(pattern, bufs, { text = "", sub = "", size = "square", theme = "black" } = {}) {
+async function renderPattern(pattern, bufs, {
+  text = "", sub = "", size = "square", theme = "black",
+  quote = "", brand = "",
+} = {}) {
   const r = (pattern && pattern.render) || {};
   const list = (bufs || []).filter(Boolean);
   if (!list.length) throw new Error("사진이 없습니다.");
 
   if (r.kind === "collage") {
-    return collage({ bufs: list.slice(0, r.n || 3), text, sub, size, theme });
+    return collage({ bufs: list.slice(0, r.n || 3), text, sub, size, theme, brand });
   }
   if (r.kind === "pair") {
     if (list.length < 2) throw new Error("이 틀은 사진이 두 장 필요합니다.");
@@ -546,9 +763,11 @@ async function renderPattern(pattern, bufs, { text = "", sub = "", size = "squar
       labels: r.labels || null,
       mosaicSide: r.mosaicSide || null,
       mono: r.mono !== false,
+      brand,
     });
   }
   // single
+  // ⚠️ 말풍선은 이 틀이 요구할 때만. 대사가 없으면 bubbleSvg가 알아서 안 그립니다.
   return single({
     buf: list[0],
     text: r.textSize === "none" ? "" : text,
@@ -557,6 +776,8 @@ async function renderPattern(pattern, bufs, { text = "", sub = "", size = "squar
     theme,
     mosaic: !!r.mosaic,
     style: r.textSize === "big" ? "big" : r.textSize === "none" ? "none" : "band",
+    quote: r.bubble ? quote : "",
+    brand,
   });
 }
 

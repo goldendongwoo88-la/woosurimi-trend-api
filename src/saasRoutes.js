@@ -833,6 +833,10 @@ module.exports = function attachSaas(app) {
       const strategy = thumbStrategy.strategize(title, body);
       const caption = (strategy.captions || [])[0] || "";
       const rec = thumbPatterns.pick(title, body, buffers.length, page);
+      // 말풍선 대사 — **제목에 따옴표로 있는 말만** 씁니다. 지어낸 대사는 명예훼손이 됩니다.
+      const quote = thumbPatterns.quoteOf(title);
+      // 채널 표식 — 확장이 블로그 아이디를 넘겨줍니다. 없으면 안 그립니다.
+      const brand = String(b.brand || "").slice(0, 20);
 
       // 틀마다 색을 다르게 줍니다 — 4개가 한눈에 구분되게
       const THEMES = ["black", "yellow", "red", "white"];
@@ -841,7 +845,7 @@ module.exports = function attachSaas(app) {
         const c = rec.items[i];
         try {
           const jpeg = await thumbnail.renderPattern(c.pattern, buffers, {
-            text: caption, size, theme: THEMES[i % THEMES.length],
+            text: caption, size, theme: THEMES[i % THEMES.length], quote, brand,
           });
           items.push({
             id: c.pattern.id,
