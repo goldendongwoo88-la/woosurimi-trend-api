@@ -2610,7 +2610,7 @@
       const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(s.text)));
       if (!p) { failed.push({ what: `소제목 "${s.text}"`, why: "본문에서 그 줄을 못 찾았습니다" }); continue; }
       const okk = await F.setParagraphStyle(p, "소제목");
-      okk ? done.push(`소제목: ${s.text}`) : failed.push({ what: `소제목 "${s.text}"`, why: "편집기가 안 바꿔줬습니다" });
+      okk ? done.push(`소제목: ${s.text}`) : failed.push({ what: `소제목 "${s.text}"`, why: (F.getLastWhy && F.getLastWhy()) || "편집기가 안 바꿔줬습니다" });
     }
 
     // ── 2. 인용구 ──
@@ -2619,7 +2619,7 @@
       const p = paras().find((n) => F.norm(n.innerText || "").includes(F.norm(q.text)));
       if (!p) { failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: "본문에서 그 문장을 못 찾았습니다" }); continue; }
       const okk = await F.setParagraphStyle(p, "인용구");
-      okk ? done.push(`인용구: ${q.text.slice(0, 20)}…`) : failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: "편집기가 안 바꿔줬습니다" });
+      okk ? done.push(`인용구: ${q.text.slice(0, 20)}…`) : failed.push({ what: `인용구 "${q.text.slice(0, 20)}…"`, why: (F.getLastWhy && F.getLastWhy()) || "편집기가 안 바꿔줬습니다" });
     }
 
     // ── 3. 강조 ──

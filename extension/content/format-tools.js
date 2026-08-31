@@ -89,6 +89,22 @@
   const fail = (why) => { lastWhy = why; return false; };
   const getLastWhy = () => lastWhy;
 
+  /**
+   * 편집기 본체에 진짜 포커스를 줍니다.
+   *
+   * ⚠️ 2026-08-31, 16군데 전부 실패한 진짜 원인이 여기였습니다.
+   * 사장님이 패널의 "넣기" 단추를 누른 직후라 포커스는 패널에 있습니다.
+   * 그 상태에서는 execCommand("bold")도, 스타일 드롭다운도 **아무 일 없이 지나갑니다**
+   * (오류도 안 냅니다. 그래서 "화면이 그대로"로만 보였습니다).
+   * 포커스를 받을 수 있는 건 <p>가 아니라 contenteditable 조상입니다.
+   */
+  function focusEditable(node) {
+    const host = node && node.closest && node.closest('[contenteditable="true"]');
+    const target = host || node;
+    try { target && target.focus && target.focus({ preventScroll: true }); } catch {}
+    return !!host;
+  }
+
   /** 문단 안에 커서를 놓습니다. 스타일 바꾸기는 커서가 있어야 먹습니다. */
   function putCaret(paragraph) {
     try {
@@ -96,9 +112,13 @@
       range.selectNodeContents(paragraph);
       range.collapse(false);
       const sel = window.getSelection();
+      // ⚠️ 순서가 중요합니다. 포커스를 **먼저** 줘야 합니다.
+      // 예전엔 paragraph.focus()를 불렀는데, <p>는 포커스를 받을 수 없는 태그라
+      // 그 줄은 아무 일도 안 하고 있었습니다. 편집기에 포커스가 없으면
+      // execCommand도 스타일 드롭다운도 조용히 무시됩니다.
+      focusEditable(paragraph);
       sel.removeAllRanges();
       sel.addRange(range);
-      paragraph.focus && paragraph.focus();
       return true;
     } catch {
       return false;
@@ -182,6 +202,9 @@
       range.setStart(s.node, Math.min(s.offset, s.node.length));
       range.setEnd(e.node, Math.min(e.offset, e.node.length));
       const sel = window.getSelection();
+      // 여기도 포커스가 먼저입니다. 사장님이 패널 단추를 누른 직후라
+      // 포커스는 패널에 있습니다. 그대로 두면 execCommand가 아무것도 안 합니다.
+      focusEditable(root);
       sel.removeAllRanges();
       sel.addRange(range);
       return range;
