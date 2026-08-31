@@ -1049,6 +1049,16 @@
       // ⚠️ 여기가 핵심입니다. 바로 보지 말고 에디터가 정리할 때까지 기다립니다.
       await settle();
       if (norm(getTitle()) === norm(want)) {
+        /**
+         * ⚠️ 회색 "제목" 잔상 지우기 (1.27.17 실사용에서 발견).
+         * 사람이 타자를 치면 네이버가 안내 글자("제목")를 스스로 걷는데,
+         * 코드로 넣은 글자는 그 스위치를 안 건드려서 진짜 제목 뒤에
+         * 회색 "제목"이 겹쳐 보였습니다. 안내 요소를 직접 숨깁니다.
+         */
+        try {
+          document.querySelectorAll('.se-documentTitle [class*="placeholder"], .se-documentTitle [class*="Placeholder"]')
+            .forEach((el) => { el.style.display = "none"; });
+        } catch {}
         panel.hidden = true;
         scheduleCount();
         return;
@@ -3001,6 +3011,18 @@
       <div class="ws-row good">제목 ${title ? "넣음" : "없음"} · 소제목 ${os.done}/${os.total} · 임시저장됨</div>
       <div class="ws-dim" style="font-size:11.5px">굵게·형광·색은 붙여넣기에 이미 실려 있어 따로 손대지 않습니다.</div>
       ${os.failed && os.failed.length ? `<div class="ws-dim" style="font-size:11.5px">소제목 ${os.failed.join(", ")}는 문단을 클릭하고 왼쪽 위에서 직접 바꿔주세요.</div>` : ""}`);
+    /**
+     * 다 됐으면 창을 알아서 걷는다 — 2026-08-31 사장님 지시.
+     * 단, 소제목이 실패했으면 남긴다(직접 바꾸실 안내가 적혀 있으니 읽으셔야 한다).
+     * 그 사이 사장님이 다른 도구를 열었으면 그 화면을 닫으면 안 되므로,
+     * 여전히 이 마무리 화면일 때만 닫는다.
+     */
+    if (!os.failed || !os.failed.length) {
+      setTimeout(() => {
+        const h = panel.querySelector("h4");
+        if (h && h.textContent === "통합 복사 마무리") panel.hidden = true;
+      }, 4000);
+    }
   }
 
   /**

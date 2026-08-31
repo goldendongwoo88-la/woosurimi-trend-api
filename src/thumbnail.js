@@ -275,6 +275,101 @@ async function applyMosaic(buf, w, h, { zone = null, blocks = 11 } = {}) {
 }
 
 /**
+ * 큰 글씨 — 홈판 최상위(nidle_831)가 쓰는 유튜브식 대문 글씨.
+ *
+ * ⚠️ 띠를 안 깝니다. 사진 위에 바로 얹습니다. 대신 **검은 테두리**를 둘러서
+ * 어떤 사진 위에서도 읽히게 합니다.
+ *
+ * ⚠️ 테두리를 어떻게 그리나: 글자를 그리는 alignedText는 글자를 **길(path)**로 바꿔
+ * 채우기만 합니다. stroke를 줄 수가 없습니다. 그래서 **같은 글자를 여덟 방향으로
+ * 조금씩 밀어 검게 깔고, 그 위에 흰 글자를 얹습니다.** 흔히 쓰는 방법이고 결과가 같습니다.
+ *
+ * ⚠️ 핵심 낱말 하나만 빨강으로 뺍니다. 숫자·가격이 있으면 그것을, 없으면 첫 낱말을.
+ * 다 빨갛게 하면 아무것도 강조가 안 됩니다.
+ */
+function bigTextSvg({ w, h, text, theme = "black" }) {
+  const t = THEMES[theme] || THEMES.black;
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+
+  // 두 줄까지. 한 줄이 화면 폭의 88%를 넘으면 나눕니다.
+  const maxW = w * 0.88;
+  let size = Math.round(w * 0.13);
+  const fit = (line) => {
+    let s = size;
+    while (measureText(line, s) > maxW && s > 20) s -= 2;
+    return s;
+  };
+  let lines = [words.join(" ")];
+  if (measureText(lines[0], size) > maxW && words.length > 1) {
+    const mid = Math.ceil(words.length / 2);
+    lines = [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+  }
+  size = Math.min(...lines.map(fit));
+
+  // 강조할 낱말 — 숫자가 든 낱말 우선
+  const accentWord = words.find((x) => /\d/.test(x)) || words[0];
+
+  const lineH = Math.round(size * 1.22);
+  // 아래 1/3 자리에 놓습니다. 인물 얼굴(위쪽 38%)을 안 가립니다.
+  const baseY = Math.round(h * 0.78) - (lines.length - 1) * lineH;
+  const OFF = Math.max(2, Math.round(size * 0.055));   // 테두리 두께
+  const RING = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
+  let out = "";
+  lines.forEach((line, i) => {
+    const y = baseY + i * lineH;
+    // 1) 검은 테두리 — 여덟 방향
+    for (const [dx, dy] of RING) {
+      out += alignedText(line, w / 2 + dx * OFF, y + dy * OFF, size, "#111318", { anchor: "middle" });
+    }
+    // 2) 흰 글자. 강조 낱말이 이 줄에 있으면 그 낱말만 따로 빨갛게 덮습니다.
+    out += alignedText(line, w / 2, y, size, t.text, { anchor: "middle" });
+    const at = line.indexOf(accentWord);
+    if (at >= 0) {
+      const before = line.slice(0, at);
+      const lineW = measureText(line, size);
+      const x0 = w / 2 - lineW / 2 + measureText(before, size);
+      out += alignedText(accentWord, x0, y, size, "#ff3b30", { anchor: "start" });
+    }
+  });
+
+  return Buffer.from(`<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${out}</svg>`);
+}
+
+/**
+ * 여러 장을 세로 띠로 이어붙입니다 (3장 콜라주).
+ * ⚠️ 뷰티·패션 메이트가 자주 쓰는 틀입니다. 글씨 없이 정보량으로 승부합니다.
+ */
+async function collage({ bufs, text = "", sub = "", size = "square", theme = "black" }) {
+  const S = SIZES[size] || SIZES.square;
+  const list = (bufs || []).filter(Boolean).slice(0, 3);
+  if (list.length < 2) throw new Error("콜라주는 사진이 두 장 이상 필요합니다.");
+
+  const n = list.length;
+  const colW = Math.floor(S.w / n);
+  const parts = await Promise.all(list.map((b) => cropFace(b, colW, S.h)));
+
+  const layers = parts.map((input, i) => ({ input, left: i * colW, top: 0 }));
+  // 사이에 가는 흰 선 — 없으면 한 장처럼 붙어 보여 대비가 죽습니다.
+  for (let i = 1; i < n; i++) {
+    layers.push({
+      input: Buffer.from(
+        `<svg width="5" height="${S.h}" xmlns="http://www.w3.org/2000/svg"><rect width="5" height="${S.h}" fill="#fff"/></svg>`
+      ),
+      left: i * colW - 2,
+      top: 0,
+    });
+  }
+  if (text) layers.push({ input: overlaySvg({ w: S.w, h: S.h, text, sub, theme }), left: 0, top: 0 });
+
+  return sharp({ create: { width: S.w, height: S.h, channels: 3, background: "#000" } })
+    .composite(layers)
+    .jpeg({ quality: 90 })
+    .toBuffer();
+}
+
+/**
  * 오버레이 띠 + 글자.
  * ⚠️ 글자가 띠보다 길면 잘립니다. 넘치면 글자 크기를 줄여 맞춥니다.
  */
@@ -337,6 +432,13 @@ async function beforeAfter({
   labels = { left: "BEFORE", right: "AFTER" },
   // "left" | "right" — 한쪽만 얼굴을 가려 "누구?"로 끌 때 (thumbStrategy의 두 명 중 1명 모자이크)
   mosaicSide = null,
+  /**
+   * 왼쪽을 흑백으로 할지.
+   * ⚠️ 전/후 비교에서는 흑백이 맞습니다(과거 vs 현재). 그런데 **인물 + 소재**를 붙이는
+   * 틀(splitSubject — 사람과 건물)에서는 왼쪽 사람이 흑백이 되어 버립니다.
+   * 같은 함수가 두 틀을 다 그리므로 끌 수 있어야 합니다.
+   */
+  mono = true,
 }) {
   const S = SIZES[size] || SIZES.square;
   const halfW = Math.round(S.w / 2);
@@ -367,7 +469,7 @@ async function beforeAfter({
   ]);
   if (mosaicSide === "left") left = await applyMosaic(left, halfW, S.h);
   if (mosaicSide === "right") right = await applyMosaic(right, halfW, S.h);
-  left = await toMono(left);
+  if (mono) left = await toMono(left);
 
   const layers = [
     { input: left, left: 0, top: 0 },
@@ -390,14 +492,62 @@ async function beforeAfter({
     .toBuffer();
 }
 
-/** 한 장짜리 — 오버레이만 얹습니다. mosaic를 켜면 얼굴 자리를 가립니다. */
-async function single({ buf, text = "", sub = "", size = "square", theme = "black", position = "bottom", mosaic = false }) {
+/**
+ * 한 장짜리.
+ * @param style "band"(어두운 띠 + 글씨) | "big"(띠 없이 큰 글씨 + 검은 테두리) | "none"(글씨 없음)
+ */
+async function single({
+  buf, text = "", sub = "", size = "square", theme = "black",
+  position = "bottom", mosaic = false, style = "band",
+}) {
   const S = SIZES[size] || SIZES.square;
   let base = await cropFace(buf, S.w, S.h, { eye: position === "top" ? 0.52 : 0.38 });
   if (mosaic) base = await applyMosaic(base, S.w, S.h);
   const layers = [];
-  if (text) layers.push({ input: overlaySvg({ w: S.w, h: S.h, text, sub, theme, position }), left: 0, top: 0 });
+  if (text && style === "big") {
+    const svg = bigTextSvg({ w: S.w, h: S.h, text, theme });
+    if (svg) layers.push({ input: svg, left: 0, top: 0 });
+  } else if (text && style !== "none") {
+    layers.push({ input: overlaySvg({ w: S.w, h: S.h, text, sub, theme, position }), left: 0, top: 0 });
+  }
   return sharp(base).composite(layers).jpeg({ quality: 90 }).toBuffer();
+}
+
+/**
+ * 패턴 하나를 그림으로 만듭니다 — thumbPatterns.js의 render 지시를 해석합니다.
+ *
+ * ⚠️ 못 만들면 **조용히 다른 걸 그리지 않고 던집니다.** 사장님이 고른 틀과 다른 게
+ * 나오면 그게 더 나쁩니다. 부르는 쪽에서 걸러야 합니다(thumbPatterns가 사진 수로 거릅니다).
+ */
+async function renderPattern(pattern, bufs, { text = "", sub = "", size = "square", theme = "black" } = {}) {
+  const r = (pattern && pattern.render) || {};
+  const list = (bufs || []).filter(Boolean);
+  if (!list.length) throw new Error("사진이 없습니다.");
+
+  if (r.kind === "collage") {
+    return collage({ bufs: list.slice(0, r.n || 3), text, sub, size, theme });
+  }
+  if (r.kind === "pair") {
+    if (list.length < 2) throw new Error("이 틀은 사진이 두 장 필요합니다.");
+    return beforeAfter({
+      beforeBuf: list[0], afterBuf: list[1],
+      text: r.band === false ? "" : text,
+      sub, size, theme,
+      labels: r.labels || null,
+      mosaicSide: r.mosaicSide || null,
+      mono: r.mono !== false,
+    });
+  }
+  // single
+  return single({
+    buf: list[0],
+    text: r.textSize === "none" ? "" : text,
+    sub,
+    size: r.size || size,
+    theme,
+    mosaic: !!r.mosaic,
+    style: r.textSize === "big" ? "big" : r.textSize === "none" ? "none" : "band",
+  });
 }
 
 /**
@@ -432,4 +582,4 @@ function suggestText(title = "") {
   return [...new Set(out)].filter((s) => s.length >= 2).slice(0, 5);
 }
 
-module.exports = { beforeAfter, single, suggestText, applyMosaic, findFace, cropFace, faceCropPlan, FACE_ZONE, SIZES, THEMES };
+module.exports = { beforeAfter, single, collage, renderPattern, suggestText, applyMosaic, findFace, cropFace, faceCropPlan, FACE_ZONE, SIZES, THEMES };
