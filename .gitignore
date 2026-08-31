@@ -10,3 +10,4 @@ scratch-*
 
 # 이 컴퓨터 전용 권한 파일 — 세션마다 계속 바뀝니다. 공유하면 충돌만 납니다.
 .claude/settings.local.json
+data/affiliate-links.json
