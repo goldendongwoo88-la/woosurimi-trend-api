@@ -537,16 +537,32 @@ ${text}`;
   // 홈피드 랭커는 "클릭은 높은데 금방 나가는 글"을 걸러냅니다.
   // 그래서 여기서는 읽다가 도망가지 않게 만드는 요소를 봅니다.
 
-  const longParas = paras.filter((p) => noSpace(p).length > 300);
+  // ⚠️ 2026-08-31 기준 교체. 예전에는 "300자 넘으면 경고 / 평균 120자 이하면 좋음"이었는데,
+  // 실측(상위 블로거 25~56곳)으로 재보니 **잘 되는 쪽 문단은 16~24자**이고 45자 초과 문단은 0~7%였습니다.
+  // 옛 기준이면 사장님 글(평균 41~48자)이 "무난합니다"로 통과합니다 — 제일 큰 문제를 통과시킵니다.
+  //
+  // ⚠️ 단, 여기 paras는 **빈 줄** 기준으로 쪼갠 것이라 화면 문단과 다를 수 있습니다.
+  // 줄바꿈이 하나도 없는 글(웹에서 긁어온 본문 등)은 통째로 1문단이 되어 평균이 수천 자로 잡힙니다.
+  // 그때 "문단이 길다"고 말하면 글이 아니라 입력 방식을 탓하는 셈이라, 판정하지 않고 그 사실만 알립니다.
   const avgPara = Math.round(charsNoSpace / (paras.length || 1));
-  if (longParas.length) {
+  const PARA_TARGET = 24;   // 잘 되는 쪽 상단값
+  const PARA_LIMIT = 45;    // 이걸 넘는 문단은 화면에서 벽이 됨
+  const longParas = paras.filter((p) => noSpace(p).length > PARA_LIMIT);
+  const overRate = paras.length ? Math.round((longParas.length / paras.length) * 100) : 0;
+
+  if (paras.length <= 1 && charsNoSpace > 400) {
+    add("para", "문단 길이", true, "info",
+      "줄바꿈이 없어서 문단을 셀 수 없습니다",
+      "네이버 편집기에서 서식째로 복사해 붙여넣으면 문단 길이를 정확히 봐 드립니다. 지금은 판정하지 않았습니다.", FEED);
+  } else if (avgPara > PARA_LIMIT || overRate > 20) {
     add("para", "문단 길이", false, "warn",
-      `${longParas.length}개 문단이 300자를 넘습니다 (평균 ${avgPara}자)`,
-      "휴대폰에서 글자 벽처럼 보이면 바로 나갑니다. 두세 문장마다 줄을 바꿔주세요.", FEED);
-  } else if (avgPara <= 120) {
-    add("para", "문단 길이", true, "good", `평균 ${avgPara}자 — 휴대폰에서 읽기 좋습니다`, null, FEED);
+      `평균 ${avgPara}자 · ${PARA_LIMIT}자 넘는 문단이 ${overRate}%`,
+      `잘 되는 블로그는 문단이 16~24자이고 ${PARA_LIMIT}자 초과가 0~7%입니다. 휴대폰 한 줄이 20자라 지금은 벽으로 보입니다. 문장 하나에 마침표 하나, 마침표에서 줄을 바꾸세요.`, FEED);
+  } else if (avgPara <= PARA_TARGET) {
+    add("para", "문단 길이", true, "good", `평균 ${avgPara}자 — 실측 기준(16~24자) 안에 듭니다`, null, FEED);
   } else {
-    add("para", "문단 길이", true, "good", `평균 ${avgPara}자 — 무난합니다`, null, FEED);
+    add("para", "문단 길이", true, "info", `평균 ${avgPara}자 — 나쁘진 않지만 20자 안팎이 더 좋습니다`,
+      `잘 되는 쪽 중앙값은 16~24자입니다.`, FEED);
   }
 
   // 읽는 데 걸리는 시간 — 체류 2분이 기준입니다.
