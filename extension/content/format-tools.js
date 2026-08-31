@@ -63,12 +63,20 @@
    * 글자로 찾으면 항상 안쪽 span이 잡힙니다. 그 span을 눌러봤자 아무 일도 안 납니다.
    * (드롭다운이 안 열려서 "항목이 안 보인다"고 나왔던 겁니다)
    */
-  function clickable(el) {
+  function clickable(el, avoid) {
     if (!el) return null;
-    return el.closest(
-      "button, [role='button'], [role='menuitem'], [role='option'], a, li, " +
-      "[class*='se-toolbar-button'], [class*='se-toolbar-option'], [class*='se-toolbar-item']"
-    ) || el;
+    // ⚠️ 2026-09-01 실측: 드롭다운 **항목이 드롭다운 단추 안쪽에** 그려집니다.
+    // 그래서 무작정 closest("button")까지 올라가면 항목이 아니라 **단추 자신**이 잡혀서,
+    // 드롭다운을 열었다 닫기만 하고 끝났습니다("같은 걸 두 번 누름").
+    // 항목처럼 생긴 껍데기(li·option·a)를 **먼저** 보고, 그게 없을 때만 버튼까지 올라갑니다.
+    const near = el.closest("li, [role='option'], [role='menuitem'], a");
+    if (near && near !== avoid) return near;
+    const btn = el.closest(
+      "button, [role='button'], [class*='se-toolbar-button'], " +
+      "[class*='se-toolbar-option'], [class*='se-toolbar-item']"
+    );
+    if (btn && btn !== avoid) return btn;
+    return el; // 위로 올라가면 피해야 할 것뿐이면, 글자 그 자리를 누릅니다
   }
 
   /**
@@ -96,14 +104,19 @@
     return findToolbarButton(["본문", "소제목", "인용구"]);
   }
 
-  /** 드롭다운이 열린 뒤, 원하는 항목을 찾습니다. */
-  function findStyleOption(label) {
+  /**
+   * 드롭다운이 열린 뒤, 원하는 항목을 찾습니다.
+   * @param {Element} [avoid] 방금 누른 드롭다운 단추 — 이걸 다시 집으면 안 됩니다.
+   */
+  function findStyleOption(label, avoid) {
     for (const el of document.querySelectorAll("button, [role='option'], [role='menuitem'], li, a, span")) {
       const t = (el.innerText || el.textContent || "").trim();
       if (t !== label) continue;
       if (!isVisible(el)) continue;
       const r = el.getBoundingClientRect();
-      if (r.width < 260 && r.height < 70) return clickable(el);
+      if (r.width >= 260 || r.height >= 70) continue;
+      const c = clickable(el, avoid);
+      if (c && c !== avoid) return c;
     }
     return null;
   }
@@ -127,6 +140,23 @@
       if (seen.size >= 40) break;
     }
     return [...seen];
+  }
+
+  /**
+   * 방금 누른 것 때문에 새로 열린 하위 목록에서 첫 항목을 찾습니다.
+   * (인용구 모양 고르기처럼 한 단계 더 있는 경우)
+   */
+  function findSubmenuItem(opener) {
+    const scope = opener.closest("li, [class*='se-toolbar-item'], [class*='se-toolbar-option']") || opener.parentElement;
+    if (!scope) return null;
+    for (const el of scope.querySelectorAll("li, [role='option'], [role='menuitem'], button, a")) {
+      if (el === opener || el.contains(opener)) continue;
+      if (!isVisible(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.width >= 260 || r.height < 8 || r.height >= 70) continue;
+      return el;
+    }
+    return null;
   }
 
   /** 요소가 뭔지 짧게 적습니다. 엉뚱한 걸 눌렀는지 보려고. */
@@ -200,7 +230,7 @@
     realClick(trigger);
     await settle(180);
 
-    const option = findStyleOption(label);
+    const option = findStyleOption(label, trigger);
     if (!option) {
       const names = visibleOptionNames();
       // 드롭다운을 열어놨으면 닫아줍니다. 열린 채로 두면 사장님 화면이 어수선합니다.
@@ -212,6 +242,22 @@
     }
     realClick(option);
     await settle();
+
+    /**
+     * ⚠️ 인용구는 한 번 더 골라야 합니다.
+     * "인용구" 단추를 누르면 바로 적용되는 게 아니라 **따옴표·라인·말풍선 등 모양 목록**이
+     * 다시 열립니다. 그래서 여기서 멈추면 "눌렀는데 문단이 그대로"로 보였던 겁니다.
+     * 아직 안 바뀌었으면, 새로 열린 목록에서 첫 모양을 고릅니다.
+     */
+    const changedNow = () =>
+      (paragraph.isConnected
+        ? paragraph.className + "|" + ((paragraph.closest(".se-component") || {}).className || "")
+        : "(교체됨)") !== before;
+
+    if (!changedNow()) {
+      const sub = findSubmenuItem(option);
+      if (sub) { realClick(sub); await settle(); }
+    }
 
     // ⚠️ 정말 바뀌었는지는 **다시 읽어봐야** 압니다.
     // 문단이 다른 요소로 교체될 수도 있어서, 화면에서 다시 찾습니다.
