@@ -3010,6 +3010,9 @@
   let wsuBusy = false;
   let wsuArmed = false;              // 빈 본문에서 이 원고를 기다리는 중인가
   let wsuArmedToken = null;
+  let wsuWarnToken = null;           // '다른 글' 안내를 이미 띄운 복사본 — 같은 안내를 반복해서 띄우지 않기
+  let wsuMismatchToken = null;       // '다른 글' 상태로 기다리는 중인 복사본과 그 시작 시각
+  let wsuMismatchSince = 0;
   const WSU_LOADED_AT = Date.now();
 
   async function wsuFetchCopied() {
@@ -3017,12 +3020,16 @@
     return j && j.ok ? j.copied : null;   // 플로어가 안 떠 있으면 null — 조용히 지나간다
   }
 
-  async function wsuFinish(postId) {
+  /**
+   * @returns "done"     마무리 끝(또는 원고가 없어 더 볼 것 없음) — 이 복사본은 소진
+   *          "mismatch" 화면의 글이 복사한 원고와 다름 — 소진하지 말고 계속 지켜볼 것
+   */
+  async function wsuFinish(postId, { firstWarn = true } = {}) {
     const I = window.__wsInsert;
-    if (!I) return;
+    if (!I) return "done";
     const j = await wsuFloorGet("/api/posts/" + encodeURIComponent(postId));
     const post = j && j.post;
-    if (!post || !post.body) return;
+    if (!post || !post.body) return "done";
 
     /**
      * ⚠️ 굵게·형광·색·글자크기는 **여기서 손대지 않습니다.**
@@ -3056,18 +3063,32 @@
       const bodyText = norm(I.bodyParagraphs().map((p) => p.innerText || "").join(" "));
       const matched = subheads.filter((t) => bodyText.includes(norm(t))).length;
       if (matched === 0) {
-        showPanel(`<h4>통합 복사 마무리</h4>
-          <div class="ws-row warn">지금 열려 있는 글이 복사한 원고와 달라서 <b>아무것도 건드리지 않았습니다.</b><br>
-          복사한 원고: <b>${esc(title.slice(0, 40))}…</b><br>
-          이 글에 넣으실 거면 본문 칸에 <b>Ctrl+V</b> 먼저 해주세요.</div>`);
-        return;
+        /**
+         * ⚠️ 여기서 복사본을 소진하면 안 됩니다 (2026-08-31 실사고).
+         * 예전엔 이 안내를 띄우고 끝냈는데, 지켜보기 쪽이 토큰을 이미 소진해버려서
+         * 안내대로 Ctrl+V를 해도 **다시는 시도하지 않았습니다.** "안 되네?"가 그 증상입니다.
+         * 이제 "mismatch"를 돌려주고, 지켜보기가 붙여넣기를 계속 기다립니다.
+         */
+        if (firstWarn) {
+          showPanel(`<h4>통합 복사 마무리</h4>
+            <div class="ws-row warn">지금 화면의 글이 복사한 원고와 달라서 <b>아직 손대지 않았습니다.</b><br>
+            복사한 원고: <b>${esc(title.slice(0, 40))}…</b><br>
+            본문 칸에 <b>Ctrl+V</b> 하시면 알아서 이어집니다.</div>`);
+        }
+        return "mismatch";
       }
     }
 
     showPanel(`<h4>통합 복사 마무리</h4><div class="ws-row">제목과 소제목을 넣는 중입니다…</div>`);
 
     if (title) {
-      try { await applyTitle(title); } catch {}
+      /**
+       * ⚠️ 제목은 반드시 applyTitleReal(원고 붙이기와 같은 길)로 넣습니다.
+       * 예전 경로(applyTitle)는 DOM에만 글자를 넣고 편집기 내부 모델은 빈 채로 남겨서,
+       * 회색 "제목" 안내가 겹쳐 보이고 **지워지지도 않는** 사고가 났습니다(2026-08-31).
+       * 진짜 클릭+Ctrl+V까지 가는 길이라 편집기가 사람 입력으로 받아들입니다.
+       */
+      try { await (I.applyTitleReal ? I.applyTitleReal(title) : applyTitle(title)); } catch {}
       // 본문 맨 위에 그대로 붙은 제목 줄은 지운다 — 제목칸에 따로 들어갔으니 중복이다.
       try {
         const dup = I.bodyParagraphs().find((p) => norm(p.innerText || "") === norm(title));
@@ -3097,6 +3118,7 @@
         if (h && h.textContent === "통합 복사 마무리") panel.hidden = true;
       }, 4000);
     }
+    return "done";
   }
 
   /**
@@ -3136,10 +3158,26 @@
       return;
     }
 
-    wsuSeenToken = copied.token;
-    wsuArmed = false;
+    /**
+     * ⚠️ 소진은 **끝난 다음에** 합니다 (2026-08-31 고침).
+     * 예전엔 여기서 먼저 소진해서, "다른 글" 판정이 나면 그 복사본이 영영 버려졌습니다.
+     * 이제 mismatch면 소진하지 않고 계속 지켜보다가, 맞는 본문이 붙는 순간 마무리합니다.
+     * 안내는 한 번만 띄우고(wsuWarnToken), 5분이 지나도록 안 맞으면 그만 봅니다.
+     */
     wsuBusy = true;
-    try { await wsuFinish(copied.id); } finally { wsuBusy = false; }
+    try {
+      const r = await wsuFinish(copied.id, { firstWarn: wsuWarnToken !== copied.token });
+      if (r === "mismatch") {
+        wsuWarnToken = copied.token;
+        if (wsuMismatchToken !== copied.token) { wsuMismatchToken = copied.token; wsuMismatchSince = Date.now(); }
+        if (Date.now() - wsuMismatchSince > 5 * 60e3) { wsuSeenToken = copied.token; wsuMismatchToken = null; }
+        return;
+      }
+      wsuSeenToken = copied.token;
+      wsuArmed = false;
+      wsuWarnToken = null;
+      wsuMismatchToken = null;
+    } finally { wsuBusy = false; }
   }, 1500);
 
   // 에디터가 늦게 뜨는 경우가 많아서 잠깐 기다렸다가 다시 시도합니다.

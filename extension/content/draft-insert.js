@@ -548,6 +548,49 @@
    * @param {{title, blocks}} draft  draft-parser가 뜯어낸 것
    * @param {(msg:string)=>void} say 진행 상황 알림
    */
+  /**
+   * 제목을 넣는 검증된 길 — 통합 복사 마무리와 원고 붙이기가 **같이** 씁니다.
+   *
+   * ⚠️ 왜 이 길이어야 하나 (2026-08-31 실사고): 통합 복사 마무리가 다른 경로
+   * (execCommand만 쓰는 applyTitle)로 제목을 넣었더니, DOM에는 글자가 보이는데
+   * **편집기 내부 모델은 빈 채**였습니다. 그래서 회색 "제목" 안내가 계속 겹쳐 보이고,
+   * 지우려 해도 (모델엔 지울 게 없으니) **지워지지 않고**, 발행하면 제목이 빠질 판이었습니다.
+   *
+   * 순서: ① 타자 흉내(setEditableText) → 확인 ② 안 먹으면 클립보드에 담고
+   * 제목칸을 **진짜로 클릭** 후 Ctrl+V(디버거 경유 — 사람 입력과 구별 불가).
+   * 확인은 같음(===)이 아니라 **포함**으로 — 안내 유령 글자("제목")가 붙어 있어서
+   * 같음 비교는 실제로 들어갔는데도 거짓 실패를 냈습니다.
+   */
+  async function applyTitleReal(title, say = () => {}) {
+    const F = window.__wsFormat;
+    const el = document.querySelector(".se-documentTitle .se-text-paragraph") ||
+               document.querySelector(".se-documentTitle [contenteditable='true']");
+    if (!el || !F || !F.setEditableText) return false;
+    say("제목을 넣는 중…");
+    await settle(120);
+    F.setEditableText(el, title);
+    await settle();
+    const tOK = () => (el.innerText || "").replace(INVIS, "").includes(title.replace(INVIS, "").slice(0, 20));
+    let okT = tOK();
+    if (!okT) {
+      say("제목을 진짜 클릭으로 넣는 중…");
+      await writeClip(title);
+      const r0 = el.getBoundingClientRect();
+      const { fx, fy } = frameOffset();
+      const resp = await new Promise((res) => {
+        try {
+          chrome.runtime.sendMessage({
+            type: "clickPaste",
+            x: Math.round(fx + r0.left + Math.min(60, r0.width / 2)),
+            y: Math.round(fy + r0.top + r0.height / 2),
+          }, res);
+        } catch { res(null); }
+      });
+      if (resp && resp.ok) { await settle(600); okT = tOK(); }
+    }
+    return okT;
+  }
+
   async function insert(draft, say = () => {}, { force = false } = {}) {
     const F = window.__wsFormat;
     if (!F) return { ok: false, why: "서식 도구를 못 불러왔습니다. 확장을 다시 설치해 보세요." };
@@ -605,42 +648,8 @@
 
     // ── 1. 제목 ──
     if (draft.title) {
-      say("제목을 넣는 중…");
-      const el = document.querySelector(".se-documentTitle .se-text-paragraph") ||
-                 document.querySelector(".se-documentTitle [contenteditable='true']");
-      if (el && F.setEditableText) {
-        await settle(120);
-        F.setEditableText(el, draft.title);
-        await settle();
-        // ⚠️ 같음(===)이 아니라 **포함**으로 봅니다. 제목 칸에는 "제목"이라는
-        // 안내 유령 글자가 붙어 있어서, 실제로 들어갔는데도 계속
-        // "안 받았습니다"라고 거짓 실패를 냈습니다 (실측).
-        const tOK = () => (el.innerText || "").replace(INVIS, "").includes(draft.title.replace(INVIS, "").slice(0, 20));
-        let okT = tOK();
-        if (!okT) {
-          /**
-           * ⚠️ 새 문서에서는 제목칸도 같은 병입니다 — 코드가 넣은 글자를
-           * 편집기가 무시합니다 (제목이 본문 첫 줄로 밀려 들어간 실사고, 2026-08-28).
-           * 본문을 뚫은 그 길 그대로: 제목을 클립보드에 담고, 제목칸을
-           * **진짜로 클릭**한 뒤 Ctrl+V.
-           */
-          say("제목을 진짜 클릭으로 넣는 중…");
-          await writeClip(draft.title);
-          const r0 = el.getBoundingClientRect();
-          const { fx, fy } = frameOffset();
-          const resp = await new Promise((res) => {
-            try {
-              chrome.runtime.sendMessage({
-                type: "clickPaste",
-                x: Math.round(fx + r0.left + Math.min(60, r0.width / 2)),
-                y: Math.round(fy + r0.top + r0.height / 2),
-              }, res);
-            } catch { res(null); }
-          });
-          if (resp && resp.ok) { await settle(600); okT = tOK(); }
-        }
-        (okT ? done : failed).push(okT ? "제목" : { what: "제목", why: "편집기가 안 받았습니다 — 제목만 직접 붙여주세요" });
-      } else failed.push({ what: "제목", why: "제목 칸을 못 찾았습니다" });
+      const okT = await applyTitleReal(draft.title, say);
+      (okT ? done : failed).push(okT ? "제목" : { what: "제목", why: "편집기가 안 받았습니다 — 제목만 직접 붙여주세요" });
     }
 
     // ── 2. 본문 통째로 ──
@@ -915,5 +924,5 @@
     return { ok: true, changed: after !== before, label: after || before };
   }
 
-  window.__wsInsert = { insert, applyStructure, applyOfficialSubheads, saveDraft, isEmpty, pasteBody, appendBlock, bodyParagraphs };
+  window.__wsInsert = { insert, applyStructure, applyOfficialSubheads, applyTitleReal, saveDraft, isEmpty, pasteBody, appendBlock, bodyParagraphs };
 })();
