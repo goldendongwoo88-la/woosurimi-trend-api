@@ -22,6 +22,7 @@ const crypto = require("crypto");
 const { execFile } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 const { callClaude, isConfigured, extractJson } = require("./claudeClient");
+const shortsStudio = require("./shortsStudio");
 
 const OUT_DIR = path.join(__dirname, "..", "public", "renders");
 
@@ -121,7 +122,7 @@ async function fetchYoutube(url, workDir) {
 // ────────────────────────────────────────────────────────────
 // 어디를 자를까
 // ────────────────────────────────────────────────────────────
-async function pickMoments(cues, { count = 4, topic = "" } = {}) {
+async function pickMoments(cues, { count = 10, topic = "" } = {}) {
   if (!isConfigured()) throw new Error("AI가 연결되지 않았습니다.");
 
   // 자막을 15초 덩어리로 묶어서 넘깁니다. 한 줄씩 넘기면 너무 잘게 쪼개져서
@@ -145,7 +146,18 @@ async function pickMoments(cues, { count = 4, topic = "" } = {}) {
       "⚠️ 한 구간은 **하나의 이야기**로 끝나야 합니다. 중간에 잘리면 안 됩니다.\n" +
       "⚠️ 길이는 20~55초. 너무 짧으면 내용이 없고 너무 길면 안 봅니다.\n" +
       "⚠️ 서로 겹치지 않게 고르세요.\n\n" +
-      '{"moments":[{"start":초,"end":초,"hook":"상단 고정 문구(14자 이내)",' +
+      "── 각 구간마다 만들 것 ──\n" +
+      "① hook — 화면 맨 위에 **두 줄**로 들어갑니다. 둘째 줄은 색이 달라 대비가 생깁니다.\n" +
+      "   첫 줄은 상황·소재(8~12자), 둘째 줄은 **반전이나 판정**(6~10자).\n" +
+      '   예: "덜 익은 토마토" / "이게 디테일"  ·  "초반부터 절망" / "이 포켓몬 왜 이렇게 약해"\n' +
+      "   둘째 줄이 첫 줄을 되풀이하면 안 됩니다. 뒤집거나, 값을 매기거나, 궁금하게 만듭니다.\n" +
+      "② comment — 영상 아래에 **시청자 댓글**처럼 붙습니다. 사람들이 이걸 읽느라 끝까지 봅니다.\n" +
+      "   진짜 댓글처럼 짧고 구어체로. 정중한 설명체 금지. 30자 이내.\n" +
+      '   좋은 예: "이 조합 찬성이요...", "맛이 어떨지 궁금합니다", "얼마나 진심였으면 3개국어를..."\n' +
+      "   ⚠️ 영상에 실제로 나온 내용에서만 씁니다. 없는 사실을 지어내지 마세요.\n\n" +
+      '{"moments":[{"start":초,"end":초,' +
+      '"hook":{"line1":"첫 줄","line2":"둘째 줄"},' +
+      '"comment":{"name":"닉네임(한글 2~5자)","text":"댓글 한 줄","likes":"494"},' +
       '"why":"이 구간을 고른 이유 한 줄"}]} JSON만 출력하세요.',
     messages: [{
       role: "user",
@@ -162,12 +174,26 @@ async function pickMoments(cues, { count = 4, topic = "" } = {}) {
   const parsed = extractJson(data) || {};
   const total = cues[cues.length - 1].end;
   return (Array.isArray(parsed.moments) ? parsed.moments : [])
-    .map((m) => ({
-      start: Math.max(0, Number(m.start) || 0),
-      end: Math.min(total, Number(m.end) || 0),
-      hook: String(m.hook || "").slice(0, 16),
-      why: String(m.why || "").trim(),
-    }))
+    .map((m) => {
+      // 훅은 {line1,line2}로 받지만, 예전처럼 문자열로 올 수도 있어 둘 다 받습니다.
+      const h = m.hook && typeof m.hook === "object" ? m.hook : { line1: String(m.hook || ""), line2: "" };
+      const l1 = String(h.line1 || "").slice(0, 14).trim();
+      const l2 = String(h.line2 || "").slice(0, 14).trim();
+      const c = m.comment && typeof m.comment === "object" ? m.comment : {};
+      return {
+        start: Math.max(0, Number(m.start) || 0),
+        end: Math.min(total, Number(m.end) || 0),
+        hookLine1: l1,
+        hookLine2: l2,
+        hook: [l1, l2].filter(Boolean).join(" "),   // 화면에 그릴 때는 두 줄로 나눠 씁니다
+        comment: {
+          name: String(c.name || "").slice(0, 10).trim(),
+          text: String(c.text || "").slice(0, 40).trim(),
+          likes: String(c.likes || "").replace(/[^\d.만천]/g, "").slice(0, 6),
+        },
+        why: String(m.why || "").trim(),
+      };
+    })
     .filter((m) => m.end - m.start >= 12 && m.end - m.start <= 90)
     .slice(0, count);
 }
@@ -179,33 +205,14 @@ async function pickMoments(cues, { count = 4, topic = "" } = {}) {
 /**
  * 한 구간을 세로 쇼츠로.
  *
- * ⚠️ 가로 영상을 세로로 만들 때 그냥 잘라내면 사람이 화면 밖으로 나갑니다.
- * 흐린 배경 위에 원본을 얹는 방식을 씁니다. 요즘 쇼츠에서 흔히 쓰는 모양이고,
- * 무엇보다 무엇이 잘려나가지 않습니다.
+ * ⚠️ 2026-09-01 방식을 통째로 바꿨습니다.
+ * 예전에는 **흐린 배경 위에 가로 영상을 얹는** 방식이었습니다. 화면 위아래 절반이
+ * 뭉갠 배경으로 낭비되고 인물이 작게 박혀서, 사장님 지적대로 "AI로 대충 만든 티"가
+ * 났습니다. 이제 shortsStudio가 **피사체 위치로 진짜 잘라내고**, 위에 훅 두 줄,
+ * 아래에 댓글 카드를 붙입니다(이지컷 화면 분석 결과).
  */
-async function cutOne(srcPath, moment, destPath) {
-  const dur = (moment.end - moment.start).toFixed(2);
-  const vf = [
-    // 배경: 꽉 채우고 흐리게
-    "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=28:2[bg]",
-    // 앞: 가로폭에 맞춰 얹기
-    "[0:v]scale=1080:-2[fg]",
-    "[bg][fg]overlay=(W-w)/2:(H-h)/2[out]",
-  ].join(";");
-
-  await run(ffmpegPath, [
-    "-y",
-    "-ss", String(moment.start),
-    "-i", srcPath,
-    "-t", dur,
-    "-filter_complex", vf,
-    "-map", "[out]", "-map", "0:a?",
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-    "-c:a", "aac", "-b:a", "128k",
-    "-movflags", "+faststart",
-    "-r", "30",
-    destPath,
-  ], { timeout: 600000 });
+async function cutOne(srcPath, moment, destPath, opts = {}) {
+  return shortsStudio.renderShort(srcPath, moment, destPath, opts);
 }
 
 /**
@@ -213,7 +220,7 @@ async function cutOne(srcPath, moment, destPath) {
  *
  * ⚠️ 본인 영상만 넣으세요. 남의 영상을 자르면 채널이 위험합니다.
  */
-async function fromYoutube(url, { count = 4, topic = "" } = {}) {
+async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = "light", subtitles = true } = {}) {
   const jobId = crypto.randomUUID().slice(0, 8);
   const workDir = path.join(os.tmpdir(), "l2s-" + jobId);
   fs.mkdirSync(workDir, { recursive: true });
@@ -231,7 +238,7 @@ async function fromYoutube(url, { count = 4, topic = "" } = {}) {
       const name = `short-${jobId}-${i + 1}.mp4`;
       const dest = path.join(OUT_DIR, name);
       try {
-        await cutOne(src, moments[i], dest);
+        await cutOne(src, moments[i], dest, { cues, channel, theme, subtitles });
         const size = fs.statSync(dest).size;
         shorts.push({
           ...moments[i],
