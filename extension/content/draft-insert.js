@@ -782,7 +782,16 @@
       if (b.kind === "gap") return "<p><br></p>";
       if (b.kind === "photo") return `<p>[사진: ${escH(b.text || "여기에 사진")}]</p>`;
       if (b.kind === "subhead")
-        return `<p><span style="font-size:19px;"><b>${richHtml(escH(b.text))}</b></span></p>`;
+        /**
+         * ⚠️ 2026-09-01 실측으로 바꿨습니다.
+         * 예전엔 <p><span style="font-size:19px"><b>…</b></span></p> 로 보냈습니다.
+         * 그건 **겉보기만 소제목**이고 편집기 안에서는 그냥 본문이라, 나중에 도구줄로
+         * 다시 바꿔야 했습니다(그 과정에서 사고도 났습니다).
+         * 브라우저에서 드래그 복사해 붙여넣을 때 h2는 진짜 제목으로 살아남고
+         * h3는 안 살아남는 것이 확인됐습니다. 그래서 h2로 보냅니다.
+         * style은 편집기가 h2를 무시할 때를 대비한 보험입니다.
+         */
+        return `<h2 style="font-size:19px;font-weight:bold;">${richHtml(escH(b.text))}</h2>`;
       if (b.kind === "quote")
         // 인용 모양을 스타일로도 실어 보냅니다 — 편집기가 blockquote를 제 인용구로
         // 안 바꿔도 시각적으로는 인용구답게 들어가게.
