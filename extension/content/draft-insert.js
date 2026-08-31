@@ -566,27 +566,43 @@
     const el = document.querySelector(".se-documentTitle .se-text-paragraph") ||
                document.querySelector(".se-documentTitle [contenteditable='true']");
     if (!el || !F || !F.setEditableText) return false;
+    const tOK = () => (el.innerText || "").replace(INVIS, "").includes(title.replace(INVIS, "").slice(0, 20));
+
+    /**
+     * ⚠️ 2026-09-01 — 순서를 뒤집었습니다. 사장님 신고: "제목이 삭제가 안 됩니다."
+     *
+     * 예전엔 setEditableText(빠른 길)로 먼저 넣고, 글자가 보이면 거기서 멈췄습니다.
+     * 그러면 **화면에는 글자가 있는데 편집기 내부 모델은 비어 있습니다.**
+     * 사장님이 제목을 지우려고 전체 선택 후 지워도, 편집기는 자기 모델에 지울 게
+     * 없다고 보고 아무 일도 안 합니다. 그래서 제목이 안 지워졌습니다.
+     *
+     * 진짜 클릭+붙여넣기는 편집기가 **사람 입력으로 받아들여** 모델에 기록합니다.
+     * 느리지만 이게 맞는 길입니다. 빠른 길은 이게 안 될 때의 예비로 내렸습니다.
+     */
     say("제목을 넣는 중…");
     await settle(120);
-    F.setEditableText(el, title);
-    await settle();
-    const tOK = () => (el.innerText || "").replace(INVIS, "").includes(title.replace(INVIS, "").slice(0, 20));
-    let okT = tOK();
+    let okT = false;
+
+    await writeClip(title);
+    const r0 = el.getBoundingClientRect();
+    const { fx, fy } = frameOffset();
+    const resp = await new Promise((res) => {
+      try {
+        chrome.runtime.sendMessage({
+          type: "clickPaste",
+          x: Math.round(fx + r0.left + Math.min(60, r0.width / 2)),
+          y: Math.round(fy + r0.top + r0.height / 2),
+        }, res);
+      } catch { res(null); }
+    });
+    if (resp && resp.ok) { await settle(600); okT = tOK(); }
+
+    // 예비 — 진짜 클릭이 막혔을 때만. 이 길로 들어간 제목은 안 지워질 수 있습니다.
     if (!okT) {
-      say("제목을 진짜 클릭으로 넣는 중…");
-      await writeClip(title);
-      const r0 = el.getBoundingClientRect();
-      const { fx, fy } = frameOffset();
-      const resp = await new Promise((res) => {
-        try {
-          chrome.runtime.sendMessage({
-            type: "clickPaste",
-            x: Math.round(fx + r0.left + Math.min(60, r0.width / 2)),
-            y: Math.round(fy + r0.top + r0.height / 2),
-          }, res);
-        } catch { res(null); }
-      });
-      if (resp && resp.ok) { await settle(600); okT = tOK(); }
+      say("제목을 넣는 중(예비 방식)…");
+      F.setEditableText(el, title);
+      await settle();
+      okT = tOK();
     }
     /**
      * ⚠️ 회색 "제목" 잔상 지우기 (2026-08-31 — 두 번째 시도).
@@ -595,13 +611,30 @@
      * editor-tools 쪽에만 넣었다가, 통합 복사가 이 함수를 쓰게 되면서 그 처리를 안 타
      * 증상이 그대로 남았습니다 — 그래서 넣는 자리인 여기로 옮겼습니다.
      */
-    if (okT) {
-      try {
-        document.querySelectorAll(
-          ".se-documentTitle [class*='placeholder'], .se-documentTitle [class*='Placeholder']"
-        ).forEach((n) => { n.style.display = "none"; });
-      } catch {}
-    }
+    /**
+     * ⚠️ 2026-09-01 — display:none으로 **영구히** 숨기던 것을 되돌렸습니다.
+     * 그렇게 하면 나중에 사장님이 제목을 지워 비웠을 때도 안내가 안 돌아와서,
+     * 빈 제목인지 아닌지 화면으로 알 수가 없습니다.
+     * 진짜 클릭+붙여넣기로 넣으면 네이버가 안내를 **스스로** 걷습니다.
+     * 그래도 잔상이 남는 경우에만, 제목이 비면 다시 보이도록 되돌려 둡니다.
+     */
+    try {
+      const ph = document.querySelectorAll(
+        ".se-documentTitle [class*='placeholder'], .se-documentTitle [class*='Placeholder']"
+      );
+      ph.forEach((n) => { n.style.display = okT ? "none" : ""; });
+      if (okT && ph.length) {
+        // 제목이 비워지면 안내를 되살립니다. 한 번만 걸어둡니다.
+        const host = document.querySelector(".se-documentTitle");
+        if (host && !host.dataset.wsPhWatch) {
+          host.dataset.wsPhWatch = "1";
+          new MutationObserver(() => {
+            const empty = !(el.innerText || "").replace(INVIS, "").trim();
+            ph.forEach((n) => { n.style.display = empty ? "" : "none"; });
+          }).observe(host, { childList: true, subtree: true, characterData: true });
+        }
+      }
+    } catch {}
     return okT;
   }
 
