@@ -320,8 +320,10 @@
    누를 것이 없으니 pointer-events를 꺼서 밑에 있는 편집기를 그대로 쓸 수 있게 합니다. */
 #ws-title-bar {
   position: fixed; left: 50%; transform: translateX(-50%);
-  /* 네이버 도구줄이 위쪽 두 줄(약 56px)을 씁니다. 그 바로 밑에 붙입니다. */
-  top: 60px; z-index: 2147482000;
+  /* 네이버 도구줄이 위쪽 두 줄을 쓰고, 그 오른쪽 끝에 쇼핑커넥트·내 클립 같은
+     아이콘 줄이 하나 더 있습니다(2026-08-31 사장님 지적 — 띠가 그 줄을 덮었음).
+     그 줄까지 다 지나간 아래(110px)에 붙입니다. */
+  top: 110px; z-index: 2147482000;
   max-width: min(760px, calc(100vw - 320px));
   padding: 7px 18px;
   background: rgba(24, 26, 32, .93);

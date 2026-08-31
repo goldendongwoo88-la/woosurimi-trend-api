@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "build:ext": "node scripts/test-linebreak-parity.js && node build-extension.js",
-    "test:blog": "node scripts/test-linebreak.js && node scripts/test-linebreak-parity.js && node scripts/test-spellcheck.js && node scripts/test-credit-refund.js && node scripts/test-search-nav.js && node scripts/test-emphasis.js && node scripts/test-thumbnail.js && node scripts/test-thumb-strategy.js && node scripts/test-draft-autobreak.js",
+    "test:blog": "node scripts/test-linebreak.js && node scripts/test-linebreak-parity.js && node scripts/test-spellcheck.js && node scripts/test-credit-refund.js && node scripts/test-search-nav.js && node scripts/test-emphasis.js && node scripts/test-thumbnail.js && node scripts/test-thumb-strategy.js && node scripts/test-thumb-patterns.js && node scripts/test-draft-autobreak.js",
     "preview:panels": "node scripts/preview-panels.js",
     "preview:format": "node scripts/preview-format.js"
   },

@@ -2906,7 +2906,9 @@
 
   function updateTitleBar() {
     const t = getTitle();
-    if (!t) { titleBar.hidden = true; return; }
+    // ⚠️ 제목이 비었을 때 네이버가 넣어두는 안내 유령 글자("제목")를 진짜 제목으로
+    // 착각해서, 빈 문서에도 "제목"이라고 적힌 띠가 떠 있었습니다(2026-08-31).
+    if (!t || t === "제목") { titleBar.hidden = true; return; }
     if (titleBar.textContent !== t) titleBar.textContent = t;
     titleBar.hidden = false;
   }

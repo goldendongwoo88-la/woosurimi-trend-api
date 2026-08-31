@@ -588,6 +588,20 @@
       });
       if (resp && resp.ok) { await settle(600); okT = tOK(); }
     }
+    /**
+     * ⚠️ 회색 "제목" 잔상 지우기 (2026-08-31 — 두 번째 시도).
+     * 사람이 타자를 치면 네이버가 안내 글자를 스스로 걷는데, 코드로 넣으면 그 스위치를
+     * 안 건드려서 진짜 제목 뒤에 회색 "제목"이 계속 붙어 보였습니다.
+     * editor-tools 쪽에만 넣었다가, 통합 복사가 이 함수를 쓰게 되면서 그 처리를 안 타
+     * 증상이 그대로 남았습니다 — 그래서 넣는 자리인 여기로 옮겼습니다.
+     */
+    if (okT) {
+      try {
+        document.querySelectorAll(
+          ".se-documentTitle [class*='placeholder'], .se-documentTitle [class*='Placeholder']"
+        ).forEach((n) => { n.style.display = "none"; });
+      } catch {}
+    }
     return okT;
   }
 
