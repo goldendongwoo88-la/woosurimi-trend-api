@@ -68,10 +68,22 @@ const MEASURED = {
  * 실측은 0이지만, 아예 못 쓰게 하면 정말 중요한 한 줄을 표시할 방법이 없습니다.
  * 그래서 0은 아니되 아주 적게 둡니다.
  */
-const PER_1000 = { bold: 5, underline: 0.6, highlight: 0.6, color: 1 };
+/**
+ * ⚠️ 2026-09-01 사장님 지시로 올렸습니다.
+ * 직접 강조를 넣어 발행하신 글(디올 소바쥬)을 재보니 굵게 152자·글자색 43자
+ * (파랑 #0075C8 · 초록 · 핑크)였고, **"이것보다 더 많이, 인용구 포함"**을 원하십니다.
+ *
+ * 위 MEASURED(실측)와는 어긋납니다 — 잘 되는 블로그는 글자색을 거의 안 쓰고,
+ * 색을 많이 쓰는 쪽이 오히려 성과가 낮았습니다. 그 데이터는 위에 그대로 남겨둡니다.
+ * 다만 사장님 블로그의 톤은 사장님이 정하는 것이고, 실제 성과는
+ * gw_analytics 장부에 쌓아 우리 계정 기준으로 다시 판단하면 됩니다.
+ *
+ *   굵게 5 → 9 · 글자색 1 → 3 · 밑줄 0.6 → 1.5 · 배경색 0.6 → 1
+ */
+const PER_1000 = { bold: 9, underline: 1.5, highlight: 1, color: 3 };
 
 /** 아무리 긴 글이어도 이 이상은 안 합니다. */
-const HARD_CAP = { bold: 22, underline: 3, highlight: 2, color: 5 };
+const HARD_CAP = { bold: 34, underline: 6, highlight: 4, color: 12 };
 
 const KINDS = {
   bold: { label: "굵게", why: "제일 눈에 띄고 부담이 없습니다. 핵심어에 씁니다." },
@@ -166,8 +178,9 @@ async function plan({ title = "", body = "" } = {}) {
     `이 글에서 강조할 자리를 고르세요.\n` +
     `개수 기준 (이 글 길이에 맞춘 값입니다):\n` +
     `  굵게 ${targets.bold}개 · 밑줄 ${targets.underline}개 · 배경색 ${targets.highlight}개 · 글자색 ${targets.color}개\n` +
-    `이보다 적어도 됩니다. 강조할 만한 게 없으면 억지로 채우지 마세요.\n\n` +
-    `그리고 인용구로 뽑을 문장을 1~3개 고르세요.\n\n` +
+    `위 개수를 **되도록 채우세요.** 사장님이 강조가 촘촘한 글을 원하십니다.\n` +
+    `다만 아무 데나 칠하면 안 됩니다 — 결론·숫자·가격·제품명·비교 지점에 겁니다.\n\n` +
+    `그리고 인용구로 뽑을 문장을 3~6개 고르세요. 스크롤하다 눈이 멈추는 자리를 만듭니다.\n\n` +
     `JSON만 답하세요:\n` +
     `{\n` +
     `  "marks": [\n` +
@@ -264,7 +277,8 @@ function validate(parsed, { text, targets, chars }) {
     }
     const at = text.indexOf(phrase);
     if (at < 0) { dropped.push({ phrase, why: "인용구가 본문에 그대로 없습니다" }); continue; }
-    if (quotes.length >= 3) { dropped.push({ phrase, why: "인용구는 3개까지입니다" }); continue; }
+    // 2026-09-01 사장님 지시 — 인용구를 더 넣습니다. 3개 → 6개.
+    if (quotes.length >= 6) { dropped.push({ phrase, why: "인용구는 6개까지입니다" }); continue; }
     quotes.push({ text: phrase, why: String(q.why || "").slice(0, 80), at });
   }
   quotes.sort((a, b) => a.at - b.at);
