@@ -1759,6 +1759,44 @@
    * 사진만. 단추·안내 문구는 문단 밖에 살아서 자연히 안 담깁니다.
    * 사진은 이 화면(로그인 상태)에서 받아 **파일 안에 심어서** 어디서 열어도 보입니다.
    */
+  /**
+   * 문단 하나를 워드가 알아듣는 모양으로 바꿉니다 (1.27.17).
+   *
+   * 네이버는 서식을 클래스(se-fs-fs19, se-weight- …)로 걸어두고 그 CSS는 에디터 안에만
+   * 있습니다. innerHTML을 그대로 내보내면 워드가 클래스를 몰라 전부 기본 글씨가 됩니다.
+   * 그래서 **화면에 실제로 보이는 값**(computed style)을 읽어 인라인 style로 새깁니다.
+   * 기본값(검정 글씨·투명 배경·기본 크기)은 새기지 않습니다 — 다 새기면 파일만 무거워집니다.
+   */
+  function wordInlineStyles(p) {
+    const clone = p.cloneNode(true);
+    const orig = [p, ...p.querySelectorAll("*")];
+    const copy = [clone, ...clone.querySelectorAll("*")];
+    const baseSize = Math.round(parseFloat(getComputedStyle(p).fontSize) || 16);
+    for (let i = 0; i < orig.length; i++) {
+      const el = copy[i];
+      if (!el || el.nodeType !== 1) continue;
+      let cs;
+      try { cs = getComputedStyle(orig[i]); } catch { continue; }
+      const st = [];
+      if (parseInt(cs.fontWeight, 10) >= 600) st.push("font-weight:bold");
+      if (cs.fontStyle === "italic") st.push("font-style:italic");
+      if ((cs.textDecorationLine || "").includes("underline")) st.push("text-decoration:underline");
+      if ((cs.textDecorationLine || "").includes("line-through")) st.push("text-decoration:line-through");
+      const color = cs.color;
+      if (color && !/^rgb\(0,\s*0,\s*0\)$/.test(color)) st.push(`color:${color}`);
+      const bg = cs.backgroundColor;
+      if (bg && bg !== "transparent" && !/^rgba\(0,\s*0,\s*0,\s*0\)$/.test(bg) && !/^rgb\(255,\s*255,\s*255\)$/.test(bg)) st.push(`background-color:${bg}`);
+      const fs = Math.round(parseFloat(cs.fontSize) || 0);
+      if (fs && fs !== baseSize) st.push(`font-size:${fs}px`);
+      // 네이버 전용 클래스·id는 워드에 의미가 없고 파일만 키웁니다.
+      el.removeAttribute("class");
+      el.removeAttribute("id");
+      if (st.length) el.setAttribute("style", st.join(";"));
+      else el.removeAttribute("style");
+    }
+    return clone.innerHTML;
+  }
+
   async function downloadWord() {
     const title = getTitle() || "블로그 원고";
     const root = getEditorRoot();
@@ -1820,8 +1858,14 @@
         // 글감 안내 문구는 원고가 아닙니다 (draft-insert의 판별과 같은 결).
         if (/(기다립니다|남겨보세요|기록해\s*보세요|들려주세요|적어보세요)\.?\s*#/.test(t)) continue;
         const isQuote = !!p.closest(".se-quotation");
-        // 굵게 등 서식은 살리되, 네이버 잡동사니 속성은 워드가 알아서 무시합니다.
-        parts.push(isQuote ? `<blockquote>${p.innerHTML}</blockquote>` : `<p>${p.innerHTML}</p>`);
+        /**
+         * ⚠️ innerHTML을 그대로 담으면 서식이 다 죽습니다 (1.27.17에서 확인).
+         * 네이버는 굵기·크기·색을 클래스(se-fs-fs19 등)로 걸고 CSS는 에디터 안에만
+         * 있습니다. 워드는 그 클래스를 몰라 전부 기본 글씨가 됐습니다. 그래서 화면에
+         * 실제로 보이는 모양(computed style)을 읽어 인라인으로 새겨 담습니다.
+         */
+        const inner = wordInlineStyles(p);
+        parts.push(isQuote ? `<blockquote>${inner}</blockquote>` : `<p>${inner}</p>`);
       }
     }
 
