@@ -142,9 +142,88 @@ function osPaste(pid) {
     return /sent/.test(out);
   } catch { return false; } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
 }
+/**
+ * 클립보드 백업/복원.
+ *
+ * ⚠️ 왜 필요한가 (2026-09-02, 두 번 난 사고)
+ * 네이버 제목 칸은 **진짜 붙여넣기만** 받습니다. 그래서 확장이 제목을 넣을 때 클립보드를 씁니다.
+ * 그러면 사장님이 다른 창에서 Ctrl+V 할 때 원고 제목이 튀어나옵니다 —
+ * 실제로 이메일 본문과 포토샵 저장 파일명에 원고가 들어갔습니다.
+ * 고칠 곳은 확장이 아니라 여기입니다: **시작 전에 백업하고, 끝나면 되돌려 놓습니다.**
+ */
+function readClipboard() {
+  try {
+    return execFileSync("powershell", ["-NoProfile", "-STA", "-Command", "Get-Clipboard -Raw"],
+      { encoding: "utf8", timeout: 15000 });
+  } catch { return null; }
+}
+function writeClipboard(text) {
+  if (text == null) return;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wsclip-"));
+  try {
+    const tf = path.join(dir, "clip.txt");
+    const sf = path.join(dir, "set.ps1");
+    fs.writeFileSync(tf, text, "utf8");
+    const ps = [
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "$t = [System.IO.File]::ReadAllText('" + tf + "', [System.Text.Encoding]::UTF8)",
+      "if ($t.Length -gt 0) { [System.Windows.Forms.Clipboard]::SetText($t) } else { [System.Windows.Forms.Clipboard]::Clear() }",
+    ].join(String.fromCharCode(13) + String.fromCharCode(10));
+    fs.writeFileSync(sf, String.fromCharCode(0xFEFF) + ps, "utf8");
+    execFileSync("powershell", ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-File", sf],
+      { stdio: "ignore", timeout: 20000 });
+  } catch {} finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
+}
+
+/**
+ * ── 사진을 **진짜로 올립니다** ──
+ *
+ * ⚠️ 왜 바꿨나 (2026-09-02 사장님 지적: "라이브러리에는 사진이 안나와")
+ * 예전에는 원고 HTML에 `<img src="남의 주소">`를 넣어 붙여넣었습니다. 화면에는 보였지만
+ * 네이버가 그 사진을 **가진 게 아니라 남의 주소를 빌려 쓰는 것**이라,
+ *   · 사진 라이브러리에 안 나옵니다 → 사장님이 사진을 고치거나 뺄 수가 없습니다
+ *   · 대표사진 지정도 안 됩니다
+ *   · 원본 쪽에서 주소가 바뀌면 나중에 사진이 통째로 깨집니다
+ * 그래서 파일로 내려받아 **에디터 사진 버튼으로 업로드**합니다.
+ * 업로드된 사진은 주소가 blogfiles.pstatic.net 으로 바뀝니다 — 그게 "네이버가 가진 사진"이라는 표시입니다.
+ */
+const UA_IMG = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36";
+const PHOTO_MARK = (i) => `⟦사진${i}⟧`;
+
+/** 사진을 임시 폴더로 내려받습니다. 못 받은 자리는 null로 둡니다(자리는 유지). */
+async function downloadPhotos(photos, say) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wsu-photos-"));
+  const files = [];
+  let small = 0;
+  for (const [i, ph] of photos.entries()) {
+    try {
+      const r = await fetch(ph.url, { headers: { "User-Agent": UA_IMG, Referer: "https://www.instagram.com/" } });
+      if (!r.ok) { files.push(null); continue; }
+      const buf = Buffer.from(await r.arrayBuffer());
+      // 3KB 미만은 사진이 아니라 오류 이미지이거나 아주 작은 섬네일입니다. 올리지 않습니다.
+      if (buf.length < 3000) { files.push(null); small++; continue; }
+      const f = path.join(dir, `p${String(i).padStart(2, "0")}.jpg`);
+      fs.writeFileSync(f, buf);
+      files.push(f);
+    } catch { files.push(null); }
+  }
+  const got = files.filter(Boolean).length;
+  say(`      사진 ${got}/${photos.length}장 내려받음${small ? ` (너무 작아서 뺌 ${small}장)` : ""}`);
+  return { dir, files };
+}
+
+module.exports = module.exports || {};
+
 const say = (m) => console.log(m);
 
+let clipBackup = null;
+const restoreClip = () => { try { writeClipboard(clipBackup); } catch {} };
+
 (async () => {
+  // 사장님이 쓰시던 클립보드를 지키려고 먼저 백업합니다.
+  clipBackup = readClipboard();
+  process.on("exit", restoreClip);
+
   say(`[1/6] 크롬 여는 중 (프로필: naver_${blogId})`);
   const browser = await puppeteer.launch({
     /**
@@ -170,8 +249,14 @@ const say = (m) => console.log(m);
       "--disable-blink-features=AutomationControlled",
       "--hide-crash-restore-bubble",
       "--disable-session-crashed-bubble",
-      "--window-size=1100,800",
-      "--window-position=1150,650",   // 오른쪽 아래 구석
+      "--window-size=700,420",
+      /**
+       * ⚠️ **화면 밖(-2400)으로 보내면 안 됩니다.**
+       * 크롬이 보이지 않는 창을 절전 처리해서 페이지가 아예 안 뜹니다
+       * (실측: navigation timeout 60초). 헤드리스도 붙여넣기가 제목으로 가서 못 씁니다.
+       * 그래서 **작게 만들어 오른쪽 아래 구석**에 둡니다. 완전히 안 보이게는 못 합니다.
+       */
+      "--window-position=1250,720",
       "--lang=ko-KR,ko",
     ],
   });
@@ -251,10 +336,19 @@ ${blogId} 로그인이 안 돼 있습니다.
       try {
         if (typeof buildNaverHtml === "function") htmlOut = buildNaverHtml(r.post.body, r.post.title, photosArr);
       } catch {}
-      if (typeof copyCombined !== "function") return { ok: false, why: "통합복사 기능을 못 찾았습니다" };
+      /**
+       * ⚠️ **클립보드를 건드리지 않습니다.** (2026-09-02 사고)
+       * 통합복사는 시스템 클립보드에 원고를 씁니다. 그러면 사장님이 다른 창에서 Ctrl+V 할 때
+       * **원고가 튀어나옵니다.** 실제로 사장님 작업 중에 그 일이 났습니다.
+       * 지금은 HTML을 직접 넘겨 붙이므로 클립보드가 필요 없습니다. 그래서 안 씁니다.
+       */
+      if (htmlOut) {
+        return { ok: true, how: "HTML 직접", title: r.post.title, photos: photosArr.length, photosArr, html: htmlOut, body: r.post.body };
+      }
+      if (typeof copyCombined !== "function") return { ok: false, why: "본문 HTML을 못 만들었습니다" };
       try {
         await copyCombined();
-        return { ok: true, how: "clipboard API", title: r.post.title, photos: photosArr.length, html: htmlOut, body: r.post.body };
+        return { ok: true, how: "clipboard API", title: r.post.title, photos: photosArr.length, photosArr, html: htmlOut, body: r.post.body };
       } catch (e) {
         /**
          * ⚠️ 최신 클립보드 API가 막히는 환경이 있습니다(권한·포커스).
@@ -287,7 +381,7 @@ ${blogId} 로그인이 안 돼 있습니다.
         sel.removeAllRanges(); tmp.remove();
         document.removeEventListener("copy", onCopy);
         if (!okOld) return { ok: false, why: "클립보드에 담지 못했습니다: " + e.message };
-        return { ok: true, how: "execCommand(옛 방식)", title: r.post.title, photos: photos.length, html: htmlOut, body: r.post.body };
+        return { ok: true, how: "execCommand(옛 방식)", title: r.post.title, photos: photos.length, photosArr: photos, html: htmlOut, body: r.post.body };
       }
     }, postId);
 
@@ -296,7 +390,13 @@ ${blogId} 로그인이 안 돼 있습니다.
 
     // ── 3) 글쓰기 열기 ──
     say("[3/6] 네이버 글쓰기 여는 중");
-    await page.goto(`https://blog.naver.com/${blogId}?Redirect=Write`, { waitUntil: "networkidle2", timeout: 60000 });
+    /**
+     * networkidle2는 **너무 까다롭습니다.** 네이버 페이지는 광고·추적 요청이 계속 떠서
+     * "조용해지는 순간"이 안 옵니다(실측: 60초 초과로 실패).
+     * 글이 그려졌는지만 보면 충분하므로 domcontentloaded로 바꾸고, 대신 조금 더 기다립니다.
+     */
+    await page.goto(`https://blog.naver.com/${blogId}?Redirect=Write`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await sleep(3000);
     await sleep(4000);
 
     // 스마트에디터는 iframe 안에 있습니다. 없으면 페이지 자체가 편집기입니다.
@@ -376,7 +476,24 @@ ${blogId} 로그인이 안 돼 있습니다.
       if (!show) await browser.close();
       process.exit(1);
     }
-    const frameE = editor;
+    /**
+     * ⚠️ 프레임은 중간에 **교체됩니다.**
+     * 확장 버튼을 누르거나 편집기가 다시 그려지면 잡아둔 프레임이 죽고
+     * "Attempted to use detached Frame" 으로 통째로 실패합니다(실측).
+     * 그래서 쓸 때마다 살아 있는지 보고, 죽었으면 다시 찾습니다.
+     */
+    let frameE = editor;
+    const liveFrame = async () => {
+      const alive = frameE ? await frameE.evaluate(() => true).catch(() => false) : false;
+      if (alive) return frameE;
+      for (const f of page.frames()) {
+        const has = await f.evaluate(() => Boolean(
+          document.querySelector(".se-main-container, .se-content") || document.querySelector(".se-documentTitle")
+        )).catch(() => false);
+        if (has) { frameE = f; return frameE; }
+      }
+      return frameE;
+    };
 
     // ── 4) 본문 칸 클릭 후 진짜 Ctrl+V ──
     say("[4/6] 본문에 붙여넣는 중");
@@ -461,75 +578,63 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 여기서 다시 만들면 그 사고를 처음부터 다시 겪게 됩니다.
      * 편집국이 /api/last-copied로 원고를 이미 넘겨놨으므로 버튼만 누르면 됩니다.
      */
-    let byExtension = false;
-    const already = await frameE.evaluate(() => {
-      const root = document.querySelector(".se-main-container, .se-content");
-      const t = (document.querySelector(".se-documentTitle")?.innerText || "").replace(/\s/g, "");
-      return Math.max(0, (root?.innerText || "").replace(/\s/g, "").length - t.length);
-    }).catch(() => 0);
-    if (already >= 200) say(`      이미 본문 ${already.toLocaleString()}자 들어감 — 나머지 단계 건너뜀`);
-    for (const f of (already >= 200 ? [] : page.frames())) {
-      const clicked = await f.evaluate(() => {
-        const visible = (el) => {
-          const r = el.getBoundingClientRect();
-          const st = getComputedStyle(el);
-          return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none";
-        };
-        const btn = [...document.querySelectorAll("button, a, div[role='button']")]
-          .filter(visible)
-          .find((b) => /원고\s*붙이기/.test((b.textContent || "").trim()));
-        if (!btn) return false;
-        btn.click();
-        return true;
-      }).catch(() => false);
-      if (clicked) { byExtension = true; break; }
-    }
-    if (byExtension) {
-      say("      확장의 '원고 붙이기'를 눌렀습니다 — 처리 기다리는 중");
-      await sleep(12000);
-      const n1 = await frameE.evaluate(() => {
-        const root = document.querySelector(".se-main-container, .se-content");
-        const t = (document.querySelector(".se-documentTitle")?.innerText || "").replace(/\s/g, "");
-        return Math.max(0, (root?.innerText || "").replace(/\s/g, "").length - t.length);
-      }).catch(() => 0);
-      say(`      확장 처리 후 본문 ${n1.toLocaleString()}자`);
-    } else {
-      say("      확장 버튼을 못 찾았습니다 — 직접 붙여넣기로 갑니다");
-    }
-
     /**
-     * ① 합성 붙여넣기부터.
-     * ⚠️ OS 클립보드를 거친 진짜 Ctrl+V가 편집기까지 안 닿는 경우가 있었습니다(실측: 0자).
-     * 스마트에디터는 paste 이벤트를 스스로 처리하므로, DataTransfer를 만들어 직접 던지면
-     * 편집기가 정상 경로로 받아 문단·사진을 알아서 만듭니다. 확장도 같은 사다리를 씁니다.
+     * ⚠️ **확장의 '원고 붙이기' 버튼은 누르지 않습니다.** (2026-09-02)
+     * 그 버튼을 누르면 편집기가 다시 그려지면서 **프레임이 죽고**,
+     * 이후 모든 작업이 "detached Frame"으로 통째로 실패합니다(실측 2회).
+     * 게다가 필요도 없습니다 — 본문이 채워지면 확장이 알아서 제목·소제목을 정리합니다.
      */
+    const byExtension = false;
+    // 확장 블록을 지우면서 같이 사라진 값입니다. 여기서는 늘 0(아직 아무것도 안 들어감)입니다.
+    const already = 0;
+
     /**
      * ⚠️ 본문이 어느 프레임에 있는지 확정할 수 없습니다.
      * 실측: PostWriteForm 프레임에 문단이 2개(제목+본문)뿐인데 본문이 31자에 머물렀고,
      * about:blank 프레임에도 편집 가능한 영역이 하나 더 있었습니다.
      * 짐작으로 하나를 고르지 말고 **편집 가능한 곳마다 넣어보고, 들어간 곳을 씁니다.**
      */
-    const measure = async (f) => f.evaluate(() => {
+    /**
+     * ⚠️ 잴 때마다 **살아 있는 프레임을 다시 잡습니다.**
+     * 붙여넣기가 일어나면 편집기가 다시 그려지면서 잡아둔 프레임이 죽습니다.
+     * 그걸 그대로 쓰면 "detached Frame"으로 통째로 실패합니다(실측 3회).
+     */
+    /**
+     * 프레임에서 코드를 돌립니다. **끊기면 다시 잡아 한 번 더** 해봅니다.
+     * 붙여넣기·클릭 때마다 편집기가 다시 그려져 프레임이 죽는데,
+     * 그때마다 개별로 막으려니 계속 새 자리에서 터졌습니다(실측 3회). 여기 한 곳에서 처리합니다.
+     */
+    const evalIn = async (fn, ...a) => {
+      try { return await (await liveFrame()).evaluate(fn, ...a); }
+      catch (e) {
+        if (!/detached|Execution context/i.test(String(e.message))) throw e;
+        frameE = null;                       // 강제로 다시 찾게 합니다
+        await sleep(1200);
+        try { return await (await liveFrame()).evaluate(fn, ...a); } catch { return null; }
+      }
+    };
+
+    const measure = async () => (await evalIn(() => {
       const root = document.querySelector(".se-main-container, .se-content") || document.body;
       const t = (document.querySelector(".se-documentTitle")?.innerText || "").replace(/\s/g, "");
       return Math.max(0, (root?.innerText || "").replace(/\s/g, "").length - t.length);
-    }).catch(() => 0);
+    })) || 0;
 
-    if ((await measure(frameE)) < 200) {
+    if ((await measure()) < 200) {
       /**
        * ⚠️ **붙여넣기 직전에 본문을 다시 클릭합니다.**
        * 앞에서 확장 버튼을 누르는 동안 커서가 본문에서 빠져나갑니다.
        * 커서가 없으면 붙여넣기가 제목으로 가거나 아무 데도 안 들어갑니다.
        */
       try {
-        const h2 = await frameE.evaluateHandle(() => {
+        const h2 = await (await liveFrame()).evaluateHandle(() => {
           const inTitle = (n) => Boolean(n.closest?.(".se-documentTitle"));
           const paras = [...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n));
           return paras.length ? paras[paras.length - 1] : document.querySelector(".se-content");
         });
         const el2 = h2.asElement();
         if (el2) { await el2.click({ delay: 60 }); await sleep(700); }
-        const where = await frameE.evaluate(() => {
+        const where = await evalIn(() => {
           const sel = window.getSelection();
           if (!sel || !sel.rangeCount) return "커서 없음";
           let n = sel.getRangeAt(0).startContainer;
@@ -571,7 +676,7 @@ ${blogId} 로그인이 안 돼 있습니다.
         }, copied.html || "", copied.body || "").catch(() => false);
         if (!ok) continue;
         await sleep(3500);
-        const n2 = await measure(frameE);
+        const n2 = await measure();
         say(`      ${f.url().slice(0, 40)} 에 시도 → 본문 ${n2}자`);
         if (n2 >= 200) break;
       }
@@ -586,7 +691,7 @@ ${blogId} 로그인이 안 돼 있습니다.
      * Input.insertText는 사람이 타자 친 것과 같은 취급이라 편집기 모델까지 채워집니다.
      * 서식·사진은 안 실립니다 — 글자만 들어갑니다. 그래도 빈 초안보다 낫습니다.
      */
-    if (already < 200 && (await measure(frameE)) < 200 && (copied.body || "").length > 200) {
+    if (already < 200 && (await measure()) < 200 && (copied.body || "").length > 200) {
       say("      CDP로 글자 직접 넣기 (서식 없이 본문만)");
       const focused = await frameE.evaluate(() => {
         /**
@@ -617,7 +722,7 @@ ${blogId} 로그인이 안 돼 있습니다.
         }
         await cdp.detach().catch(() => {});
         await sleep(2500);
-        say(`      넣은 뒤 본문 ${(await measure(frameE)).toLocaleString()}자`);
+        say(`      넣은 뒤 본문 ${(await measure()).toLocaleString()}자`);
       }
     }
 
@@ -633,7 +738,7 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 그걸로 판단하면 이미 들어간 글에 **한 번 더** 붙습니다 —
      * 실측: 사진 13장을 골랐는데 26장이 들어갔습니다.
      */
-    const nowIn = await measure(frameE);
+    const nowIn = await measure();
     const pasted = (nowIn >= 200 || already >= 200 || alreadyIn >= 200) ? true : await frameE.evaluate((html, plain) => {
       /**
        * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
@@ -674,9 +779,181 @@ ${blogId} 로그인이 안 돼 있습니다.
       await page.keyboard.up("Control");
     }
 
-    // 사진이 있으면 네이버가 하나씩 올리느라 시간이 걸립니다. 넉넉히 기다립니다.
-    say("      붙여넣는 중… 사진 업로드까지 기다립니다");
-    await sleep(copied.photos ? 25000 : 6000);
+    // 붙여넣기가 자리를 잡을 때까지만 기다립니다. (사진은 아래에서 따로 올립니다)
+    await sleep(6000);
+
+    /**
+     * ── 사진 업로드 ──
+     * 본문에 남겨둔 표식(⟦사진0⟧ …)을 하나씩 찾아가서, 그 자리에 진짜 파일을 올립니다.
+     * 다 올리면 표식 글자는 지웁니다.
+     */
+    const photosArr = copied.photosArr || [];
+    let uploaded = 0;
+    if (photosArr.length) {
+      say(`[4.5/6] 사진 올리는 중 (${photosArr.length}장)`);
+      const { dir, files } = await downloadPhotos(photosArr, say);
+      const failed = new Set();
+      const ed = () => page.frames().find((f) => /PostWriteForm/.test(f.url())) || frameE;
+
+      const imgCount = async () => (await ed().evaluate(
+        () => document.querySelectorAll(".se-component.se-image").length).catch(() => 0));
+
+      for (const [i, file] of files.entries()) {
+        if (!file) { failed.add(i); continue; }
+        const mark = PHOTO_MARK(i);
+        // ① 표식 자리에 커서를 세웁니다.
+        const put = await ed().evaluate((mk) => {
+          const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let n;
+          while ((n = w.nextNode())) {
+            const at = (n.nodeValue || "").indexOf(mk);
+            if (at < 0) continue;
+            const host = n.parentElement?.closest("[contenteditable='true']");
+            host?.focus?.();
+            const r = document.createRange();
+            r.setStart(n, at + mk.length);
+            r.collapse(true);
+            const sel = window.getSelection();
+            sel.removeAllRanges(); sel.addRange(r);
+            return true;
+          }
+          return false;
+        }, mark).catch(() => false);
+        if (!put) { failed.add(i); say(`      ⚠ ${mark} 자리를 못 찾았습니다 — 건너뜁니다`); continue; }
+
+        // ② 사진 버튼을 눌러 파일 선택창을 띄우고 파일을 넘깁니다.
+        const before = await imgCount();
+        let chooser = null;
+        const waitCh = page.waitForFileChooser({ timeout: 15000 }).then((c) => { chooser = c; }).catch(() => {});
+        await ed().evaluate(() => {
+          const b = [...document.querySelectorAll("button.se-image-toolbar-button")][0]
+            || [...document.querySelectorAll("button")].find((n) => /사진/.test(n.textContent || ""));
+          b?.click();
+        }).catch(() => {});
+        await waitCh;
+        if (!chooser) { failed.add(i); say(`      ⚠ 파일 선택창이 안 떴습니다 (${i + 1}번째)`); continue; }
+        await chooser.accept([file]);
+
+        // ③ 올라갈 때까지 기다립니다 — 사진 수가 늘면 끝난 것입니다.
+        let ok = false;
+        for (let t = 0; t < 20; t++) {
+          await sleep(1500);
+          if ((await imgCount()) > before) { ok = true; break; }
+        }
+        if (ok) uploaded++;
+        else { failed.add(i); say(`      ⚠ ${i + 1}번째 사진이 안 올라갔습니다`); }
+      }
+
+      /**
+       * ④ 표식 정리.
+       * 올라간 자리는 표식 **글자만** 지웁니다.
+       * 못 올린 자리는 **출처 줄까지 통째로** 지웁니다 — 사진 없이 "▲ 사진 출처"만 남으면
+       * 사진이 빠진 것처럼 보입니다(실측: 8장만 올라갔는데 출처는 12줄이 남았습니다).
+       */
+      const cleaned = await ed().evaluate((failedIdx) => {
+        const bad = new Set(failedIdx);
+        const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        const hits = [];
+        let n;
+        while ((n = w.nextNode())) {
+          const m = (n.nodeValue || "").match(/⟦사진(\d+)⟧/);
+          if (m) hits.push({ node: n, idx: Number(m[1]) });
+        }
+        let removed = 0;
+        for (const h of hits) {
+          const para = h.node.parentElement?.closest("p, .se-text-paragraph");
+          if (bad.has(h.idx) && para) {
+            // 바로 다음 줄이 출처면 같이 지웁니다.
+            const nx = para.nextElementSibling;
+            if (nx && /^▲ 사진 출처/.test((nx.textContent || "").trim())) { nx.remove(); removed++; }
+            para.remove();
+            continue;
+          }
+          h.node.nodeValue = (h.node.nodeValue || "").replace(/⟦사진\d+⟧/g, "");
+        }
+        return removed;
+      }, [...failed]).catch(() => 0);
+      if (cleaned) say(`      못 올린 자리 출처줄 ${cleaned}줄 지웠습니다`);
+
+      /**
+       * ⑤ **옆트임** — 사진을 화면 폭에 꽉 차게 (사장님 지시 2026-09-02).
+       * 사진을 진짜 마우스로 눌러야 편집기가 "고른 상태"로 인식하고 옆트임 단추가 나옵니다.
+       * DOM의 click()으로는 안 됩니다(실측).
+       */
+      let wide = 0;
+      for (let k = 0; k < uploaded; k++) {
+        try {
+          const imgs = await ed().$$(".se-component.se-image img");
+          if (!imgs[k]) continue;
+          await imgs[k].click();
+          await sleep(900);
+          const hit = await ed().evaluate(() => {
+            const b = [...document.querySelectorAll("button")]
+              .find((n) => /옆트임/.test(n.textContent || "") && n.offsetParent !== null);
+            if (!b) return false;
+            b.click();
+            return true;
+          });
+          if (hit) wide++;
+          await sleep(500);
+        } catch {}
+      }
+      say(`      올린 사진 ${uploaded}장 · 옆트임 ${wide}장`);
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+    }
+
+    /**
+     * ── 제목 넣기 ──
+     * ⚠️ 확장 버튼을 빼면서 제목 넣는 일도 같이 빠졌습니다(실측: 제목이 자리표시 그대로).
+     * 본문과 같은 방식으로 넣습니다 — 제목 칸을 클릭해 커서를 세우고 그 자리에 붙여넣기.
+     * DOM에 글자만 쓰면 편집기 내부 모델이 비어서 **저장할 때 제목이 사라집니다.**
+     */
+    /**
+     * ⓪ **확장에게 마무리를 맡깁니다.**
+     * 편집국에 "이 원고를 방금 복사했다"고 알려주면(=/api/last-copied),
+     * 확장이 본문이 찬 것을 보고 **제목 칸과 네이버 공식 소제목**을 처리합니다.
+     * 그 두 가지는 네이버가 진짜 클릭을 요구해서 붙여넣기로는 절대 안 들어갑니다.
+     * ⚠️ 클립보드는 안 건드립니다 — 원고를 클립보드에 쓰면 사장님이 다른 창에서
+     * Ctrl+V 할 때 그게 튀어나옵니다(실제로 났던 사고).
+     */
+    try {
+      await fetch(`${FLOOR}/api/last-copied`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: postId }),
+      });
+      say("      확장에 마무리 요청(제목·소제목) — 기다리는 중");
+      for (let i = 0; i < 10; i++) {
+        await sleep(2000);
+        const t = await evalIn(() => (document.querySelector(".se-documentTitle")?.innerText || "").trim());
+        if (t && t !== "제목") { say(`      제목 들어감: ${t.slice(0, 30)}`); break; }
+      }
+    } catch {}
+
+    const titleText = String(copied.title || "").trim();
+    if (false && titleText) {
+      try {
+        const th = await (await liveFrame()).evaluateHandle(() => {
+          const el = document.querySelector(".se-documentTitle .se-text-paragraph")
+            || document.querySelector(".se-documentTitle [contenteditable='true']")
+            || document.querySelector(".se-documentTitle");
+          return el;
+        });
+        const tel = th.asElement();
+        if (tel) { await tel.click({ delay: 60 }); await sleep(600); }
+        await evalIn((t) => {
+          const sel = window.getSelection();
+          if (!sel || !sel.rangeCount) return false;
+          let node = sel.getRangeAt(0).startContainer;
+          if (node.nodeType === 3) node = node.parentElement;
+          if (!node || !node.closest(".se-documentTitle")) return false;
+          const dt = new DataTransfer();
+          dt.setData("text/plain", t);
+          node.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+          return true;
+        }, titleText);
+        await sleep(2000);
+      } catch {}
+    }
 
     // ── 5) 뭐가 들어갔는지 세어 봅니다 ──
     const state = await frameE.evaluate(() => {
@@ -693,10 +970,28 @@ ${blogId} 로그인이 안 돼 있습니다.
          * 바깥 껍데기(.se-component.se-image)만 셉니다.
          */
         images: root ? root.querySelectorAll(".se-component.se-image").length : 0,
+        /**
+         * **네이버가 진짜로 가진 사진인지** 셉니다.
+         * 업로드된 사진만 주소가 pstatic.net 으로 바뀝니다. 남의 주소를 빌려 쓴 사진은
+         * 화면에는 보여도 **사진 라이브러리에 안 나오고 수정도 안 됩니다** (사장님 지적 2026-09-02).
+         * 이 숫자가 사진 수와 다르면 업로드가 아니라 붙여넣기로 들어간 것입니다.
+         */
+        owned: root ? [...root.querySelectorAll(".se-component.se-image img")]
+          .filter((n) => /pstatic\.net/.test(n.src || "")).length : 0,
+        /** 출처 줄이 가운데 정렬됐는지 (사장님 지시 2026-09-02) */
+        credits: root ? [...root.querySelectorAll("*")]
+          .filter((n) => /^▲ 사진 출처/.test((n.textContent || "").trim())).length : 0,
+        creditsCentered: root ? [...root.querySelectorAll("*")]
+          .filter((n) => /^▲ 사진 출처/.test((n.textContent || "").trim()))
+          .filter((n) => /center/.test(getComputedStyle(n).textAlign || "")).length : 0,
         title: (document.querySelector(".se-documentTitle")?.innerText || "").trim().slice(0, 40),
       };
     });
-    say(`[5/6] 들어간 것 — 글자 ${state.chars.toLocaleString()}자 · 사진 ${state.images}장`);
+    say(`[5/6] 들어간 것 — 글자 ${state.chars.toLocaleString()}자 · 사진 ${state.images}장`
+      + ` (네이버가 가진 사진 ${state.owned}장 · 출처줄 ${state.creditsCentered}/${state.credits} 가운데정렬)`);
+    if (state.images && state.owned < state.images) {
+      say(`      ⚠ ${state.images - state.owned}장은 업로드가 아니라 붙여넣기로 들어갔습니다 — 라이브러리에 안 나옵니다`);
+    }
     say(`      제목: ${state.title || "(비어 있음)"}`);
 
     if (state.chars < 200) {
@@ -772,13 +1067,71 @@ ${blogId} 로그인이 안 돼 있습니다.
       return m ? Number(m[1]) : null;
     }).catch(() => null);
     say(`      "${saved.label}" 눌렀습니다. 임시저장 목록: ${savedCount ?? "확인 못 함"}건`);
+
+    /**
+     * ── 제목이 **진짜로 저장됐는지** 확인 ──
+     * ⚠️ 화면의 제목 칸에 글자가 보여도 저장 목록에는 "제목 없음"으로 남을 수 있습니다
+     * (편집기 내부 모델이 비어 있으면 그렇습니다 — 사장님이 목록에서 발견하신 문제).
+     * 그래서 저장 목록을 열어 **맨 위 글의 제목**을 직접 읽습니다.
+     */
+    const listTitle = await frameE.evaluate(async () => {
+      const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const open = [...document.querySelectorAll("button, a")].filter(vis)
+        .find((b) => /^저장(\s*\d+)?$/.test((b.textContent || "").trim()));
+      // "저장 N" 옆의 목록 열기 단추를 누릅니다.
+      const near = open?.parentElement?.querySelectorAll("button") || [];
+      for (const b of near) if (b !== open) { b.click(); break; }
+      await new Promise((r) => setTimeout(r, 2500));
+      const rows = [...document.querySelectorAll("li, tr")]
+        .map((n) => (n.textContent || "").trim())
+        .filter((t) => /\d{4}\.\d{2}\.\d{2}/.test(t));
+      return rows.slice(0, 2);
+    }).catch(() => []);
+    if (listTitle.length) {
+      const first = String(listTitle[0] || "");
+      if (/제목\s*없음/.test(first)) {
+        say("      ⚠ 저장 목록에 **제목 없음**으로 들어갔습니다 — 제목이 편집기 모델에 안 실렸습니다");
+      } else {
+        say(`      저장 목록 확인: ${first.slice(0, 40)}`);
+      }
+    }
+    restoreClip();   // 사장님 클립보드를 원래대로 돌려놓습니다
     say("\n✔ 임시저장까지 끝났습니다. 발행은 사장님이 직접 하십시오.");
     say(`   확인: https://blog.naver.com/${blogId}/postwrite`);
 
-    if (!show) await browser.close();
+    /**
+     * ⚠️ **나가기 전에 탭을 비웁니다.**
+     * 크롬은 닫을 때 열려 있던 탭을 세션에 저장합니다. 그래서 자동화가 매번 탭을 남기면,
+     * 나중에 사장님이 바로가기로 창을 여실 때 **그게 전부 복원됩니다**
+     * (실측: 블로그 탭 25개가 한꺼번에 뜨고 메모리를 잡아먹었습니다).
+     * 빈 페이지 하나만 남기고 나갑니다.
+     */
+    try {
+      const pages = await browser.pages();
+      for (const pg of pages.slice(1)) { try { await pg.close(); } catch {} }
+      if (pages[0]) { try { await pages[0].goto("about:blank", { timeout: 8000 }); } catch {} }
+    } catch {}
+
+    if (!show) {
+      try { await browser.close(); } catch {}
+      try {
+        const pid = browser.process()?.pid;
+        if (pid) execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+      } catch {}
+    }
   } catch (e) {
     console.error("실패:", e.message);
+    // 실패해도 탭은 비우고 나갑니다 — 안 그러면 다음에 사장님 창에 쌓여서 복원됩니다.
+    try {
+      const pages = await browser.pages();
+      for (const pg of pages.slice(1)) { try { await pg.close(); } catch {} }
+      if (pages[0]) { try { await pages[0].goto("about:blank", { timeout: 8000 }); } catch {} }
+    } catch {}
     try { await browser.close(); } catch {}
+    try {
+      const pid = browser.process()?.pid;
+      if (pid) execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {}
     process.exit(1);
   }
 })();
