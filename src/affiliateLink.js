@@ -77,8 +77,15 @@ function register({ contentId, url, product = "", channel = "", price = null, no
   const subId = cleanSubId(contentId);
   const tracked = withSubId(url, subId);
 
-  // 같은 콘텐츠·같은 상품이 두 번 등록되면 갱신합니다. 중복 행은 정산 대조를 흐립니다.
-  const i = rows.findIndex((r) => r.contentId === contentId && r.product === product);
+  /**
+   * 같은 콘텐츠면 갱신합니다.
+   *
+   * ⚠️ 2026-09-01 수정: 전에는 **contentId와 제품명이 둘 다 같을 때만** 갱신했습니다.
+   * 그래서 제품명을 정확한 이름으로 고쳐 다시 등록하니 옛 행이 그대로 남아 중복이 났습니다
+   * (실측: 2건 등록했는데 4건이 쌓임). 정산 대조 때 같은 subId가 두 줄로 잡히면 매출이 흐려집니다.
+   * contentId 하나가 콘텐츠 하나이므로 **contentId만으로 찾습니다.**
+   */
+  const i = rows.findIndex((r) => r.contentId === contentId);
   const rec = {
     contentId, subId, product, channel,
     url: tracked, originalUrl: url,
