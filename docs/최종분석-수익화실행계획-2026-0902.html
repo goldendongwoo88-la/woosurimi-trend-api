@@ -134,6 +134,15 @@
   </div>
 </div>
 
+<div class="callout ok">
+  <span class="label">9/2 진행 현황 — 8개 항목 중 3개 완료</span>
+  <p><strong>완료</strong> ① 재해석 지시서(<code>reinterpret.js</code>) ·
+  ④ 실시간 키워드 발굴기(<code>keywordMiner.js</code>) ·
+  ⑤ 자막 이원화(<code>dualSubtitle.js</code>) — 셋 다 실제 실행까지 확인했습니다.<br>
+  <strong>대기</strong> ② 쿠팡 키 · ③ 크몽 등록 · ⑨ 네이버 검색 API 키 — <strong>전부 사장님 클릭</strong>입니다.
+  코드로 뚫을 수 있는 건 오늘 다 뚫었습니다.</p>
+</div>
+
 <div class="callout warn">
   <span class="label">한 줄 진단 — 이번에도 같습니다</span>
   <p><strong>만드는 건 끝났습니다. 팔러 나간 게 아직 0건입니다.</strong>
@@ -166,10 +175,10 @@
         <td><span class="pill p-new">완료</span> 소스 개수 지시</td></tr>
     <tr><td><strong>실시간 키워드</strong></td>
         <td>네이버 뉴스탭 최신/인기 → 지금 뜨는 키워드 + 서브키워드. 블로그 나이가 어려도 속도로 이긴다</td>
-        <td><span class="pill p-fix">이번 주</span> 키워드 발굴기</td></tr>
+        <td><span class="pill p-new">완료</span> <code>keywordMiner.js</code> 신규</td></tr>
     <tr><td><strong>캡컷 트랙 스타일</strong></td>
         <td>폰트·색상·위치·굵기를 프리셋으로 저장 → 클릭 한 번. 자막 수동 맞춤 공정이 통째로 사라짐</td>
-        <td><span class="pill p-fix">이번 주</span> 프리셋 제작</td></tr>
+        <td><span class="pill p-new">완료</span> <code>dualSubtitle.js</code>로 자동화</td></tr>
   </tbody>
 </table>
 
@@ -243,12 +252,13 @@
   <h3>④ 블로그 <span class="pill p-fix">앞단 비어 있음</span></h3>
   <div class="row"><span class="k">현재</span><span><code>golden-blog-floor</code>(8485) + 네이버 임시저장 자동화(9/1 완성) + <code>humanTouch.js</code> 검사기</span></div>
   <div class="row"><span class="k">빈 곳</span><span><strong>"지금 뜨는 키워드"를 잡아오는 앞단</strong>. 글은 쓸 수 있는데 무엇을 쓸지가 손으로 정해짐</span></div>
-  <div class="row"><span class="k">붙일 것</span><span>실시간 키워드 발굴기 — 뉴스 최신/인기 → 급상승 키워드 → 서브키워드 조합 → 경쟁 약한 순 정렬</span></div>
+  <div class="row"><span class="k">오늘 추가</span><span><strong><code>keywordMiner.js</code> 완성</strong> — 뉴스 276건 수집 → 급상승 키워드 → 롱테일 조합 → 검색량 밴드로 정렬. 실행 확인 완료</span></div>
+  <div class="row"><span class="k">남은 것</span><span><strong>네이버 검색 API 키(무료)</strong>가 없어 문서수(경쟁도)가 꺼져 있음 → 황금비 대신 추정치로 정렬 중. 절반만 쓰는 상태</span></div>
   <div class="row"><span class="k">부수</span><span>본문에 <strong>1분 30초 16:9 영상</strong> 삽입 시 순위 상승(3p→2p 실측). 우리는 쇼츠 소재가 이미 있어 공짜로 얻는 이득</span></div>
   <div class="do">
     <div class="t">이번 주 실행</div>
     <ol>
-      <li><strong>[클로드]</strong> 키워드 발굴기 제작 — 언론사 RSS 기반(구글뉴스 링크 함정 회피, 기존 메모리 근거)</li>
+      <li><strong>[사장님]</strong> <code>developers.naver.com/apps</code> → 검색 API 등록 → Client ID/Secret 발급 (5분·무료·하루 25,000회) → 편집국 설정에 입력</li>
       <li>발굴 → 원고 → <code>humanTouch</code> 검사 → 네이버 임시저장까지 <strong>야간 배치 1회</strong> 연결</li>
       <li>모든 원고에 기존 쇼츠 소재를 90초 16:9로 재인코딩해 삽입</li>
     </ol>
@@ -293,7 +303,9 @@
 <div class="sector">
   <h3>⑦ 영상 제작 자동화 (공통 인프라) <span class="pill p-fix">부분</span></h3>
   <div class="row"><span class="k">현재</span><span><code>golden-econ-studio</code> 릴스 파이프라인 · Voicebox 무료 TTS · 켄번즈 · <code>shortsAgent.js</code>(H-V-P-R-C + 훅 7유형)</span></div>
-  <div class="row"><span class="k">붙일 것</span><span>① 캡컷 트랙 스타일 프리셋 ② 소스 자동 수집(<code>yt-dlp</code> 기반, 오늘 정리 완료) ③ TTS 배속 1.4 고정</span></div>
+  <div class="row"><span class="k">오늘 추가</span><span><strong><code>dualSubtitle.js</code> 완성</strong> — 원본 대사(흰색·Malgun)와 내 해설(노란색·Noto Sans KR Black)을 다른 스타일로 갈라 <code>.ass</code> 생성. ffmpeg로 실제 렌더까지 확인. <strong>캡컷을 손으로 열 필요가 없어집니다</strong>(손편집용 규격표는 <code>--규격</code>으로 출력)</span></div>
+  <div class="row"><span class="k">덤</span><span>재해석 비율 자동 판정 — 해설이 전체 자막 시간의 50% 미만이면 경고. 수익창출 기준 미달을 업로드 전에 잡는다</span></div>
+  <div class="row"><span class="k">남은 것</span><span>소스 자동 수집(<code>yt-dlp</code> 기반, 정리 완료) · TTS 배속 1.4 고정</span></div>
   <div class="row"><span class="k">검토만</span><span><strong>MiniMax H3</strong> — 무료인데 Seedance급이라는 주장. 우리 "시댄스 유료 확정" 결론을 흔들 수 있음. 실측 후 판단</span></div>
   <div class="row"><span class="k">보류</span><span>ComfyUI + LTX 2.5 — 저장공간 50GB 필요. 지금 손대면 분산</span></div>
 </div>
@@ -307,8 +319,9 @@
     <tr><td class="num">1</td><td><strong>재해석 지시서</strong></td><td><code>gw_global_shorts_2026</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>채널 삭제를 막는다. 다른 어떤 기능보다 손실 방지가 크다</td></tr>
     <tr><td class="num">2</td><td><strong>쿠팡 키 연결</strong></td><td><code>.env</code></td><td>0원</td><td><span class="pill p-fix">사장님</span></td><td>라인 하나가 통째로 정지 중. 두 줄이면 풀린다</td></tr>
     <tr><td class="num">3</td><td><strong>크몽 등록</strong></td><td>—</td><td>0원</td><td><span class="pill p-fix">사장님</span></td><td>완제품이 이틀째 대기. 마진 1위 라인의 유일한 관문</td></tr>
-    <tr><td class="num">4</td><td>실시간 키워드 발굴기</td><td><code>golden-blog-floor</code></td><td>0원</td><td>이번 주</td><td>블로그의 앞단만 비어 있다. 뒤는 다 됨</td></tr>
-    <tr><td class="num">5</td><td>캡컷 트랙 스타일 프리셋</td><td>릴스 파이프라인</td><td>0원</td><td>이번 주</td><td>자막 수동 공정을 없앤다. 편당 수분 절약</td></tr>
+    <tr><td class="num">4</td><td><strong>실시간 키워드 발굴기</strong></td><td><code>golden-blog-floor</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>뉴스 276건 → 키워드 순위. 검색 API 키가 붙으면 정확도가 배가된다</td></tr>
+    <tr><td class="num">5</td><td><strong>자막 이원화</strong></td><td><code>woosurimi-trend-api/src</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>캡컷 프리셋 대신 ffmpeg 자동 굽기로 구현 — 편집기를 여는 공정 자체가 사라짐</td></tr>
+    <tr><td class="num">9</td><td>네이버 검색 API 키</td><td><code>golden-blog-floor</code></td><td>0원</td><td><span class="pill p-fix">사장님</span></td><td>5분이면 황금비가 켜진다. 키워드 발굴기가 절반만 도는 상태</td></tr>
     <tr><td class="num">6</td><td>홈쇼핑 편성표 소재 큐</td><td><code>golden-shop-shorts</code></td><td>0원</td><td>2주차</td><td>검색량보다 빠른 선행지표. 쿠팡 키가 먼저</td></tr>
     <tr><td class="num">7</td><td>MiniMax H3 실측</td><td><code>ai-video-techniques.md</code></td><td>0원</td><td>2주차</td><td>유료 결론을 뒤집을 수 있으면 비용 구조가 바뀐다</td></tr>
     <tr><td class="num">8</td><td>블로그 본문 90초 영상 삽입</td><td>블로그 파이프라인</td><td>0원</td><td>2주차</td><td>쇼츠 소재를 재활용해 순위를 올린다. 공짜 이득</td></tr>
@@ -330,8 +343,8 @@
   <tbody>
     <tr>
       <td><strong>1주차<br>이번 주</strong></td>
-      <td>① 크몽 가입 + 7종 등록<br>② 쿠팡 파트너스 가입 + 키 2줄<br><span style="color:#77828C">합계 1~2시간</span></td>
-      <td>· 키워드 발굴기 제작<br>· 재해석 지시서로 시험 3편<br>· YPP 트래커 재측정</td>
+      <td>① 크몽 가입 + 7종 등록<br>② 쿠팡 파트너스 가입 + 키 2줄<br>③ 네이버 검색 API 키 (5분)<br><span style="color:#77828C">합계 1~2시간</span></td>
+      <td><span style="color:#14663F">✓ 재해석 지시서 · 키워드 발굴기 · 자막 이원화 (9/2 완료)</span><br>· 재해석 지시서로 시험 3편<br>· YPP 트래커 재측정<br>· 블로그 야간 배치 연결</td>
       <td><strong>첫 입금 1건</strong><br>쿠팡 클릭 1건</td>
     </tr>
     <tr>
@@ -392,7 +405,7 @@
 <footer>
   우수리미 통합 분석 · 2026-09-02 · 근거 자료는 <code>woosurimi-trend-api/docs/</code>와
   <code>data/yt-analysis-0902/</code>에 원문 그대로 보관.
-  숫자는 영상 화자의 주장이며 우리 실측치가 아닙니다 — 첫 정산서가 나오면 이 문서를 갱신합니다.
+  숫자는 영상 화자의 주장이며 우리 실측치가 아닙니다 — 첫 정산서가 나오면 이 문서를 갱신합니다.<br>2026-09-02 갱신: 우선순위 ①④⑤ 완료 반영, ⑨ 네이버 검색 API 키 추가.
 </footer>
 
 </body>
