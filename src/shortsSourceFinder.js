@@ -127,8 +127,16 @@ async function searchCandidates(keyword, { count = 25, shortsOnly = false } = {}
       duration: Number(v.duration) || 0,
       channel: v.channel || v.uploader || "",
     }))
-    .filter((v) => v.id && v.views > 0)
-    .filter((v) => (shortsOnly ? v.duration > 0 && v.duration <= 90 : true));
+    /**
+     * ⚠️ 예전엔 `v.views > 0`으로 걸렀습니다. 그래서 **결과가 늘 0건**이었습니다.
+     * 실측(2026-09-01): `--flat-playlist` 검색 결과에는 view_count 필드가 아예 없습니다.
+     * (id·title·duration·channel은 나오는데 조회수는 안 나옵니다.)
+     * 조회수는 다음 단계(inspect)에서 한 건씩 정밀 조회할 때 들어옵니다.
+     * 그러니 여기서 조회수로 거르면 안 됩니다 — 아직 아무도 조회수를 모르는 시점입니다.
+     */
+    .filter((v) => v.id)
+    // 길이를 못 받은 것은 남깁니다. 쇼츠인지 아닌지는 정밀 조회에서 다시 봅니다.
+    .filter((v) => (shortsOnly ? !(v.duration > 90) : true));
 }
 
 /** 후보 하나를 자세히 봅니다 (느림). 상위 몇 개에만 씁니다. */
@@ -170,7 +178,15 @@ async function findSources(keyword, { count = 25, inspectTop = 8, shortsOnly = f
   const candidates = await searchCandidates(keyword, { count, shortsOnly });
   if (!candidates.length) return { keyword, checked: 0, results: [], note: "검색 결과가 없습니다." };
 
-  const top = [...candidates].sort((a, b) => b.views - a.views).slice(0, inspectTop);
+  /**
+   * 어떤 것을 정밀 조회할까.
+   * 검색 단계에서는 조회수를 안 주므로(위 설명 참고) 대부분 0입니다.
+   * 조회수를 아는 게 하나도 없으면 **유튜브가 매긴 검색 순서**를 그대로 씁니다 —
+   * 전부 0으로 정렬하면 순서가 뒤죽박죽이 되어 오히려 나쁜 후보를 봅니다.
+   */
+  const knowsViews = candidates.some((c) => c.views > 0);
+  const top = (knowsViews ? [...candidates].sort((a, b) => b.views - a.views) : candidates)
+    .slice(0, inspectTop);
 
   const results = [];
   for (const c of top) {
