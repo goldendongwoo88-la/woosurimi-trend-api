@@ -1816,6 +1816,7 @@
 
     const parts = [];
     let imgOk = 0, imgFail = 0;
+    const seenImg = new Set();
     const comps = root.querySelectorAll(":scope .se-component, :scope > div");
     // 컴포넌트 단위가 안 잡히는 판도 있어 실패하면 문단 전체로 갑니다.
     const list = comps.length ? [...comps] : [root];
@@ -1832,9 +1833,27 @@
        * 이 제약을 안 받습니다. blob: 주소(방금 올린 사진)는 페이지 안에서만 열리므로
        * 그것만 여기서 직접 받습니다.
        */
-      for (const img of comp.querySelectorAll("img.se-image-resource, img[class*='se-image']")) {
-        const src = img.currentSrc || img.src;
-        if (!src) continue;
+      for (const img of comp.querySelectorAll("img.se-image-resource, img[class*='se-image'], .se-component.se-image img")) {
+        /**
+         * ⚠️ 2026-09-01 — 사진이 워드에 한 장도 안 담기던 진짜 원인.
+         *
+         * 예전엔 `img.currentSrc || img.src`만 봤습니다. 그런데 네이버는 화면에 안 보이는
+         * 사진을 **지연 로딩**합니다 — 진짜 주소는 `data-src`에 있고 src는 비어 있습니다.
+         * 그래서 `if (!src) continue`로 **조용히 건너뛰었고**, 실패 문구조차 안 남아서
+         * 워드에 빈칸과 캡션만 남았습니다.
+         *
+         * 같은 파일의 collectPhotoUrls(썸네일용)는 이미 data-src를 먼저 읽고 있었습니다.
+         * 두 곳이 갈라져 있던 게 문제였습니다. 여기도 같은 순서로 맞춥니다.
+         */
+        const src = img.getAttribute("data-src") || img.currentSrc || img.src || "";
+        if (!src) {
+          // 조용히 넘기지 않습니다. 못 담았으면 못 담았다고 남겨야 사장님이 압니다.
+          parts.push(`<p>[사진: 주소를 못 읽어 자리만 남깁니다]</p>`);
+          imgFail++;
+          continue;
+        }
+        if (seenImg.has(src)) continue;   // 선택자를 넓혀서 같은 사진이 두 번 잡힐 수 있습니다
+        seenImg.add(src);
         try {
           let dataUri;
           if (src.startsWith("blob:") || src.startsWith("data:")) {
