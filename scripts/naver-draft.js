@@ -627,7 +627,14 @@ ${blogId} 로그인이 안 돼 있습니다.
       return Math.max(0, (root?.innerText || "").replace(/\s/g, "").length - t.length);
     }).catch(() => 0) : 0;
 
-    const pasted = (already >= 200 || alreadyIn >= 200) ? true : await frameE.evaluate((html, plain) => {
+    /**
+     * ⚠️ **다시 재고 나서 결정합니다.**
+     * `already`는 프레임 순회 **전에** 잰 값이라, 순회에서 성공했어도 옛 숫자(31자)가 남아 있습니다.
+     * 그걸로 판단하면 이미 들어간 글에 **한 번 더** 붙습니다 —
+     * 실측: 사진 13장을 골랐는데 26장이 들어갔습니다.
+     */
+    const nowIn = await measure(frameE);
+    const pasted = (nowIn >= 200 || already >= 200 || alreadyIn >= 200) ? true : await frameE.evaluate((html, plain) => {
       /**
        * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
        * 실측: 제목 문단이 .se-documentTitle의 자손이 아니라서 필터를 그냥 통과했고,
@@ -660,7 +667,7 @@ ${blogId} 로그인이 안 돼 있습니다.
       const t = (document.querySelector(".se-documentTitle")?.innerText || "").replace(/\s/g, "");
       return Math.max(0, (root?.innerText || "").replace(/\s/g, "").length - t.length);
     }).catch(() => 0);
-    if (got < 200) {
+    if (got < 200 && nowIn < 200) {
       say("      안 들어갔습니다 — 진짜 Ctrl+V로 다시 시도");
       await page.keyboard.down("Control");
       await page.keyboard.press("KeyV");
@@ -679,7 +686,13 @@ ${blogId} 로그인이 안 돼 있습니다.
       const allText = (root?.innerText || "").replace(/\s/g, "");
       return {
         chars: Math.max(0, allText.length - titleText.length),
-        images: root ? root.querySelectorAll(".se-component.se-image, .se-image-resource").length : 0,
+        /**
+         * ⚠️ 사진 하나가 `.se-component.se-image`와 `.se-image-resource`를 **둘 다** 가집니다.
+         * 두 선택자를 한 번에 세면 **정확히 두 배**로 나옵니다 —
+         * 13장을 넣었는데 26장이라고 보고해서 "중복으로 들어갔다"고 잘못 판단했습니다.
+         * 바깥 껍데기(.se-component.se-image)만 셉니다.
+         */
+        images: root ? root.querySelectorAll(".se-component.se-image").length : 0,
         title: (document.querySelector(".se-documentTitle")?.innerText || "").trim().slice(0, 40),
       };
     });
