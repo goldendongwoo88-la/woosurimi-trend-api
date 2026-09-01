@@ -21,26 +21,21 @@
  *
  * ⚠️ **발행은 안 합니다. 임시저장까지입니다.** 사장님 방침입니다.
  *
- * ── 지금 어디까지 되나 (2026-09-01 기준) ──
- *   로그인 확인      ✅
- *   원고+사진 담기    ✅ (사진 10장까지 확인)
- *   글쓰기 열기       ✅
- *   **제목 넣기**     ✅ 확장의 '원고 붙이기'가 처리
- *   **본문 넣기**     ❌ 아직 안 됩니다
- *   임시저장         (본문이 안 들어가서 일부러 멈춤)
+ * ── 되는 것 (2026-09-01 확인, 2회 연속 재현) ──
+ *   로그인 확인 → 원고 담기 → 글쓰기 열기 → 팝업 닫기 → 본문 붙여넣기 → 임시저장
+ *   실측: 본문 1,177자 · 제목 정상 · 임시저장 목록 증가 확인
  *
- * ── 본문이 안 들어가는 이유 (실측으로 좁힌 것) ──
- *   1. 확장은 chrome.debugger로 '진짜 붙여넣기'를 합니다. 그런데 **퍼펫티어가 이미 디버거를
- *      점유**하고 있어 확장이 그 경로를 못 씁니다. 그래서 제목만 들어갑니다.
- *   2. 합성 paste 이벤트(ClipboardEvent + DataTransfer)는 스마트에디터가 무시했습니다.
- *   3. CDP Input.insertText도 안 들어갔습니다. 프레임에 contenteditable이 1개뿐인데
- *      그게 **제목 칸**이고, 본문은 클릭하기 전까지 편집 가능 상태가 아닌 것으로 보입니다.
- *      (본문 문단에는 자리표시 문구 "글감과 함께 나의 일상을 기록해보세요!"만 31자 들어 있음)
+ * ── 오래 막혔던 두 가지와 답 ──
+ *   1. **"작성 중인 글이 있습니다" 팝업**이 편집기를 덮고 있으면 아무것도 안 들어갑니다.
+ *      클립보드가 멀쩡해도 본문은 자리표시 문구(31자)만 남습니다. 사라질 때까지 '취소'를 누릅니다.
+ *   2. **커서가 본문에 있어야 합니다.** 이 편집기는 contenteditable이 제목 하나뿐이라,
+ *      요소를 찾아서 붙이면 언제나 제목으로 갑니다.
+ *      게다가 확장 버튼을 누르는 순간 커서가 본문에서 빠져나갑니다 —
+ *      그래서 **붙여넣기 직전에 본문을 다시 클릭**하고, 커서가 있는 자리에 paste를 던집니다.
  *
- * ── 다음에 시도할 것 ──
- *   · 퍼펫티어 대신 **CDP 없이** 크롬을 띄우고 확장만으로 처리 (자동화 없이 사람이 누르는 것과 동일)
- *   · 또는 본문 영역을 페이지 좌표로 **실제 마우스 클릭**해 편집 상태로 만든 뒤 입력
- *   · 또는 확장에서 debugger 대신 쓸 경로를 하나 더 만들어 두기
+ * ⚠️ 운영체제 키보드(SendKeys)는 기본으로 꺼져 있습니다(--focus 로만 켜짐).
+ *    그 방식은 크롬 창을 앞으로 불러내서, 사장님이 이메일 쓰시던 창에 원고가 붙는 사고를 냈습니다.
+ *    지금은 필요 없습니다.
  *
  * ── 편집기 DOM 실측 (2026-09-01) ──
  * 네이버 글쓰기 프레임(PostWriteForm.naver)의 실제 구조는 이렇습니다:
@@ -521,6 +516,29 @@ ${blogId} 로그인이 안 돼 있습니다.
     }).catch(() => 0);
 
     if ((await measure(frameE)) < 200) {
+      /**
+       * ⚠️ **붙여넣기 직전에 본문을 다시 클릭합니다.**
+       * 앞에서 확장 버튼을 누르는 동안 커서가 본문에서 빠져나갑니다.
+       * 커서가 없으면 붙여넣기가 제목으로 가거나 아무 데도 안 들어갑니다.
+       */
+      try {
+        const h2 = await frameE.evaluateHandle(() => {
+          const inTitle = (n) => Boolean(n.closest?.(".se-documentTitle"));
+          const paras = [...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n));
+          return paras.length ? paras[paras.length - 1] : document.querySelector(".se-content");
+        });
+        const el2 = h2.asElement();
+        if (el2) { await el2.click({ delay: 60 }); await sleep(700); }
+        const where = await frameE.evaluate(() => {
+          const sel = window.getSelection();
+          if (!sel || !sel.rangeCount) return "커서 없음";
+          let n = sel.getRangeAt(0).startContainer;
+          if (n.nodeType === 3) n = n.parentElement;
+          return (n?.closest?.(".se-documentTitle") ? "제목" : "본문");
+        }).catch(() => "확인실패");
+        say(`      커서 다시 세움 → ${where}`);
+      } catch {}
+
       for (const f of page.frames()) {
         const ok = await f.evaluate((html, plain) => {
           /**
@@ -529,21 +547,26 @@ ${blogId} 로그인이 안 돼 있습니다.
        * 그 결과 **제목 칸에 본문이 통째로 붙었습니다.**
        * 이 편집기는 문단이 2개(제목·본문)뿐이고 **본문이 항상 마지막**입니다. 그걸로 고릅니다.
        */
-      const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
-      const pickBody = (list) => (list.length ? list[list.length - 1] : null);
-          const cands = [...document.querySelectorAll("[contenteditable='true']")].filter((n) => !inTitle(n));
-          if (!cands.length) return false;
-          for (const editable of cands) {
-            editable.focus?.();
-            const range = document.createRange();
-            range.selectNodeContents(editable);
-            const sel = window.getSelection();
-            sel.removeAllRanges(); sel.addRange(range);
-            const dt = new DataTransfer();
-            dt.setData("text/html", html);
-            dt.setData("text/plain", plain);
-            editable.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-          }
+          /**
+           * ⚠️ **커서가 있는 자리에 넣습니다. 선택을 새로 만들지 않습니다.**
+           *
+           * 이 편집기는 contenteditable이 **제목 하나뿐**입니다(실측 editable=1).
+           * 그래서 "편집 가능한 요소를 찾아서 넣는" 방식은 **언제나 제목**으로 갑니다.
+           * 본문은 우리가 이미 클릭해서 커서를 세워둔 자리이므로, 그 커서를 건드리지 않고
+           * **커서가 들어 있는 요소**에 paste 이벤트를 던집니다.
+           * (한때 OS 키보드로만 됐던 이유가 이것입니다 — 키보드는 늘 커서 자리에 넣으니까요.)
+           */
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return false;
+          let node = sel.getRangeAt(0).startContainer;
+          if (node.nodeType === 3) node = node.parentElement;
+          if (!node) return false;
+          if (node.closest && node.closest(".se-documentTitle")) return false;   // 제목이면 안 넣습니다
+
+          const dt = new DataTransfer();
+          dt.setData("text/html", html);
+          dt.setData("text/plain", plain);
+          node.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
           return true;
         }, copied.html || "", copied.body || "").catch(() => false);
         if (!ok) continue;
