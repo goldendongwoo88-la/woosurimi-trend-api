@@ -117,7 +117,9 @@
       <button class="go" id="btnSearch">소재 찾기</button>
       <div class="hint">
         <b>효율</b>이 높을수록 구독자 없이도 유튜브가 밀어준 소재입니다 — 우리가 찾아야 할 것입니다.<br>
-        키워드 하나당 유튜브 할당량 약 100유닛을 씁니다(하루 1만). 한 번에 8개까지가 안전합니다.
+        키워드 하나당 유튜브 할당량 약 100유닛을 씁니다(하루 1만). 한 번에 8개까지가 안전합니다.<br>
+        <b>🔥 지금 타야 함</b>은 지금 터지는 상품입니다 — 영상을 베끼지 말고 같은 상품으로 지금 만드십시오.
+        <b>◎ 재각색 적기</b>를 보시려면 기간을 1년으로 늘리세요.
       </div>
     </div>
     <div class="status" id="s1"></div>
@@ -204,8 +206,9 @@ function renderFolders(names) {
 function card(v) {
   const eff = v.efficiency == null ? '?' : v.efficiency;
   const rm = v.remake;
+  const LABEL = { remake: '◎ 재각색 적기', ride: '🔥 지금 타야 함', wait: '△ 아직 아님' };
   const flag = rm ? '<div class="flag ' + (rm.ready ? 'ready' : 'wait') + '">' +
-      (rm.ready ? '◎ 재각색 적기' : '△ 아직 이름') + ' — ' + rm.why + '</div>' : '';
+      (LABEL[rm.mode] || (rm.ready ? '◎ 적기' : '△ 아직 아님')) + ' — ' + rm.why + '</div>' : '';
   const thumb = v.thumb ? '<img class="thumb" src="' + v.thumb + '" alt="">' : '<div class="thumb"></div>';
   return '<div class="item">' + thumb +
     '<div class="body">' +

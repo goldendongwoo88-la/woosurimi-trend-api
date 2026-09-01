@@ -112,14 +112,28 @@ function shapeVideo(v, subs) {
 function remakeTiming(v) {
   if (!v.days || !v.views) return null;
   const quiet = v.perDay < v.views / 60;
-  return {
-    days: v.days,
-    perDay: v.perDay,
-    ready: v.days >= 180 && quiet,
-    why: v.days < 180 ? "아직 최근 영상 — 지금 손대면 원본과 정면으로 겹칩니다"
-      : !quiet ? "아직 조회수가 오르는 중 — 유튜브가 밀어주는 중입니다"
-      : "성장이 멈춘 지 오래 — 사람들 기억에서 흐려졌습니다",
-  };
+  const old = v.days >= 180;
+  const hot = (v.efficiency || 0) >= 20;
+
+  /**
+   * ⚠️ 지금 터지는 영상을 무조건 "대기"로 밀어두면 안 됩니다.
+   * 최근 것만 보면(기간 30일) 전부 대기로 나와서 표시가 아무 쓸모가 없어집니다.
+   *
+   * 쇼핑 쇼츠는 **영상이 아니라 상품이 터지는 것**입니다. 지금 뜨는 상품이면 지금 만드는 게 맞습니다.
+   * 야담·이야기 소재는 반대입니다 — 원본이 밀리는 중에 손대면 정면으로 겹칩니다.
+   * 그래서 지금 터지는 것은 "베끼지 말고 같은 소재로 지금"이라고 알려줍니다.
+   */
+  if (old && quiet) {
+    return { days: v.days, perDay: v.perDay, ready: true, mode: "remake",
+      why: "성장이 멈춘 지 오래 — 사람들 기억에서 흐려졌습니다. 재각색 적기입니다." };
+  }
+  if (hot) {
+    return { days: v.days, perDay: v.perDay, ready: true, mode: "ride",
+      why: "지금 터지는 중 — 영상을 베끼지 말고 같은 상품·소재로 지금 만드십시오." };
+  }
+  return { days: v.days, perDay: v.perDay, ready: false, mode: "wait",
+    why: old ? "아직 조회수가 오르는 중 — 유튜브가 밀어주는 중입니다"
+      : "아직 최근 영상이고 효율도 낮습니다 — 굳이 따라갈 이유가 없습니다" };
 }
 
 /**
