@@ -25,6 +25,11 @@ const YTF = require("./youtubeFinder");
 const WP = require("./winnerPattern");
 const PE = require("./productExtract");
 const SV = require("./stockVideo");
+const SIG = require("./shoppingSignals");                       // 구매력·보완재·시즌 (2026-09-01 라이브 실측)
+
+/** 대본 검사기는 공용 자산입니다. 없어도 나머지는 돌게 둡니다. */
+let SC = null;
+try { SC = require(require("path").join(__dirname, "..", "..", "_shared", "script-check")); } catch {}
 
 let coupang = null;
 try { coupang = require("./coupangPartners"); } catch { /* 없어도 나머지는 돕니다 */ }
@@ -96,8 +101,26 @@ function makeTitles(product, pattern, { store = "다이소", price = "" } = {}) 
 }
 
 /**
+ * 댓글 CTA에 쓸 키워드 한 낱말.
+ *
+ * 라이브에서 재생된 완성 대본 5편 중 3편이 **"댓글에 ○○ 남겨주세요"**로 끝났습니다
+ * ("비누 남겨주세요" · "빵 남겨주세요" · "비밀 남겨주세요").
+ * 링크를 누르라는 것보다 심리적 저항이 낮고, 댓글 수가 올라가 알고리즘에도 실립니다.
+ * 키워드는 **짧을수록** 답니다. 제품명 전체를 시키면 아무도 안 씁니다.
+ */
+function ctaKeyword(product) {
+  const w = String(product || "").trim().split(/\s+/).pop() || "정보";
+  return w.length <= 4 ? w : w.slice(-3);       // "스푼 스크러버" → "러버"보다 "청소"가 낫지만, 최소한 짧게
+}
+
+/**
  * ── 릴스 구조: H-V-P-R-C ──
  * 갓생맘 REELS_SCRIPT 공식. 30초 안에 이 다섯 칸을 채우면 끝까지 봅니다.
+ *
+ * ⚠️ 2026-09-01 갱신 — 기본 길이를 33초에서 **24초**로 내렸습니다.
+ * 돈농부 라이브에서 공개된 고수익 영상 실측이 전부 22~29초였습니다
+ * (22초 83만원 · 22초 48만원 · 29초 265만원 · 29초 770만원).
+ * 33초는 실측 상단을 넘습니다.
  *   H(Hook)     0~3초   손가락을 멈추게 하는 문제 장면
  *   V(Value)    3~10초  "이게 왜 필요한가"
  *   P(Proof)    10~20초 실제로 되는 장면 (여기가 저장을 만듭니다)
@@ -107,7 +130,7 @@ function makeTitles(product, pattern, { store = "다이소", price = "" } = {}) 
  * ⚠️ 우리 실측(파인더 22편)과도 맞습니다: 상위 영상 전부 **문제 장면으로 열었습니다.**
  * 정리된 모습으로 시작한 영상은 상위권에 없었습니다.
  */
-function buildStructure(product, seconds = 33) {
+function buildStructure(product, seconds = 24) {
   const s = Math.max(15, Math.min(60, seconds));
   const at = (r) => Math.round(s * r);
   return [
@@ -115,7 +138,7 @@ function buildStructure(product, seconds = 33) {
     { from: at(0.09), to: at(0.30), part: "V 가치", what: `${product}${josa(product, "을", "를")} 꺼내며 가격 한 줄`,          note: "숫자를 화면에 박습니다" },
     { from: at(0.30), to: at(0.60), part: "P 증명", what: "실제로 쓰는 장면 2~3컷",                 note: "여기가 저장을 만듭니다. 손이 나와야 합니다" },
     { from: at(0.60), to: at(0.82), part: "R 결과", what: "전/후 대비",                             note: "같은 각도로 찍어야 대비가 삽니다" },
-    { from: at(0.82), to: s,        part: "C 안내", what: "제품컷 + '링크는 설명란'",               note: "대가성 문구는 설명란 첫 줄" },
+    { from: at(0.82), to: s,        part: "C 안내", what: `제품컷 + "댓글에 ${ctaKeyword(product)} 남겨주세요"`, note: "링크 유도보다 저항이 낮고 댓글 수가 알고리즘에 실립니다. 대가성 문구는 설명란 첫 줄" },
   ];
 }
 
@@ -190,7 +213,21 @@ async function run(keywords, { days = 90, maxSubs = 100000, minEfficiency = 5, w
   // ── 3) 팔 제품 뽑기 ──
   say("[3/5] 팔 제품 뽑는 중");
   const pe = PE.extract(all, { max: want * 3 });
-  const picks = (pe.products || []).slice(0, want);
+
+  /**
+   * ⚠️ 2026-09-01 — 여기서 조회수 순으로만 자르면 안 됩니다.
+   * 라이브 실측: 조회수 2.3만(83만원)이 조회수 4만(48만원)보다 **더 벌었습니다.**
+   * 조회수는 "몇 명이 봤나"고 구매력은 "그 사람들이 돈을 쓰나"인데,
+   * 우리가 파는 건 조회수가 아니라 클릭이라 두 번째가 더 중요합니다.
+   */
+  const scored = (pe.products || []).map((x) => {
+    const bp = SIG.buyingPower(x.product, { price: x.price || 0 });
+    return { ...x, buyingPower: bp, rank: (x.score || 1) * bp.mult };
+  }).sort((a, b) => b.rank - a.rank);
+  const picks = scored.slice(0, want);
+  if (picks.length) {
+    say(`      구매력 반영: ${picks.map((x) => `${x.product}(${x.buyingPower.mult}배 ${x.buyingPower.등급})`).join(", ")}`);
+  }
   say(`      제품 후보 ${picks.length}개: ${picks.map((p) => p.product).join(", ") || "없음"}`);
   if (!picks.length) {
     return { ok: false, stage: "제품", error: pe.note, pattern, log };
@@ -229,15 +266,25 @@ async function run(keywords, { days = 90, maxSubs = 100000, minEfficiency = 5, w
       p.stock = g ? { clips: g.total, scenes: g.scenes } : null;
     }
     p.publishAt = pattern.ok ? pattern.게시시점 : null;
-    p.targetSeconds = pattern.ok ? pattern.길이.초_중앙값 : 33;
+    p.targetSeconds = pattern.ok ? pattern.길이.초_중앙값 : 24;
     p.structure = buildStructure(p.product, p.targetSeconds);   // H-V-P-R-C
     p.hooks = hookLines(p.product);                              // 훅 7유형
+    p.ctaKeyword = ctaKeyword(p.product);                        // "댓글에 ○○ 남겨주세요"
+    p.complements = SIG.complements(p.product);                  // 한 발자국 더 — 보완재
+    p.season = SIG.시즌배율();                                    // 지금이 무슨 시기인가
   }
   say(`      제품 ${picks.length}개 기획 완료`);
 
   const blocked = [];
   if (!configured) blocked.push("쿠팡 파트너스 키 (COUPANG_ACCESS_KEY / COUPANG_SECRET_KEY)");
   blocked.push("유튜브 업로드 OAuth (지금 키로는 업로드 불가)");
+  /**
+   * 2026-09-01 라이브에서 확인된 것: 쿠팡 독점이 깨졌고 **토스가 판매금액의 10%**를 줍니다.
+   * 쿠팡(3~6.7%)의 최대 3배입니다. 같은 영상·같은 제품인데 보내는 곳만 다릅니다.
+   * 가입은 사장님 결정 사항이라 여기서는 **막힌 것으로만 기록**하고 넘어갑니다(지어내지 않습니다).
+   */
+  const 미가입 = SIG.제휴처.filter((x) => x.상태 === "미가입").map((x) => `${x.이름}(${x.수수료})`);
+  if (미가입.length) blocked.push(`제휴처 미가입 — ${미가입.join(", ")} · 사장님 결정 대기`);
 
   return {
     ok: true,
