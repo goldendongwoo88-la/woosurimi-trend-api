@@ -13,6 +13,12 @@ const EXTENSION = path.join(__dirname, "..", "extension");
 
 const blogId = process.argv[2];
 const doDelete = process.argv.includes("--제목없음만-지우기");
+/**
+ * 같은 제목이 여러 건이면 **가장 최근 것 하나만 남기고** 지웁니다.
+ * 자동화를 고쳐가며 여러 번 돌리면 같은 글이 여러 벌 쌓이는데, 사장님이 손으로 지워야 합니다.
+ * 남기는 건 항상 **최신** — 고친 내용이 반영된 판입니다.
+ */
+const doDedupe = process.argv.includes("--중복-지우기");
 if (!blogId) { console.log("사용: node scripts/naver-drafts.js <블로그ID> [--제목없음만-지우기]"); process.exit(1); }
 
 const say = (m) => console.log(m);
@@ -97,9 +103,66 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     say(`\n임시저장 ${rows.length}건 — ${blogId}\n`);
     rows.forEach((r) => say(`${String(r.i + 1).padStart(3)}. ${r.when}  ${r.title || "(제목 없음)"}`));
 
-    if (!doDelete) {
+    if (!doDelete && !doDedupe) {
       say("\n※ 보기만 했습니다. 아무것도 지우지 않았습니다.");
-      say("   제목 없는 초안만 지우려면: --제목없음만-지우기");
+      say("   실패한 초안만 지우려면: --제목없음만-지우기");
+      say("   같은 글이 여러 벌이면:  --중복-지우기");
+      return;
+    }
+
+    /**
+     * ── 같은 제목 중 오래된 것 지우기 ──
+     * 목록은 최신이 위에 옵니다. 그래서 **처음 만난 제목은 남기고, 그 뒤에 또 나오면 지웁니다.**
+     */
+    if (doDedupe) {
+      const seenT = new Set();
+      const dup = [];
+      for (const r of rows) {
+        const key = String(r.title).replace(/\s+/g, "").slice(0, 24);
+        if (!key || /제목없음/.test(key)) continue;
+        if (seenT.has(key)) dup.push(r);
+        else seenT.add(key);
+      }
+      if (!dup.length) { say("\n중복이 없습니다."); return; }
+      say(`\n같은 글이 여러 벌인 것 ${dup.length}건 — 오래된 쪽을 지웁니다 (최신은 남깁니다)`);
+      dup.forEach((d) => say(`   지울 것: ${d.when}  ${d.title.slice(0, 36)}`));
+      let gone = 0;
+      for (const d of dup) {
+        let hit = false;
+        for (const f of page.frames()) {
+          if (f.isDetached?.()) continue;
+          const r = await f.evaluate((when) => {
+            const items = [...document.querySelectorAll("li")]
+              .filter((n) => /\d{4}\.\d{2}\.\d{2}/.test(n.textContent || ""))
+              .filter((n) => !n.querySelector("li"));
+            const flat = (n) => (n.textContent || "").replace(/\s+/g, "");
+            const row = items.find((n) => flat(n).includes(when.replace(/\s+/g, "")));
+            if (!row) return false;
+            const btn = [...row.querySelectorAll("button,a")]
+              .find((b) => /삭제/.test(b.textContent || b.getAttribute("aria-label") || ""));
+            if (!btn) return false;
+            btn.click();
+            return true;
+          }, d.when).catch(() => false);
+          if (r) { hit = true; break; }
+        }
+        if (!hit) { say(`   못 찾음: ${d.when}`); continue; }
+        await sleep(1200);
+        for (const f of page.frames()) {
+          if (f.isDetached?.()) continue;
+          try {
+            await f.evaluate(() => {
+              const b = [...document.querySelectorAll("button")]
+                .filter((n) => n.offsetParent !== null)
+                .find((n) => /^\s*(확인|삭제)\s*$/.test(n.textContent || ""));
+              b?.click();
+            });
+          } catch {}
+        }
+        gone++;
+        await sleep(2200);
+      }
+      say(`\n지운 중복: ${gone}건`);
       return;
     }
 
@@ -111,14 +174,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
      * 제목이 안 실리면 본문이 들어가도 목록에서 무슨 글인지 알 수가 없습니다.
      * 제목이 붙어 있는 초안은 사장님 것일 수 있으므로 **손대지 않습니다.**
      */
-    /**
-     * 오늘 날짜의 초안만 지웁니다.
-     *
-     * ⚠️ **되돌릴 수 없습니다.** 그래서 날짜로 자릅니다 —
-     * 오늘 것은 전부 자동화가 만든 것이고, 어제 이전 것은 **사장님이 직접 쓰신 글**일 수 있습니다
-     * (실측: 2025.07.22자 "뉴맘 임신썰 이벤트" 초안이 남아 있었습니다).
-     * 사장님 지시(2026-09-02): "제목있는것도 필요없는 원고면 지워도되"
-     */
     const stamp = "제목 없음";
     const targets = rows.filter((r) => /제목\s*없음/.test(r.title) || !r.title);
     if (!targets.length) { say("\n지울 것이 없습니다 — 실패한 초안이 없습니다."); return; }
@@ -126,9 +181,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     say(`남길 것: 제목이 붙은 ${rows.length - targets.length}건 — 제대로 완성된 글입니다`);
 
     let killed = 0;
+    let lastErr = "";
     for (let round = 0; round < targets.length + 4; round++) {
-      /** 목록은 프레임이 자주 바뀝니다. 매번 모든 프레임에서 찾습니다. */
+      /**
+       * 목록은 프레임이 자주 바뀝니다. 매번 모든 프레임에서 찾습니다.
+       * ⚠️ 예전에는 오류까지 "없음"으로 삼켜서, **왜 0건인지 알 수가 없었습니다.**
+       * 오류는 따로 적어 마지막에 보여줍니다.
+       */
       let did = "없음";
+      let rowsSeen = 0;
       for (const f of page.frames()) {
         // ⚠️ 죽은 프레임에 말을 걸면 "Tab target session is not defined"로 **통째로 죽습니다**.
         //    살아 있는지 먼저 확인하고, 그래도 터지면 그 프레임만 건너뜁니다.
@@ -143,15 +204,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
            */
           const flat = (n) => (n.textContent || "").replace(/\s+/g, "");
           const row = items.find((n) => flat(n).includes(st.replace(/\s+/g, "")));
-          if (!row) return "없음";
+          if (!row) return { r: "없음", n: items.length };
           const btn = [...row.querySelectorAll("button,a")]
             .find((b) => /삭제/.test(b.textContent || b.getAttribute("aria-label") || ""));
-          if (!btn) return "버튼없음";
+          if (!btn) return { r: "버튼없음", n: items.length };
           btn.click();
-          return "눌렀음";
-        }, stamp).catch(() => "없음");
-        if (r === "눌렀음") { did = "눌렀음"; break; }
-        if (r === "버튼없음") did = "버튼없음";
+          return { r: "눌렀음", n: items.length };
+        }, stamp).catch((e) => { lastErr = String(e.message).slice(0, 70); return { r: "오류", n: 0 }; });
+        rowsSeen = Math.max(rowsSeen, r.n || 0);
+        if (r.r === "눌렀음") { did = "눌렀음"; break; }
+        if (r.r === "버튼없음") did = "버튼없음";
+      }
+      if (did === "없음" && rowsSeen === 0 && round === 0) {
+        say(`      목록 항목이 안 보입니다 — 목록 창이 닫혔거나 프레임이 바뀌었습니다${lastErr ? ` (${lastErr})` : ""}`);
       }
       if (did === "없음") break;
       if (did === "버튼없음") { say("      삭제 버튼을 못 찾았습니다 — 멈춥니다"); break; }

@@ -889,9 +889,22 @@ ${blogId} 로그인이 안 돼 있습니다.
        * 사진을 진짜 마우스로 눌러야 편집기가 "고른 상태"로 인식하고 옆트임 단추가 나옵니다.
        * DOM의 click()으로는 안 됩니다(실측).
        */
+      /**
+       * ⚠️ 업로드 직후에는 사진 요소가 아직 안 잡힙니다.
+       * 실측 2026-09-02: 10개 중 **1개만 옆트임이 되고 나머지는 0**이었습니다 —
+       * 사진 목록을 한 번만 읽었는데 그때 비어 있어서 반복문이 아예 안 돌았습니다.
+       * 나타날 때까지 기다렸다가 셉니다.
+       */
       let wide = 0;
-      const shots = await ed().$$(".se-component.se-image img").catch(() => []);
-      for (let k = 0; k < shots.length; k++) {
+      let shotCount = 0;
+      for (let t = 0; t < 12; t++) {
+        shotCount = await ed().evaluate(() =>
+          document.querySelectorAll(".se-component.se-image img").length).catch(() => 0);
+        if (shotCount >= uploaded && shotCount > 0) break;
+        await sleep(1500);
+      }
+      if (!shotCount) say("      ⚠ 사진 요소를 못 찾아 옆트임을 건너뜁니다");
+      for (let k = 0; k < shotCount; k++) {
         try {
           const imgs = await ed().$$(".se-component.se-image img");
           if (!imgs[k]) continue;
