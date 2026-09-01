@@ -2,88 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "floor",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-trading-floor/server.js"],
-      "port": 8484
-    },
-    {
-      "name": "blog",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-blog-floor/server.js"],
-      "port": 8485
-    },
-    {
-      "name": "floor-test",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set PORT=8483&& node golden-trading-floor\\server.js"],
-      "port": 8483
-    },
-    {
-      "name": "snap",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-snap-factory/server.js"],
-      "port": 8486
-    },
-    {
-      "name": "book",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-book-factory/server.js"],
-      "port": 8487
-    },
-    {
-      "name": "econ",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-econ-studio/server.js"],
-      "port": 8488
-    },
-    {
-      "name": "shorts",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-shop-shorts/server.js"],
-      "port": 8489
-    },
-    {
-      "name": "story",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-story-studio/server.js"],
-      "port": 8490
-    },
-    {
-      "name": "detail",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-detail-factory/server.js"],
-      "port": 8491
-    },
-    {
-      "name": "detail-portable",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "C:\\nodejs-portable\\node-v20.15.0-win-x64\\node.exe ..\\golden-detail-factory\\server.js"],
-      "port": 8491
-    },
-    {
-      "name": "coupletube",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["golden-couple-tube/server.js"],
-      "port": 8492
-    },
-    {
-      "name": "saju",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set PORT=8493&& C:\\nodejs-portable\\node-v20.15.0-win-x64\\node.exe ..\\saju-app\\src\\index.js"],
-      "port": 8493
-    },
-    {
-      "name": "office",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "C:\\Users\\김동우\\AppData\\Local\\Programs\\Python\\Python313\\python.exe -m http.server 8494 --directory ..\\golden-office"],
-      "port": 8494
-    },
-    {
-      "name": "couple",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "set PORT=8495&& C:\\nodejs-portable\\node-v20.15.0-win-x64\\node.exe ..\\saju-app\\couple-app\\server.js"],
-      "port": 8495
+      "name": "static-preview",
+      "runtimeExecutable": "C:/nodejs-portable/node-v20.15.0-win-x64/node.exe",
+      "runtimeArgs": ["C:/Users/김동우/OneDrive/Desktop/my-project/_tools/static-server.js"],
+      "port": 8899
     }
   ]
 }

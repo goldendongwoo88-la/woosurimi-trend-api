@@ -792,6 +792,7 @@
             : "✅ 모두 기준 안에 있습니다."
         }</p>
         <div class="ws-btnrow">
+          <button id="ws-photos" class="ws-dock-btn">사진 넣기</button>
           <button id="ws-save" class="ws-dock-btn primary">임시저장</button>
         </div>
         <p class="ws-dim" id="ws-save-msg">발행은 안 누릅니다. 임시저장만 합니다.</p>
@@ -801,6 +802,42 @@
     const wire = (topic) => {
       showPanel(render(topic));
       panel.querySelectorAll("[data-topic]").forEach((b) => (b.onclick = () => wire(b.dataset.topic)));
+
+      /**
+       * 사진 넣기 — 편집국이 고른 사진을 [사진: …] 자리에 채웁니다.
+       * 무인 모드는 이걸 자동으로 하지만, 손으로도 눌러볼 수 있어야 **어디서 막혔는지** 압니다.
+       */
+      const photoBtn = panel.querySelector("#ws-photos");
+      if (photoBtn) photoBtn.onclick = async (e) => {
+        const msg = (t, cls = "ws-dim") => {
+          const el = panel.querySelector("#ws-save-msg");
+          if (el) { el.className = cls; el.textContent = t; }
+        };
+        const P = window.__wsPhoto;
+        if (!P) return msg("사진 도구를 못 불러왔습니다. 확장을 새로고침해 주세요.", "ws-err");
+        const slots = P.photoSlots().length;
+        if (!slots) return msg("본문에 [사진: …] 자리가 없습니다.", "ws-warn");
+
+        // 어느 원고의 사진인지는 편집국 인계함이 알고 있습니다.
+        const copied = await wsuFetchCopied();
+        if (!copied || !copied.id) return msg("편집국에서 복사한 원고가 없습니다. '통합 복사'를 먼저 눌러주세요.", "ws-warn");
+        const j = await wsuFloorGet("/api/posts/" + encodeURIComponent(copied.id));
+        const photos = (j && j.post && j.post.photos) || [];
+        if (!photos.length) return msg("이 원고에 고른 사진이 없습니다. 편집국에서 사진을 먼저 고르세요.", "ws-warn");
+
+        e.target.disabled = true;
+        const r = await P.fillPhotoSlots(photos, (m) => msg(m));
+        e.target.disabled = false;
+        msg(
+          r.done
+            ? `✅ 사진 ${r.done}/${r.total} 넣었습니다.` +
+              (r.riskHigh ? ` ⚠️ 그중 ${r.riskHigh}장은 저작권 위험 '높음'입니다.` : "") +
+              (r.failed && r.failed.length ? ` 못 넣은 것: ${r.failed.join(" / ")}` : "")
+            : `못 넣었습니다: ${r.why}`,
+          r.done && !r.riskHigh ? "ws-dim" : "ws-warn"
+        );
+      };
+
       panel.querySelector("#ws-save").onclick = async (e) => {
         const I = window.__wsInsert;
         const msg = (t, cls = "ws-dim") => {
@@ -3367,11 +3404,37 @@
     if (subheads.length) {
       try { os = await I.applyOfficialSubheads({ blocks: subheads.map((text) => ({ kind: "subhead", text })) }, () => {}); } catch {}
     }
+
+    /**
+     * 사진 넣기 (2026-09-02 신설).
+     *
+     * ⚠️ **소제목 다음, 임시저장 앞**이라는 순서가 중요합니다.
+     *   · 소제목보다 앞서면: 사진이 들어가며 문단이 밀려서 소제목 클릭 좌표가 어긋납니다.
+     *   · 임시저장보다 뒤면: 사진 없는 상태로 저장돼 버립니다.
+     *
+     * ⚠️ 사진이 없거나 자리표시가 없으면 **조용히 넘어갑니다.** 사진은 있으면 좋은 것이지
+     *    없다고 글이 실패인 건 아닙니다. 실패한 자리는 [사진: …] 글자가 그대로 남아
+     *    사장님이 무엇이 빠졌는지 보실 수 있습니다.
+     */
+    let ph = { done: 0, total: 0, failed: [] };
+    if (window.__wsPhoto && Array.isArray(post.photos) && post.photos.length) {
+      try {
+        showPanel(`<h4>통합 복사 마무리</h4><div class="ws-row">사진을 넣는 중입니다…</div>`);
+        ph = await window.__wsPhoto.fillPhotoSlots(post.photos, (m) => {
+          showPanel(`<h4>통합 복사 마무리</h4><div class="ws-row">${esc(m)}</div>`);
+        });
+      } catch (e) {
+        ph = { done: 0, total: 0, failed: [String((e && e.message) || e).slice(0, 80)] };
+      }
+    }
+
     try { await I.saveDraft(); } catch {}
     scheduleCount();
 
     showPanel(`<h4>통합 복사 마무리</h4>
-      <div class="ws-row good">제목 ${title ? "넣음" : "없음"} · 소제목 ${os.done}/${os.total} · 임시저장됨</div>
+      <div class="ws-row good">제목 ${title ? "넣음" : "없음"} · 소제목 ${os.done}/${os.total}${ph.total ? ` · 사진 ${ph.done}/${ph.total}` : ""} · 임시저장됨</div>
+      ${ph.riskHigh ? `<div class="ws-warn" style="font-size:11.5px">넣은 사진 중 <b>${ph.riskHigh}장은 저작권 위험 '높음'</b>(기사·연예 사진)입니다. 발행 전에 확인하세요.</div>` : ""}
+      ${ph.failed && ph.failed.length ? `<div class="ws-dim" style="font-size:11.5px">못 넣은 사진: ${esc(ph.failed.join(" / ")).slice(0, 200)} — 그 자리는 [사진: …] 글자가 남아 있습니다.</div>` : ""}
       <div class="ws-dim" style="font-size:11.5px">굵게·형광·색은 붙여넣기에 이미 실려 있어 따로 손대지 않습니다.</div>
       ${os.failed && os.failed.length ? `<div class="ws-dim" style="font-size:11.5px">소제목 ${os.failed.join(", ")}는 문단을 클릭하고 왼쪽 위에서 직접 바꿔주세요.</div>` : ""}`);
     /**

@@ -23,9 +23,10 @@ const SD = require("./scriptDraft");
 const CF = require("./contentFormats");
 const CM = require("./commission");
 const CB = require("./comboSource");
-let SC = null, coupang = null;
+let SC = null, coupang = null, BRIDGE = null;
 try { SC = require(path.join(__dirname, "..", "..", "_shared", "script-check")); } catch {}
 try { coupang = require("./coupangPartners"); } catch {}
+try { BRIDGE = require("./deptBridge"); } catch {}
 
 const 상태 = { DONE: "done", RUNNING: "running", APPROVAL: "wait_approval",
                INTEGRATION: "wait_integration", QUEUED: "queued" };
@@ -105,7 +106,22 @@ async function run({ date = HS.ymd(), want = 5, month = null, write = true } = {
                           판매가능: picks.filter((p) => p.coupang?.sellable === true).length,
                           발행가능대본: picks.filter((p) => p.기획.채점?.pass).length } };
 
-  if (write) result.저장 = writeBrief(result);
+  if (write) {
+    result.저장 = writeBrief(result);
+    /**
+     * 부서(golden-shop-shorts)로 넘깁니다. 여기서 끊기면 사장님이 손으로 옮겨 적으셔야 합니다.
+     * 부서 앱이 꺼져 있어도 파일로 남기므로 새벽 예약 실행이 헛돌지 않습니다.
+     */
+    if (BRIDGE) {
+      try {
+        const b = await BRIDGE.push(result);
+        result.부서 = b;
+        result.steps.push({ 단계: "8 부서 전달", 상태: 상태.DONE, 내용: `${b.count}건 → ${b.알림}` });
+      } catch (e) {
+        result.steps.push({ 단계: "8 부서 전달", 상태: 상태.INTEGRATION, 내용: `실패: ${e.message}` });
+      }
+    }
+  }
   return result;
 }
 

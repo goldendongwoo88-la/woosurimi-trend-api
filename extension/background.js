@@ -228,17 +228,26 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "uiClick") {
-    // 진짜 클릭 한 번 — 편집기 위 아무 좌표나. clickPaste에서 검증된 통로의 낱개판.
+    // 진짜 클릭 — 편집기 위 아무 좌표나. clickPaste에서 검증된 통로의 낱개판.
     // 소제목 드롭다운처럼 "클릭 → 화면 변화 확인 → 다음 클릭"이 필요한 흐름에 씁니다.
+    //
+    // ⚠️ clicks:3 (세 번 클릭)은 **그 줄을 통째로 고르는** 데 씁니다 (사진 넣기).
+    //    자리표시 줄을 골라두면 사진이 그 자리를 대신하며 들어가서, 글자를 따로 안 지워도 됩니다.
+    //    DOM에서 손으로 지우면 편집기 모델에는 글자가 남아 저장할 때 되살아납니다.
     const t3 = _sender && _sender.tab && _sender.tab.id;
     if (!t3) { sendResponse({ ok: false, message: "탭을 못 찾았습니다." }); return; }
     (async () => {
       const target = { tabId: t3 };
       await chrome.debugger.attach(target, "1.3");
       try {
-        const m = { x: msg.x, y: msg.y, button: "left", clickCount: 1 };
-        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mousePressed", ...m });
-        await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseReleased", ...m });
+        // 사람이 세 번 누를 때처럼 clickCount를 1,2,3으로 올려 보냅니다.
+        // 한 번에 clickCount:3만 보내면 편집기가 줄 선택으로 안 받는 경우가 있습니다.
+        const times = Math.min(3, Math.max(1, Number(msg.clicks) || 1));
+        for (let n = 1; n <= times; n++) {
+          const m = { x: msg.x, y: msg.y, button: "left", clickCount: n };
+          await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mousePressed", ...m });
+          await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", { type: "mouseReleased", ...m });
+        }
       } finally {
         try { await chrome.debugger.detach(target); } catch {}
       }
