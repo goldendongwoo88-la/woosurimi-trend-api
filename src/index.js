@@ -1747,6 +1747,116 @@ app.get("/api/keyword/inspect", async (req, res) => {
   }
 });
 
+/* ───────────────────────── 유튜브 파인더 ─────────────────────────
+ * "구독자는 적은데 조회수는 터진" 영상을 찾습니다. 효율 = 조회수 ÷ 구독자.
+ * 키가 있으면 유튜브 API(빠름·무료), 없으면 yt-dlp(느림·키 불필요)로 돕니다.
+ * 화면: /youtube-finder.html
+ */
+const YTF = require("./youtubeFinder");
+const FINDER_FILE = path.join(__dirname, "..", "data", "finder-channels.json");
+
+function readFinderFolders() {
+  try { return JSON.parse(fs.readFileSync(FINDER_FILE, "utf8")); } catch { return {}; }
+}
+function writeFinderFolders(obj) {
+  fs.mkdirSync(path.dirname(FINDER_FILE), { recursive: true });
+  fs.writeFileSync(FINDER_FILE, JSON.stringify(obj, null, 2), "utf8");
+}
+
+app.get("/api/finder/status", (req, res) => {
+  res.json({
+    ok: true,
+    hasKey: YTF.hasApiKey(),
+    engine: YTF.hasApiKey() ? "youtube-api" : "yt-dlp",
+    why: YTF.hasApiKey()
+      ? "유튜브 API로 돕니다 — 빠르고 채널 모니터링까지 됩니다."
+      : "YOUTUBE_API_KEY가 없어 yt-dlp로 돕니다. 느리고 채널 모니터링은 못 씁니다.",
+    folders: Object.keys(readFinderFolders()),
+  });
+});
+
+app.post("/api/finder/search", async (req, res) => {
+  const b = req.body || {};
+  const keywords = (Array.isArray(b.keywords) ? b.keywords : String(b.keyword || "").split(","))
+    .map((k) => String(k).trim()).filter(Boolean).slice(0, 8);
+  if (!keywords.length) return res.json({ ok: false, error: "키워드를 넣어주세요" });
+
+  const opts = {
+    days: Math.max(1, Math.min(365, Number(b.days) || 30)),
+    maxSubs: Math.max(0, Number(b.maxSubs) || 50000),
+    minEfficiency: Number(b.minEfficiency) >= 0 ? Number(b.minEfficiency) : 1.0,
+    shortsOnly: Boolean(b.shortsOnly),
+  };
+
+  try {
+    if (YTF.hasApiKey()) {
+      const all = [];
+      const seen = new Set();
+      let quota = 0;
+      for (const kw of keywords) {
+        const r = await YTF.keywordSearch(kw, opts);
+        quota += r.quotaUsed || 0;
+        for (const v of r.results) { if (!seen.has(v.id)) { seen.add(v.id); all.push({ ...v, keyword: kw }); } }
+      }
+      all.sort((a, b2) => (b2.efficiency || 0) - (a.efficiency || 0));
+      return res.json({ ok: true, engine: "youtube-api", quotaUsed: quota, results: all });
+    }
+    // 키가 없을 때 — 느리지만 돌아갑니다
+    const { findSourcesMulti } = require("./shortsSourceFinder");
+    const r = await findSourcesMulti(keywords, { inspectTop: 5, shortsOnly: opts.shortsOnly });
+    res.json({ ok: true, engine: "yt-dlp", results: r.results, perKeyword: r.perKeyword });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+app.post("/api/finder/monitor", async (req, res) => {
+  if (!YTF.hasApiKey()) {
+    return res.json({ ok: false, needsKey: true, error: "채널 모니터링은 유튜브 API 키가 있어야 합니다. yt-dlp로는 채널 수십 개를 훑는 데 몇 십 분이 걸려 실용적이지 않습니다." });
+  }
+  try {
+    const b = req.body || {};
+    const folders = readFinderFolders();
+    const ids = b.folder ? (folders[b.folder] || []).map((c) => c.id)
+      : (Array.isArray(b.channelIds) ? b.channelIds : []);
+    const r = await YTF.monitorChannels(ids, {
+      days: Math.max(1, Math.min(90, Number(b.days) || 7)),
+      perChannel: Math.max(1, Math.min(50, Number(b.perChannel) || 10)),
+      shortsOnly: Boolean(b.shortsOnly),
+      minEfficiency: Number(b.minEfficiency) || 0,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+app.get("/api/finder/folders", (req, res) => res.json({ ok: true, folders: readFinderFolders() }));
+
+app.post("/api/finder/folders", async (req, res) => {
+  try {
+    const b = req.body || {};
+    const folder = String(b.folder || "").trim();
+    if (!folder) return res.json({ ok: false, error: "폴더 이름이 필요합니다" });
+    const folders = readFinderFolders();
+    if (b.remove) { delete folders[folder]; writeFinderFolders(folders); return res.json({ ok: true, folders }); }
+
+    // 줄바꿈이나 쉼표로 여러 개를 한 번에 붙여넣을 수 있게 합니다.
+    const SPLIT = new RegExp("[" + String.fromCharCode(10) + ",]");
+    const inputs = (Array.isArray(b.channels) ? b.channels : String(b.channels || "").split(SPLIT))
+      .map((c) => String(c).trim()).filter(Boolean);
+    const list = folders[folder] || [];
+    const known = new Set(list.map((c) => c.id));
+    const failed = [];
+    for (const raw of inputs) {
+      try {
+        const id = await YTF.resolveChannel(raw);
+        if (id && !known.has(id)) { known.add(id); list.push({ id, from: raw }); }
+        else if (!id) failed.push(raw);
+      } catch { failed.push(raw); }
+    }
+    folders[folder] = list;
+    writeFinderFolders(folders);
+    res.json({ ok: true, folder, count: list.length, failed, folders });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,

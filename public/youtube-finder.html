@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>유튜브 파인더 — 뜨는 영상 찾기</title>
+<style>
+  :root{
+    --ink:#14161a; --muted:#6b7280; --hair:#e5e7eb; --paper:#ffffff; --bg:#f6f7f9;
+    --hot:#d64545; --ok:#1f8a54; --wait:#b45309; --accent:#1f2937;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 "Pretendard","Malgun Gothic",-apple-system,sans-serif;}
+  header{background:var(--paper);border-bottom:1px solid var(--hair);padding:18px 24px;
+    position:sticky;top:0;z-index:10}
+  h1{margin:0;font-size:19px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:13px;margin-top:3px}
+  .engine{display:inline-block;margin-left:10px;padding:2px 9px;border-radius:99px;
+    font-size:12px;font-weight:700;vertical-align:2px}
+  .engine.api{background:#e7f6ee;color:var(--ok)}
+  .engine.dlp{background:#fdf1e3;color:var(--wait)}
+  main{max-width:1080px;margin:0 auto;padding:22px 24px 60px}
+  .tabs{display:flex;gap:6px;margin-bottom:16px}
+  .tab{padding:8px 16px;border:1px solid var(--hair);background:var(--paper);border-radius:8px;
+    cursor:pointer;font-size:14px;font-weight:600;color:var(--muted)}
+  .tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .card{background:var(--paper);border:1px solid var(--hair);border-radius:12px;padding:18px;margin-bottom:16px}
+  label{display:block;font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:5px}
+  input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--hair);border-radius:8px;
+    font:inherit;font-size:14px;background:#fff;color:var(--ink)}
+  textarea{min-height:78px;resize:vertical}
+  .row{display:grid;gap:12px;margin-bottom:12px}
+  .row.c4{grid-template-columns:repeat(4,1fr)}
+  .row.c2{grid-template-columns:1fr 1fr}
+  @media(max-width:760px){.row.c4,.row.c2{grid-template-columns:1fr}}
+  button.go{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:11px 22px;
+    font:inherit;font-weight:700;cursor:pointer}
+  button.go:disabled{opacity:.5;cursor:default}
+  button.ghost{background:#fff;border:1px solid var(--hair);border-radius:8px;padding:9px 14px;
+    font:inherit;cursor:pointer;font-size:13px}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.55}
+  .status{margin:12px 0;font-size:13.5px;color:var(--muted);min-height:20px}
+  .item{display:flex;gap:14px;padding:15px 0;border-top:1px solid var(--hair)}
+  .item:first-child{border-top:0}
+  .thumb{width:132px;height:74px;border-radius:8px;object-fit:cover;background:var(--hair);flex:none}
+  .body{flex:1;min-width:0}
+  .t{font-weight:600;line-height:1.4;margin-bottom:4px}
+  .t a{color:inherit;text-decoration:none}
+  .t a:hover{text-decoration:underline}
+  .meta{font-size:12.5px;color:var(--muted)}
+  .eff{font-weight:800;font-size:15px;color:var(--hot);white-space:nowrap}
+  .flag{font-size:12.5px;margin-top:5px}
+  .flag.ready{color:var(--ok)}
+  .flag.wait{color:var(--wait)}
+  .empty{padding:34px 0;text-align:center;color:var(--muted)}
+  .keychip{font-size:12.5px;background:#fdf1e3;color:var(--wait);border-radius:8px;padding:11px 13px;
+    line-height:1.55;margin-bottom:14px}
+  code{background:#f1f2f4;padding:1px 5px;border-radius:4px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>유튜브 파인더 <span id="engine" class="engine dlp">확인 중</span></h1>
+  <div class="sub">구독자는 적은데 조회수가 터진 영상을 찾습니다 · 효율 = 조회수 ÷ 구독자</div>
+</header>
+
+<main>
+  <div id="keywarn"></div>
+
+  <div class="tabs">
+    <div class="tab on" data-tab="search">키워드 검색</div>
+    <div class="tab" data-tab="monitor">채널 모니터링</div>
+  </div>
+
+  <!-- 키워드 검색 -->
+  <section id="pane-search">
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>키워드 (쉼표로 여러 개, 최대 8개)</label>
+          <input id="kw" placeholder="다이소 추천템, 주방 살림템, 생활 꿀템">
+        </div>
+      </div>
+      <div class="row c4">
+        <div><label>기간</label>
+          <select id="days">
+            <option value="7">최근 7일</option>
+            <option value="30" selected>최근 30일</option>
+            <option value="90">최근 90일</option>
+            <option value="365">최근 1년</option>
+          </select>
+        </div>
+        <div><label>최대 구독자</label>
+          <select id="maxSubs">
+            <option value="10000">1만 이하</option>
+            <option value="50000" selected>5만 이하</option>
+            <option value="200000">20만 이하</option>
+            <option value="99999999">제한 없음</option>
+          </select>
+        </div>
+        <div><label>최소 효율</label>
+          <select id="minEff">
+            <option value="0">제한 없음</option>
+            <option value="1" selected>1.0 이상</option>
+            <option value="3">3.0 이상</option>
+            <option value="10">10 이상 (떡상)</option>
+          </select>
+        </div>
+        <div><label>영상 종류</label>
+          <select id="shortsOnly">
+            <option value="0">전체</option>
+            <option value="1" selected>쇼츠만 (90초 이하)</option>
+          </select>
+        </div>
+      </div>
+      <button class="go" id="btnSearch">소재 찾기</button>
+      <div class="hint">
+        <b>효율</b>이 높을수록 구독자 없이도 유튜브가 밀어준 소재입니다 — 우리가 찾아야 할 것입니다.<br>
+        키워드 하나당 유튜브 할당량 약 100유닛을 씁니다(하루 1만). 한 번에 8개까지가 안전합니다.
+      </div>
+    </div>
+    <div class="status" id="s1"></div>
+    <div class="card" id="r1"><div class="empty">아직 찾은 게 없습니다</div></div>
+  </section>
+
+  <!-- 채널 모니터링 -->
+  <section id="pane-monitor" hidden>
+    <div class="card">
+      <div class="row c2">
+        <div><label>폴더 이름</label><input id="folder" placeholder="쇼핑쇼츠"></div>
+        <div><label>기간</label>
+          <select id="mDays">
+            <option value="3">최근 3일</option>
+            <option value="7" selected>최근 7일</option>
+            <option value="30">최근 30일</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>채널 추가 (@핸들 · 채널 주소 · 채널ID — 줄바꿈으로 여러 개)</label>
+          <textarea id="channels" placeholder="@channelhandle&#10;https://www.youtube.com/channel/UCxxxxxxxx"></textarea>
+        </div>
+      </div>
+      <div class="row c2">
+        <div><label>최소 효율</label>
+          <select id="mMinEff">
+            <option value="0" selected>제한 없음</option>
+            <option value="1">1.0 이상</option>
+            <option value="3">3.0 이상</option>
+          </select>
+        </div>
+        <div><label>영상 종류</label>
+          <select id="mShorts">
+            <option value="0" selected>전체</option>
+            <option value="1">쇼츠만 (90초 이하)</option>
+          </select>
+        </div>
+      </div>
+      <button class="ghost" id="btnAdd">폴더에 채널 추가</button>
+      <button class="go" id="btnMonitor" style="margin-left:8px">분석 시작</button>
+      <div class="hint">
+        채널 모니터링은 <b>검색을 안 씁니다</b> — 채널 100개를 훑어도 할당량 5유닛 남짓입니다. 아침에 한 번 돌려놓고 훑어보세요.<br>
+        <span id="folderList"></span>
+      </div>
+    </div>
+    <div class="status" id="s2"></div>
+    <div class="card" id="r2"><div class="empty">등록한 채널이 없습니다</div></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const nf = (n) => Number(n || 0).toLocaleString();
+
+// 탭 전환
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  $('pane-search').hidden = t.dataset.tab !== 'search';
+  $('pane-monitor').hidden = t.dataset.tab !== 'monitor';
+});
+
+// 지금 어느 엔진으로 도는지 먼저 알려줍니다 — 느린 이유를 모른 채 기다리지 않게.
+async function status() {
+  try {
+    const r = await (await fetch('/api/finder/status')).json();
+    const el = $('engine');
+    el.textContent = r.hasKey ? '유튜브 API' : 'yt-dlp (키 없음)';
+    el.className = 'engine ' + (r.hasKey ? 'api' : 'dlp');
+    if (!r.hasKey) {
+      $('keywarn').innerHTML = '<div class="keychip"><b>유튜브 API 키가 없습니다.</b> 지금은 yt-dlp로 도는데 ' +
+        '영상 하나에 몇 초씩 걸리고 <b>채널 모니터링은 못 씁니다</b>.<br>' +
+        '키를 <code>.env</code>의 <code>YOUTUBE_API_KEY</code>에 넣고 서버를 다시 켜면 빨라집니다. 무료입니다.</div>';
+    }
+    renderFolders(r.folders || []);
+  } catch {}
+}
+
+function renderFolders(names) {
+  $('folderList').textContent = names.length ? '등록된 폴더: ' + names.join(', ') : '';
+}
+
+function card(v) {
+  const eff = v.efficiency == null ? '?' : v.efficiency;
+  const rm = v.remake;
+  const flag = rm ? '<div class="flag ' + (rm.ready ? 'ready' : 'wait') + '">' +
+      (rm.ready ? '◎ 재각색 적기' : '△ 아직 이름') + ' — ' + rm.why + '</div>' : '';
+  const thumb = v.thumb ? '<img class="thumb" src="' + v.thumb + '" alt="">' : '<div class="thumb"></div>';
+  return '<div class="item">' + thumb +
+    '<div class="body">' +
+      '<div class="t"><a href="' + v.url + '" target="_blank" rel="noreferrer">' + esc(v.title) + '</a></div>' +
+      '<div class="meta">' + esc(v.channel) + ' · 조회 ' + nf(v.views) +
+        ' · 구독 ' + (v.subs == null ? '비공개' : nf(v.subs)) +
+        ' · ' + (v.duration || 0) + '초' + (v.keyword ? ' · ' + esc(v.keyword) : '') + '</div>' +
+      flag +
+    '</div>' +
+    '<div class="eff">효율 ' + eff + '</div>' +
+  '</div>';
+}
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function show(box, rows, emptyMsg) {
+  $(box).innerHTML = rows && rows.length ? rows.map(card).join('')
+    : '<div class="empty">' + emptyMsg + '</div>';
+}
+
+$('btnSearch').onclick = async () => {
+  const kws = $('kw').value.split(',').map(s => s.trim()).filter(Boolean);
+  if (!kws.length) return alert('키워드를 넣어주세요');
+  $('btnSearch').disabled = true;
+  $('s1').textContent = kws.length + '개 키워드를 훑는 중… (yt-dlp면 몇 분 걸립니다)';
+  try {
+    const r = await (await fetch('/api/finder/search', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        keywords: kws, days: +$('days').value, maxSubs: +$('maxSubs').value,
+        minEfficiency: +$('minEff').value, shortsOnly: $('shortsOnly').value === '1',
+      }),
+    })).json();
+    if (!r.ok) { $('s1').textContent = '실패: ' + r.error; return; }
+    $('s1').textContent = r.results.length + '건 찾음 · ' + r.engine +
+      (r.quotaUsed ? ' · 할당량 ' + r.quotaUsed + '유닛 사용' : '');
+    show('r1', r.results, '조건에 맞는 게 없습니다. 최소 효율을 낮추거나 기간을 늘려보세요.');
+  } catch (e) { $('s1').textContent = '실패: ' + e.message; }
+  finally { $('btnSearch').disabled = false; }
+};
+
+$('btnAdd').onclick = async () => {
+  const folder = $('folder').value.trim();
+  if (!folder) return alert('폴더 이름을 넣어주세요');
+  $('s2').textContent = '채널 확인 중…';
+  const r = await (await fetch('/api/finder/folders', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder, channels: $('channels').value }),
+  })).json();
+  if (!r.ok) { $('s2').textContent = '실패: ' + r.error; return; }
+  $('s2').textContent = '"' + folder + '" 폴더에 채널 ' + r.count + '개' +
+    (r.failed && r.failed.length ? ' (못 찾음: ' + r.failed.join(', ') + ')' : '');
+  $('channels').value = '';
+  renderFolders(Object.keys(r.folders || {}));
+};
+
+$('btnMonitor').onclick = async () => {
+  const folder = $('folder').value.trim();
+  if (!folder) return alert('폴더 이름을 넣어주세요');
+  $('btnMonitor').disabled = true;
+  $('s2').textContent = '분석 중…';
+  try {
+    const r = await (await fetch('/api/finder/monitor', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder, days: +$('mDays').value,
+        minEfficiency: +$('mMinEff').value, shortsOnly: $('mShorts').value === '1',
+      }),
+    })).json();
+    if (!r.ok) { $('s2').textContent = (r.needsKey ? '⚠ ' : '실패: ') + r.error; return; }
+    $('s2').textContent = '채널 ' + r.checked + '개 · 영상 ' + (r.videos || 0) + '편 중 ' +
+      r.results.length + '건' + (r.quotaUsed ? ' · 할당량 ' + r.quotaUsed + '유닛' : '');
+    show('r2', r.results, r.note || '최근 올라온 영상이 없습니다.');
+  } catch (e) { $('s2').textContent = '실패: ' + e.message; }
+  finally { $('btnMonitor').disabled = false; }
+};
+
+status();
+</script>
+</body>
+</html>

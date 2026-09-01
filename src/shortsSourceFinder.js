@@ -227,4 +227,43 @@ async function findSources(keyword, { count = 25, inspectTop = 8, shortsOnly = f
   };
 }
 
-module.exports = { findSources, searchCandidates, inspect, efficiency, remakeScore, copyrightFlags };
+/**
+ * 키워드 여러 개를 한 번에 — 쇼츠를 찾을 때는 이게 기본이어야 합니다.
+ *
+ * ⚠️ 왜 (2026-09-01 실측)
+ * 유튜브 일반 검색(ytsearch)에는 **쇼츠가 아예 안 섞입니다.** 40건을 받아도 90초 이하가 0건입니다.
+ * 쇼츠를 보려면 검색 화면의 "4분 미만" 필터를 써야 하는데, 그 페이지는 yt-dlp가 더 넘기지 못해
+ * **키워드 하나당 3~8건**이 천장입니다.
+ * 그래서 한 키워드를 깊게 파는 대신 **여러 키워드를 얕게 훑어 합칩니다.**
+ * 같은 영상이 여러 키워드에 걸리면 한 번만 셉니다.
+ */
+async function findSourcesMulti(keywords, opts = {}) {
+  const list = (Array.isArray(keywords) ? keywords : [keywords]).map((k) => String(k).trim()).filter(Boolean);
+  const seen = new Set();
+  const merged = [];
+  const perKeyword = [];
+
+  for (const kw of list) {
+    let r;
+    try { r = await findSources(kw, opts); }
+    catch (e) { perKeyword.push({ keyword: kw, error: e.message, found: 0 }); continue; }
+    let added = 0;
+    for (const v of r.results) {
+      if (seen.has(v.id)) continue;
+      seen.add(v.id);
+      merged.push({ ...v, keyword: kw });
+      added++;
+    }
+    perKeyword.push({ keyword: kw, searched: r.searched || 0, found: added });
+  }
+
+  merged.sort((a, b) => (b.efficiency || 0) - (a.efficiency || 0));
+  return {
+    keywords: list,
+    perKeyword,
+    results: merged,
+    note: "효율(조회수÷구독자)이 높을수록 구독자 없이도 유튜브가 밀어준 소재입니다.",
+  };
+}
+
+module.exports = { findSources, findSourcesMulti, searchCandidates, inspect, efficiency, remakeScore, copyrightFlags };
