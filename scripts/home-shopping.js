@@ -13,6 +13,9 @@
 const HS = require("../src/homeShoppingSchedule");
 const SIG = require("../src/shoppingSignals");
 const SD = require("../src/scriptDraft");
+const CF = require("../src/contentFormats");
+const CM = require("../src/commission");
+const CB = require("../src/comboSource");
 let SC = null;
 try { SC = require("../../_shared/script-check"); } catch { /* 없어도 나머지는 돕니다 */ }
 
@@ -57,6 +60,16 @@ const month = Number(opt("--month", new Date().getMonth() + 1));
       console.log(`    대본: ${sc.예상초}초 ${sc.score}점 ${상태}`);
     }
     console.log(`    훅  : ${sd.줄[0].문장}`);
+
+    /** 수수료는 카테고리로 3배가 갈립니다. 소재 옆에 붙여둬야 선택이 바뀝니다. */
+    const route = CM.bestRoute(c.제품, c.본품가 || 0);
+    const cr = CM.coupangRate(c.제품);
+    console.log(`    수수료: ${(cr.rate * 100).toFixed(0)}% (${cr.군})` +
+      (route.경로[1] ? ` · ${route.경로[0].제휴처} ${route.경로[0].요율} ${route.경로[0].비고 || ""}` : ""));
+
+    /** 형태를 늘리면 같은 소재로 여러 편이 나옵니다. 플랫폼이 달라 중복 업로드가 아닙니다. */
+    const 형태 = CF.all(c.제품, {});
+    console.log(`    형태 ${형태.length}종: ` + 형태.map((f) => `${f.형태}(${f.제작시간}→${(CF.형태별플랫폼[f.형태] || [])[0]})`).join(" · "));
     console.log("");
   }
 
