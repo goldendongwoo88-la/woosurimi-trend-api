@@ -868,6 +868,66 @@ ${
 });
 
 // 현재 연동된 인스타그램 계정 목록 (액세스 토큰은 응답에 포함하지 않음)
+/**
+ * 다른 공개 프로페셔널 계정의 최근 사진 — 비즈니스 디스커버리.
+ *
+ * ⚠️ 왜 여기(Render)에 두는가: 접속 토큰이 여기 환경변수(IG_ACCOUNTS_JSON)에만 있습니다.
+ * 편집국이 쓰려고 토큰을 사장님 컴퓨터에도 복사하면 **같은 비밀이 두 곳에 생깁니다.**
+ * 하나가 만료되면 어디가 문제인지 찾기 어렵고, 새어나갈 자리도 두 배가 됩니다.
+ * 그래서 **토큰은 여기 두고 결과만 내보냅니다.**
+ *
+ * 연예인 블로그 글에 쓸 사진의 유일하게 확실한 출처입니다 —
+ * 기사 페이지에서 긁으면 관련기사 썸네일이 섞여 **얼굴이 다른 사람**이 들어갑니다(실측 3회).
+ * 본인 계정 사진은 사람이 틀릴 수가 없습니다.
+ */
+app.get("/api/instagram/media", async (req, res) => {
+  const username = String(req.query.username || "").replace(/^@/, "").trim();
+  const limit = Math.max(1, Math.min(25, Number(req.query.limit) || 10));
+  if (!username) return res.json({ ok: false, error: "username이 필요합니다" });
+
+  const accounts = instagramAuth.listAccounts();
+  const acc = accounts && accounts[0];
+  if (!acc) return res.json({ ok: false, needsConnect: true, error: "연동된 인스타 계정이 없습니다" });
+
+  const full = instagramAuth.getAccount(acc.igUsername);
+  const token = full?.pageAccessToken || full?.accessToken;
+  const igId = full?.igBusinessAccountId || full?.igUserId || full?.id;
+  if (!token || !igId) return res.json({ ok: false, error: "토큰이나 계정 ID를 못 찾았습니다" });
+
+  const fields =
+    `business_discovery.username(${username}){followers_count,media_count,media.limit(${limit})` +
+    `{id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count}}`;
+  try {
+    const r = await fetch(
+      `https://graph.facebook.com/v21.0/${igId}?fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`,
+    );
+    const j = await r.json();
+    if (j.error) {
+      const msg = String(j.error.message || "");
+      return res.json({
+        ok: false,
+        error: /not.*business|business account/i.test(msg)
+          ? `@${username} 은(는) 프로페셔널 계정이 아니라 조회할 수 없습니다`
+          : msg,
+      });
+    }
+    const bd = j.business_discovery;
+    if (!bd) return res.json({ ok: false, error: `@${username} 정보를 못 받았습니다` });
+    const media = (bd.media?.data || [])
+      .map((m) => ({
+        url: m.media_type === "VIDEO" ? (m.thumbnail_url || null) : m.media_url,
+        permalink: m.permalink,
+        caption: String(m.caption || "").slice(0, 200),
+        timestamp: m.timestamp,
+        likes: m.like_count || 0,
+      }))
+      .filter((m) => m.url);
+    res.json({ ok: true, account: { username, followers: bd.followers_count || 0 }, media });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.get("/api/instagram/accounts", (req, res) => {
   res.json({ configured: instagramAuth.isConfigured(), accounts: instagramAuth.listAccounts() });
 });
