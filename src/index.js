@@ -929,7 +929,21 @@ app.get("/api/instagram/media", async (req, res) => {
 });
 
 app.get("/api/instagram/accounts", (req, res) => {
-  res.json({ configured: instagramAuth.isConfigured(), accounts: instagramAuth.listAccounts() });
+  /**
+   * 진단 정보를 같이 줍니다 — **토큰 값은 절대 안 내보냅니다.**
+   * 계정이 비었을 때 "환경변수가 없는 건지, 값이 잘려서 못 읽는 건지"를
+   * 구분 못 해 한참 헤맸습니다. 그 둘은 고치는 방법이 전혀 다릅니다.
+   */
+  const raw = process.env.IG_ACCOUNTS_JSON || "";
+  let parsedKeys = null;
+  if (raw) {
+    try { parsedKeys = Object.keys(JSON.parse(raw)); } catch { parsedKeys = "JSON으로 못 읽음(값이 잘렸을 수 있습니다)"; }
+  }
+  res.json({
+    configured: instagramAuth.isConfigured(),
+    accounts: instagramAuth.listAccounts(),
+    env: { present: Boolean(raw), length: raw.length, keys: parsedKeys },
+  });
 });
 
 // 오늘 남은 게시 가능 횟수 (인스타그램은 24시간에 50개 제한)
