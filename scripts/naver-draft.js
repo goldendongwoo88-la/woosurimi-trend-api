@@ -249,7 +249,14 @@ const restoreClip = () => { try { writeClipboard(clipBackup); } catch {} };
       "--disable-blink-features=AutomationControlled",
       "--hide-crash-restore-bubble",
       "--disable-session-crashed-bubble",
-      "--window-size=700,420",
+      /**
+       * 창 크기.
+       * ⚠️ 700x420으로 작게 두었더니 **사진을 눌러도 안 골라졌습니다**(실측: "고른 사진 0개").
+       * 사진 도구막대가 뜰 자리가 없어서입니다. 그래서 옆트임이 한 장도 안 먹혔습니다.
+       * 화면을 가리지 않으려고 작게 했던 건데, 안 되는 것보다는 낫습니다.
+       * 위치는 여전히 오른쪽 아래 구석입니다.
+       */
+      `--window-size=${process.env.WSU_WIN || "1100,900"}`,
       /**
        * ⚠️ **화면 밖(-2400)으로 보내면 안 됩니다.**
        * 크롬이 보이지 않는 창을 절전 처리해서 페이지가 아예 안 뜹니다
@@ -897,30 +904,52 @@ ${blogId} 로그인이 안 돼 있습니다.
        */
       let wide = 0;
       let shotCount = 0;
+      /**
+       * ⚠️ `.se-component.se-image img` 로 세면 **0이 나오는 경우가 있습니다**
+       * (실측: 사진 8장이 분명히 들어갔는데 옆트임 0장). 안쪽 <img>가 아직 안 그려진 것으로 보입니다.
+       * 측정할 때 쓰는 것과 **같은 선택자**(바깥 껍데기)로 셉니다.
+       */
       for (let t = 0; t < 12; t++) {
         shotCount = await ed().evaluate(() =>
-          document.querySelectorAll(".se-component.se-image img").length).catch(() => 0);
+          document.querySelectorAll(".se-component.se-image").length).catch(() => 0);
         if (shotCount >= uploaded && shotCount > 0) break;
         await sleep(1500);
       }
       if (!shotCount) say("      ⚠ 사진 요소를 못 찾아 옆트임을 건너뜁니다");
+      let why = "";
       for (let k = 0; k < shotCount; k++) {
         try {
-          const imgs = await ed().$$(".se-component.se-image img");
-          if (!imgs[k]) continue;
-          await imgs[k].click();
+          /**
+           * 사진을 고릅니다.
+           * ⚠️ 요소 한가운데를 누르면 **사진 설명 칸**이나 떠 있는 도구막대에 눌려서
+           * 사진이 안 골라집니다(실측: "고른 사진 0개"). 사진 **위쪽 1/4** 지점을 누릅니다.
+           */
+          const imgs = await ed().$$(".se-component.se-image");
+          if (!imgs[k]) { why = "사진 손잡이 없음"; continue; }
+          await imgs[k].scrollIntoView().catch(() => {});
+          await sleep(400);
+          const bb = await imgs[k].boundingBox().catch(() => null);
+          if (bb) await page.mouse.click(bb.x + bb.width / 2, bb.y + Math.min(bb.height * 0.25, 120));
+          else await imgs[k].click();
           await sleep(900);
           const hit = await ed().evaluate(() => {
-            const b = [...document.querySelectorAll("button")]
-              .find((n) => /옆트임/.test(n.textContent || "") && n.offsetParent !== null);
-            if (!b) return false;
-            b.click();
-            return true;
+            const btns = [...document.querySelectorAll("button")];
+            const b = btns.find((n) => /옆트임/.test(n.textContent || "") && n.offsetParent !== null);
+            if (b) { b.click(); return "눌렀음"; }
+            // 왜 못 찾았는지 남깁니다 — 숨어 있는지, 아예 없는지가 완전히 다른 문제입니다.
+            const hidden = btns.filter((n) => /옆트임/.test(n.textContent || "")).length;
+            if (hidden) return `단추가 숨어 있음(${hidden}개)`;
+            const sel = document.querySelectorAll(".se-component.se-image.se-is-selected").length;
+            const names = btns.filter((n) => n.offsetParent !== null)
+              .map((n) => (n.textContent || "").trim().slice(0, 8)).filter(Boolean).slice(0, 12);
+            return `단추 없음 (고른 사진 ${sel}개 · 보이는 단추: ${names.join("/")})`;
           });
-          if (hit) wide++;
+          if (hit === "눌렀음") wide++;
+          else why = hit;
           await sleep(500);
-        } catch {}
+        } catch (e) { why = String(e.message).slice(0, 40); }
       }
+      if (!wide && shotCount) say(`      ⚠ 옆트임 못 함 — ${why || "이유 불명"}`);
       say(`      올린 사진 ${uploaded}장 · 옆트임 ${wide}장`);
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
 
