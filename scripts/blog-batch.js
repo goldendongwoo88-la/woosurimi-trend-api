@@ -115,7 +115,17 @@ function runOne(postId) {
       }
     }
 
-    const r = await runOne(p.id);
+    /**
+     * 한 번에 안 되는 경우가 20~30% 있습니다 — 본문이 0자로 들어가거나 사진 자리를 못 찾습니다.
+     * 편집기가 늦게 뜨거나 "작성 중인 글" 팝업이 남아 있을 때 그렇습니다.
+     * 원인을 다 잡기 전까지는 **다시 한 번 돌리는 게** 가장 확실합니다.
+     */
+    let r = await runOne(p.id);
+    if (!r.ok) {
+      say("        한 번 실패 — 다시 시도합니다");
+      await sleep(6000);
+      r = await runOne(p.id);
+    }
     if (r.ok) {
       good++;
       done.add(p.id);
