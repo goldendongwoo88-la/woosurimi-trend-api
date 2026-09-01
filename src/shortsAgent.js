@@ -41,6 +41,14 @@ try { coupang = require("./coupangPartners"); } catch { /* 없어도 나머지�
  * 받침이 없거나 받침이 ㄹ이면 '로', 그 밖에는 '으로'.
  * 실측에서 "3천원 네트망로 공간 두 배"가 나왔습니다. 제목에 이런 게 섞이면 못 씁니다.
  */
+/** 받침 여부로 을/를, 이/가, 은/는을 고릅니다. "접시선반를"처럼 나오면 광고가 아마추어로 보입니다. */
+function josa(word, withJong, withoutJong) {
+  const last = String(word).trim().slice(-1);
+  const code = last.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return withoutJong;
+  return ((code - 0xac00) % 28) ? withJong : withoutJong;
+}
+
 function ro(word) {
   const last = String(word).trim().slice(-1);
   const code = last.charCodeAt(0);
@@ -85,6 +93,46 @@ function makeTitles(product, pattern, { store = "다이소", price = "" } = {}) 
       return { title: t, chars: t.length, score };
     })
     .sort((a, b) => b.score - a.score);
+}
+
+/**
+ * ── 릴스 구조: H-V-P-R-C ──
+ * 갓생맘 REELS_SCRIPT 공식. 30초 안에 이 다섯 칸을 채우면 끝까지 봅니다.
+ *   H(Hook)     0~3초   손가락을 멈추게 하는 문제 장면
+ *   V(Value)    3~10초  "이게 왜 필요한가"
+ *   P(Proof)    10~20초 실제로 되는 장면 (여기가 저장을 만듭니다)
+ *   R(Result)   20~27초 전/후 대비
+ *   C(CTA)      27~33초 링크 안내
+ *
+ * ⚠️ 우리 실측(파인더 22편)과도 맞습니다: 상위 영상 전부 **문제 장면으로 열었습니다.**
+ * 정리된 모습으로 시작한 영상은 상위권에 없었습니다.
+ */
+function buildStructure(product, seconds = 33) {
+  const s = Math.max(15, Math.min(60, seconds));
+  const at = (r) => Math.round(s * r);
+  return [
+    { from: 0,        to: at(0.09), part: "H 훅",   what: `${product} 없이 불편한 상태 (문제 장면)`, note: "정리된 모습 말고 엉망인 모습으로 여십시오" },
+    { from: at(0.09), to: at(0.30), part: "V 가치", what: `${product}${josa(product, "을", "를")} 꺼내며 가격 한 줄`,          note: "숫자를 화면에 박습니다" },
+    { from: at(0.30), to: at(0.60), part: "P 증명", what: "실제로 쓰는 장면 2~3컷",                 note: "여기가 저장을 만듭니다. 손이 나와야 합니다" },
+    { from: at(0.60), to: at(0.82), part: "R 결과", what: "전/후 대비",                             note: "같은 각도로 찍어야 대비가 삽니다" },
+    { from: at(0.82), to: s,        part: "C 안내", what: "제품컷 + '링크는 설명란'",               note: "대가성 문구는 설명란 첫 줄" },
+  ];
+}
+
+/**
+ * ── 훅 7유형 ──
+ * 갓생맘 HOOK_3SEC. 어떤 심리를 건드리는지까지 붙여둡니다 — 고를 때 근거가 됩니다.
+ */
+function hookLines(product) {
+  return [
+    { type: "문제 지적", line: `이렇게 쓰고 계시죠`,                 psych: "찔림 — 내 얘기 같아서 멈춘다" },
+    { type: "손실 회피", line: `${product} 모르면 계속 손해입니다`,  psych: "놓치기 싫음" },
+    { type: "숫자 충격", line: `단돈 ○천원인데 이게 됩니다`,          psych: "가격 대비 기대 위반" },
+    { type: "반전",     line: `비싼 거 살 필요 없었습니다`,          psych: "믿던 것이 뒤집힘" },
+    { type: "권위",     line: `살림 고수들이 다 쓰는 것`,            psych: "남들도 쓴다는 안심" },
+    { type: "금지",     line: `이거 모르고 사지 마세요`,             psych: "경고는 무시하기 어렵다" },
+    { type: "즉시성",   line: `3초면 끝납니다`,                      psych: "부담 없음" },
+  ];
 }
 
 /** 스톡 영상 검색어 — 제품명을 그대로 영어로 넣으면 잘 안 나옵니다. 쓰임새로 찾습니다. */
@@ -182,6 +230,8 @@ async function run(keywords, { days = 90, maxSubs = 100000, minEfficiency = 5, w
     }
     p.publishAt = pattern.ok ? pattern.게시시점 : null;
     p.targetSeconds = pattern.ok ? pattern.길이.초_중앙값 : 33;
+    p.structure = buildStructure(p.product, p.targetSeconds);   // H-V-P-R-C
+    p.hooks = hookLines(p.product);                              // 훅 7유형
   }
   say(`      제품 ${picks.length}개 기획 완료`);
 
@@ -204,4 +254,4 @@ async function run(keywords, { days = 90, maxSubs = 100000, minEfficiency = 5, w
   };
 }
 
-module.exports = { run, makeTitles, sceneQueries };
+module.exports = { run, makeTitles, sceneQueries, buildStructure, hookLines, josa };
