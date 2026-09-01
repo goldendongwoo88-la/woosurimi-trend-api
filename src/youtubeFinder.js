@@ -86,6 +86,8 @@ function shapeVideo(v, subs) {
   return {
     id: v.id,
     title: (v.snippet?.title || "").trim(),
+    // 설명에도 해시태그로 제품명이 박혀 있는 경우가 많습니다(productExtract가 씁니다).
+    description: (v.snippet?.description || "").slice(0, 500),
     url: `https://www.youtube.com/watch?v=${v.id}`,
     channel: v.snippet?.channelTitle || "",
     channelId: v.snippet?.channelId || "",
