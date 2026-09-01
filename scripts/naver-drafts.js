@@ -22,10 +22,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   /**
    * 그 프로필로 열린 크롬이 남아 있으면 **프로필이 잠겨서 크롬이 아예 안 뜹니다**
    * (실측: "Timed out ... waiting for the WS endpoint"). 먼저 정리합니다.
+   *
+   * ⚠️ **곱게 닫습니다(CloseMainWindow).** 예전엔 바로 Stop-Process로 죽였는데,
+   * 그러면 크롬이 쿠키를 디스크에 못 쓰고 죽어서 **네이버 로그인이 풀립니다**
+   * (실측 2026-09-02: 20분 전 로그인돼 있던 프로필이 로그인 화면으로 넘어갔습니다).
+   * 안 닫히면 그때만 강제로 죽입니다.
    */
   try {
     require("child_process").execFileSync("powershell", ["-NoProfile", "-Command",
-      `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*naver_${blogId}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
+      `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*naver_${blogId}*' } | ForEach-Object { $p = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; if ($p) { $null = $p.CloseMainWindow(); Start-Sleep -Milliseconds 1500; if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } } }`],
       { stdio: "ignore", timeout: 30000 });
     await sleep(2500);
   } catch {}

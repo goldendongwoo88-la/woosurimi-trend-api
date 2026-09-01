@@ -334,7 +334,7 @@ ${blogId} 로그인이 안 돼 있습니다.
       const photosArr = Array.isArray(r.post.photos) ? r.post.photos : [];
       let htmlOut = "";
       try {
-        if (typeof buildNaverHtml === "function") htmlOut = buildNaverHtml(r.post.body, r.post.title, photosArr);
+        if (typeof buildNaverHtml === "function") htmlOut = buildNaverHtml(r.post.body, r.post.title, photosArr, r.post.resultTable || null);
       } catch {}
       /**
        * ⚠️ **클립보드를 건드리지 않습니다.** (2026-09-02 사고)
@@ -357,7 +357,7 @@ ${blogId} 로그인이 안 돼 있습니다.
          */
         const photos = Array.isArray(r.post.photos) ? r.post.photos : [];
         const html = (typeof buildNaverHtml === "function")
-          ? buildNaverHtml(r.post.body, r.post.title, photos) : "";
+          ? buildNaverHtml(r.post.body, r.post.title, photos, r.post.resultTable || null) : "";
         if (!html) return { ok: false, why: "클립보드 실패 + 본문 HTML도 못 만들었습니다: " + e.message };
         const titleHtml = `<p data-wsu-title="1" data-wsu-post="1">${r.post.title}</p>`;
         const NL = String.fromCharCode(10);
@@ -881,7 +881,8 @@ ${blogId} 로그인이 안 돼 있습니다.
        * DOM의 click()으로는 안 됩니다(실측).
        */
       let wide = 0;
-      for (let k = 0; k < uploaded; k++) {
+      const shots = await ed().$$(".se-component.se-image img").catch(() => []);
+      for (let k = 0; k < shots.length; k++) {
         try {
           const imgs = await ed().$$(".se-component.se-image img");
           if (!imgs[k]) continue;
@@ -900,6 +901,15 @@ ${blogId} 로그인이 안 돼 있습니다.
       }
       say(`      올린 사진 ${uploaded}장 · 옆트임 ${wide}장`);
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+
+      /**
+       * ⚠️ 사진을 올리고 나면 편집기 프레임이 새로 그려집니다.
+       * 그러면 앞서 잡아둔 frameE가 **죽은 손잡이**가 되어 다음 단계에서
+       * "Cannot read properties of null (reading 'evaluate')"로 죽습니다(실측 2026-09-02).
+       * 여기서 다시 잡아 둡니다.
+       */
+      const fresh = page.frames().find((f) => /PostWriteForm/.test(f.url()));
+      if (fresh) frameE = fresh;
     }
 
     /**
@@ -921,13 +931,72 @@ ${blogId} 로그인이 안 돼 있습니다.
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: postId }),
       });
-      say("      확장에 마무리 요청(제목·소제목) — 기다리는 중");
-      for (let i = 0; i < 10; i++) {
-        await sleep(2000);
-        const t = await evalIn(() => (document.querySelector(".se-documentTitle")?.innerText || "").trim());
-        if (t && t !== "제목") { say(`      제목 들어감: ${t.slice(0, 30)}`); break; }
-      }
+      say("      확장에 마무리 요청(소제목) — 기다리는 중");
+      await sleep(6000);
     } catch {}
+
+    /**
+     * ── 제목은 **직접 쳐 넣습니다** ──
+     *
+     * ⚠️ 확장에 맡겼더니 어떤 날은 되고 어떤 날은 안 됐습니다.
+     * 화면에는 제목이 보이는데 저장하면 목록에 **"제목 없음"** 으로 들어갔습니다
+     * (사장님이 목록에서 먼저 발견하셨습니다). DOM에 글자만 써 넣으면 편집기 내부 모델이
+     * 비어 있어서 저장할 때 빠집니다.
+     *
+     * 그래서 사람이 하는 것과 똑같이 합니다 — **진짜 마우스로 제목 칸을 누르고, 키보드로 칩니다.**
+     * 이러면 편집기가 입력을 정상으로 받아 모델에도 실립니다.
+     * (클립보드는 안 씁니다. 사장님 클립보드를 덮어쓰는 사고가 두 번 났습니다.)
+     */
+    const wantTitle = String(copied.title || "").trim();
+    if (wantTitle) {
+      const edf = () => page.frames().find((f) => /PostWriteForm/.test(f.url())) || frameE;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const box = await edf().$(".se-documentTitle .se-text-paragraph, .se-documentTitle");
+          if (!box) break;
+          await box.click();
+          await sleep(700);
+          /**
+           * 이미 뭐가 들어 있으면 지우고 씁니다.
+           * ⚠️ **Ctrl+A를 쓰면 안 됩니다** — 커서가 제목 칸에 있어도 문서 전체가 잡혀서
+           * 이어지는 Delete가 **본문을 통째로 지울 수 있습니다.**
+           * 제목 요소 안에서만 범위를 잡아 지웁니다.
+           */
+          await edf().evaluate(() => {
+            const t = document.querySelector(".se-documentTitle");
+            if (!t) return;
+            const r = document.createRange();
+            r.selectNodeContents(t);
+            const sel = window.getSelection();
+            sel.removeAllRanges(); sel.addRange(r);
+          }).catch(() => {});
+          await page.keyboard.press("Delete");
+          await sleep(300);
+          await page.keyboard.type(wantTitle, { delay: 12 });
+          await sleep(1200);
+          const now = await edf().evaluate(() =>
+            (document.querySelector(".se-documentTitle")?.innerText || "").trim()).catch(() => "");
+          if (now && now !== "제목" && now.slice(0, 8) === wantTitle.slice(0, 8)) {
+            say(`      제목 쳐 넣음: ${now.slice(0, 30)}`);
+            if (process.argv.includes("--제목조사")) {
+              const dbg = await edf().evaluate(() => {
+                const t = document.querySelector(".se-documentTitle");
+                return {
+                  html: (t?.outerHTML || "").slice(0, 500),
+                  editables: document.querySelectorAll("[contenteditable='true']").length,
+                  inTitle: Boolean(window.getSelection()?.anchorNode?.parentElement?.closest?.(".se-documentTitle")),
+                  ph: [...document.querySelectorAll(".se-placeholder, .se-placeHolder")]
+                    .map((n) => ({ cls: n.className, txt: (n.textContent || "").slice(0, 10), vis: n.offsetParent !== null })),
+                };
+              }).catch(() => null);
+              say("PROBE " + JSON.stringify(dbg));
+            }
+            break;
+          }
+          say(`      제목이 안 들어갔습니다 — 다시 시도 (${attempt + 1}/3)`);
+        } catch (e) { say(`      제목 넣다 실패: ${String(e.message).slice(0, 50)}`); }
+      }
+    }
 
     const titleText = String(copied.title || "").trim();
     if (false && titleText) {
@@ -1088,6 +1157,7 @@ ${blogId} 로그인이 안 돼 있습니다.
       return rows.slice(0, 2);
     }).catch(() => []);
     if (listTitle.length) {
+      listTitle.forEach((r, i) => say(`      [목록 ${i + 1}] ${String(r).slice(0, 70)}`));
       const first = String(listTitle[0] || "");
       if (/제목\s*없음/.test(first)) {
         say("      ⚠ 저장 목록에 **제목 없음**으로 들어갔습니다 — 제목이 편집기 모델에 안 실렸습니다");

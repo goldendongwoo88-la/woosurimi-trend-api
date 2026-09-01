@@ -104,7 +104,8 @@ async function floor(p, body) {
   // 그 프로필로 열린 크롬이 있으면 잠겨서 못 씁니다. 먼저 정리합니다.
   try {
     execFileSync("powershell", ["-NoProfile", "-Command",
-      `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*naver_${blogId}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
+      // ⚠️ 곱게 닫습니다 — 강제 종료하면 쿠키를 못 써서 네이버 로그인이 풀립니다(실측 2026-09-02).
+      `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*naver_${blogId}*' } | ForEach-Object { $p = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; if ($p) { $null = $p.CloseMainWindow(); Start-Sleep -Milliseconds 1500; if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } } }`],
       { stdio: "ignore", timeout: 30000 });
     await sleep(2500);
   } catch {}
