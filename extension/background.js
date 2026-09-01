@@ -176,6 +176,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return;
   }
 
+  /**
+   * 무인 모드 결과 보고. 확장이 화면 없이 붙여넣기를 끝낸 뒤 편집국에 알립니다.
+   * 바깥에서는 화면을 못 보므로 이게 유일한 확인 수단입니다.
+   */
+  if (msg.type === "wsuFloorPost") {
+    fetch(LOCAL_SERVER + String(msg.path || ""), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(msg.body || {}),
+    })
+      .then((r) => r.json().catch(() => ({})))
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((err) => sendResponse({ ok: false, message: err.message }));
+    return true;
+  }
+
   if (msg.type === "floorGet") {
     // 플로어가 안 떠 있으면 실패가 정상입니다 — 부르는 쪽에서 조용히 넘어갑니다.
     floorFetch(String(msg.path || ""))

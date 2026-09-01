@@ -3237,6 +3237,52 @@
   let wsuMismatchSince = 0;
   const WSU_LOADED_AT = Date.now();
 
+  /** 무인 모드에서 같은 원고를 두 번 붙이지 않게 기억해 둡니다. */
+  const wsuAutoDone = new Set();
+
+  /**
+   * "작성 중인 글이 있습니다" 팝업 닫기.
+   *
+   * ⚠️ 이게 무인 모드의 첫 관문입니다. 이 창이 떠 있으면 편집기를 덮어서
+   * **클립보드가 멀쩡해도 본문에 글자가 안 들어갑니다**(2026-09-01 실측: 본문 31자 = 자리표시 문구뿐).
+   * '취소'를 누릅니다 — '확인'을 누르면 지난 초안을 이어받아 우리 원고와 섞입니다.
+   */
+  function wsuClosePopup() {
+    const txt = document.body?.innerText || "";
+    if (!/작성 중인 글이 있습니다|이어서 작성/.test(txt)) return false;
+    const visible = (el) => {
+      const b = el.getBoundingClientRect();
+      const st = getComputedStyle(el);
+      return b.width > 0 && b.height > 0 && st.visibility !== "hidden" && st.display !== "none";
+    };
+    const cancel = [...document.querySelectorAll("button, a")].filter(visible)
+      .find((b) => /^\s*취소\s*$/.test(b.textContent || ""));
+    if (cancel) { cancel.click(); return true; }
+    return false;
+  }
+
+  /** 붙여넣기 — 확장의 검증된 경로(insert)를 그대로 씁니다. */
+  async function insertGuard(draft) {
+    const I = window.__wsInsert;
+    if (!I || !I.insert) return { ok: false, why: "붙여넣기 도구를 못 찾았습니다" };
+    try { return await I.insert(draft, () => {}); }
+    catch (e) { return { ok: false, why: String(e && e.message || e).slice(0, 120) }; }
+  }
+
+  /**
+   * 결과를 편집국에 알립니다.
+   * 무인으로 돌 때 바깥에서는 화면을 못 보므로, 성공/실패를 여기서 남겨야 확인할 수 있습니다.
+   */
+  function wsuReport(postId, result) {
+    try {
+      chrome.runtime.sendMessage({
+        type: "wsuFloorPost",
+        path: "/api/auto-result",
+        body: { postId, ok: Boolean(result && result.ok), why: (result && result.why) || null, at: Date.now() },
+      });
+    } catch {}
+  }
+
   async function wsuFetchCopied() {
     const j = await wsuFloorGet("/api/last-copied");
     return j && j.ok ? j.copied : null;   // 플로어가 안 떠 있으면 null — 조용히 지나간다
@@ -3356,10 +3402,24 @@
     if (wsuBusy) return;
     // ⚠️ 이 스크립트는 바깥 창과 편집기 iframe 양쪽에서 돈다(all_frames). 편집기가 있는
     // 쪽에서만 손대야 한다 — 양쪽이 같이 걸면 제목이 두 번 들어가거나 서로 엉킨다.
+    /**
+     * ⚠️ 팝업 닫기는 **편집기 프레임 검사보다 먼저** 합니다.
+     * "작성 중인 글이 있습니다"는 **바깥 창**에 뜨는데, 자동 붙여넣기 코드는 편집기 프레임에서만
+     * 돌기 때문에 순서를 반대로 두면 바깥 창의 팝업을 아무도 안 닫습니다(실측: 3분 기다리다 실패).
+     * 무인 표시가 있을 때만 닫습니다 — 사장님이 손으로 쓰실 때 이어쓰기를 막으면 안 됩니다.
+     */
+    const copiedEarly = await wsuFetchCopied();
+    if (copiedEarly && copiedEarly.auto && !wsuAutoDone.has("popup:" + copiedEarly.token)) {
+      if (wsuClosePopup()) {
+        wsuAutoDone.add("popup:" + copiedEarly.token);
+        return;   // 팝업을 닫았으면 다음 차례에 이어서 합니다
+      }
+    }
+
     if (!getEditorRoot()) return;
     const I = window.__wsInsert;
     if (!I) return;
-    const copied = await wsuFetchCopied();
+    const copied = copiedEarly;
     if (!copied || !copied.token) return;
     if (copied.token === wsuSeenToken) return;      // 이미 처리(또는 넘기기로 한) 원고
 
@@ -3369,6 +3429,38 @@
     if (empty) {
       wsuArmed = true;
       wsuArmedToken = copied.token;
+
+      /**
+       * ⚠️ **무인 모드** (2026-09-01 추가)
+       * 편집국이 auto 표시를 달아 보낸 원고면, 사장님 Ctrl+V를 기다리지 않고 여기서 직접 붙입니다.
+       *
+       * 왜 이렇게 하나: 밖에서 자동화 도구(퍼펫티어)로 붙이려 했더니 두 가지가 터졌습니다.
+       *   1. 그 도구가 chrome.debugger 자리를 차지해서 **확장의 붙여넣기가 막혔습니다.**
+       *   2. 운영체제 키보드로 우회했더니 창을 앞으로 불러야 해서,
+       *      사장님이 이메일 쓰시던 창에 원고가 붙는 사고가 났습니다.
+       * 확장 안에서 하면 둘 다 없습니다. 남의 창을 건드리지 않고, 검증된 경로를 그대로 씁니다.
+       */
+      if (copied.auto && !wsuAutoDone.has(copied.token)) {
+        wsuAutoDone.add(copied.token);
+        wsuBusy = true;
+        try {
+          // 팝업이 떠 있으면 먼저 닫습니다. 안 닫으면 아무것도 안 들어갑니다.
+          if (wsuClosePopup()) await new Promise((r) => setTimeout(r, 1500));
+          const j = await wsuFloorGet("/api/posts/" + encodeURIComponent(copied.id));
+          const post = j && j.post;
+          const P = window.__wsDraft;
+          if (post && post.body && P) {
+            const NL2 = String.fromCharCode(10) + String.fromCharCode(10);
+            const draft = P.parse(String(post.title || "") + NL2 + String(post.body));
+            const r = await insertGuard(draft);
+            wsuReport(copied.id, r);
+          } else {
+            wsuReport(copied.id, { ok: false, why: "원고나 파서를 못 찾았습니다" });
+          }
+        } catch (e) {
+          wsuReport(copied.id, { ok: false, why: String(e && e.message || e).slice(0, 120) });
+        } finally { wsuBusy = false; }
+      }
       return;
     }
 

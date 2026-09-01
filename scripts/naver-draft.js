@@ -64,7 +64,13 @@ const EXTENSION = path.join(REPO, "extension");
 const args = process.argv.slice(2);
 const blogId = args.find((a) => !a.startsWith("--"));
 const postId = args.filter((a) => !a.startsWith("--"))[1];
-const show = args.includes("--show");        // 창을 보면서 확인하고 싶을 때
+const show = args.includes("--show");
+/**
+ * 화면 포커스를 빼앗는 붙여넣기를 허용할지. **기본은 끔.**
+ * 켜면 크롬 창을 앞으로 불러 키를 보내는데, 그 순간 사장님이 다른 창에서 타자를 치고 계시면
+ * 그 창에 원고가 들어갑니다. 실제로 이메일 작성 중에 붙어버린 적이 있습니다.
+ */
+const allowFocus = args.includes("--focus");        // 창을 보면서 확인하고 싶을 때
 
 if (!blogId || !postId) {
   console.log("사용: node scripts/naver-draft.js <블로그ID> <원고ID> [--show]");
@@ -84,13 +90,83 @@ if (fs.existsSync(path.join(profileDir, "SingletonLock"))) {
   process.exit(1);
 }
 
+const { execFileSync } = require("child_process");
+const os = require("os");
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 윈도우 클립보드에 **서식째** 담습니다.
+ *
+ * 왜 브라우저 클립보드를 안 쓰나: 브라우저가 담은 것은 CDP로 보낸 Ctrl+V에서만 쓰이는데,
+ * 그 키를 스마트에디터가 안 받았습니다. 운영체제 클립보드 + 진짜 키를 써야 사람이 한 것과 같아집니다.
+ * .NET DataObject에 Html 형식으로 넣으면 CF_HTML 머리말을 알아서 붙여줍니다.
+ */
+function setWindowsClipboard(html, plain) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wsdraft-"));
+  const hf = path.join(dir, "body.html");
+  const pf = path.join(dir, "body.txt");
+  const sf = path.join(dir, "set.ps1");
+  fs.writeFileSync(hf, html, "utf8");
+  fs.writeFileSync(pf, plain, "utf8");
+  const ps = [
+    "Add-Type -AssemblyName System.Windows.Forms",
+    `$html = [System.IO.File]::ReadAllText('${hf}', [System.Text.Encoding]::UTF8)`,
+    `$plain = [System.IO.File]::ReadAllText('${pf}', [System.Text.Encoding]::UTF8)`,
+    "$dobj = New-Object System.Windows.Forms.DataObject",
+    "$dobj.SetData([System.Windows.Forms.DataFormats]::Html, $html)",
+    "$dobj.SetData([System.Windows.Forms.DataFormats]::UnicodeText, $plain)",
+    "[System.Windows.Forms.Clipboard]::SetDataObject($dobj, $true)",
+    "Start-Sleep -Milliseconds 500",
+    "Write-Output ('ok:' + [System.Windows.Forms.Clipboard]::ContainsData([System.Windows.Forms.DataFormats]::Html))",
+  ].join(String.fromCharCode(13) + String.fromCharCode(10));
+  fs.writeFileSync(sf, String.fromCharCode(0xFEFF) + ps, "utf8");   // BOM이 없으면 PowerShell이 한글을 깨뜨립니다
+  const out = execFileSync("powershell", ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-File", sf],
+    { encoding: "utf8", timeout: 30000 });
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  return /ok:True/i.test(out);
+}
+
+/** 크롬 창을 앞으로 가져오고 **진짜 Ctrl+V**를 보냅니다. */
+function osPaste(pid) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wspaste-"));
+  const sf = path.join(dir, "paste.ps1");
+  const ps = [
+    "Add-Type -AssemblyName Microsoft.VisualBasic",
+    "Add-Type -AssemblyName System.Windows.Forms",
+    `try { [Microsoft.VisualBasic.Interaction]::AppActivate(${pid}) } catch {}`,
+    "Start-Sleep -Milliseconds 900",
+    "[System.Windows.Forms.SendKeys]::SendWait('^v')",
+    "Start-Sleep -Milliseconds 500",
+    "Write-Output 'sent'",
+  ].join(String.fromCharCode(13) + String.fromCharCode(10));
+  fs.writeFileSync(sf, String.fromCharCode(0xFEFF) + ps, "utf8");   // BOM이 없으면 PowerShell이 한글을 깨뜨립니다
+  try {
+    const out = execFileSync("powershell", ["-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-File", sf],
+      { encoding: "utf8", timeout: 30000 });
+    return /sent/.test(out);
+  } catch { return false; } finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
+}
 const say = (m) => console.log(m);
 
 (async () => {
   say(`[1/6] 크롬 여는 중 (프로필: naver_${blogId})`);
   const browser = await puppeteer.launch({
-    headless: show ? false : "new",
+    /**
+     * 창 없이 돕니다 — 사장님 화면을 전혀 건드리지 않습니다.
+     *
+     * 한때 운영체제 키보드를 쓰려고 창을 띄웠는데, 그 방식은 **사장님이 쓰시던 이메일 창에
+     * 원고가 붙는 사고**를 냈습니다. 알고 보니 키보드가 필요 없었습니다 —
+     * "작성 중인 글이 있습니다" 팝업만 닫으면 합성 붙여넣기로 본문·사진이 다 들어갑니다.
+     * (--show 를 주면 창을 볼 수 있습니다. 문제를 눈으로 확인할 때만 쓰십시오.)
+     */
+    /**
+     * ⚠️ 창 없이(헤드리스) 돌리면 **붙여넣기가 제목 칸으로 들어갑니다**(실측).
+     * 헤드리스에서는 편집기가 문단을 다르게 그리는 것으로 보입니다.
+     * 그래서 창을 띄우되 **화면 오른쪽 아래 구석**으로 보냅니다 — 작업 화면을 거의 안 가립니다.
+     * 포커스는 안 뺏습니다(운영체제 키보드는 기본으로 꺼져 있습니다).
+     */
+    headless: false,
     userDataDir: profileDir,
     defaultViewport: null,
     args: [
@@ -99,7 +175,8 @@ const say = (m) => console.log(m);
       "--disable-blink-features=AutomationControlled",
       "--hide-crash-restore-bubble",
       "--disable-session-crashed-bubble",
-      "--window-size=1440,960",
+      "--window-size=1100,800",
+      "--window-position=1150,650",   // 오른쪽 아래 구석
       "--lang=ko-KR,ko",
     ],
   });
@@ -230,13 +307,41 @@ ${blogId} 로그인이 안 돼 있습니다.
     // 스마트에디터는 iframe 안에 있습니다. 없으면 페이지 자체가 편집기입니다.
     const frame = page.frames().find((f) => /PostWriteForm|editor/i.test(f.url())) || page.mainFrame();
 
-    // "작성 중이던 글이 있습니다" 팝업이 뜨면 **취소**를 눌러야 새 글로 시작합니다.
-    await frame.evaluate(() => {
-      const btns = [...document.querySelectorAll("button, a")];
-      const cancel = btns.find((b) => /취소|아니오|새로 작성/.test(b.textContent || ""));
-      if (cancel) cancel.click();
-    }).catch(() => {});
-    await sleep(1500);
+    /**
+     * ⚠️ **"작성 중인 글이 있습니다" 팝업을 반드시 닫아야 합니다.**
+     *
+     * 이게 본문이 안 들어가던 진짜 원인이었습니다. 팝업이 편집기를 덮고 있으면
+     * 클립보드가 멀쩡하고 Ctrl+V가 제대로 가도 글자가 본문에 안 꽂힙니다.
+     * (실측: 클립보드에는 원고 전체가 담겨 있었는데 본문은 31자 — 자리표시 문구뿐이었습니다)
+     *
+     * 한 번 눌러보고 마는 게 아니라 **사라질 때까지 확인**합니다. 팝업은 편집기가 다 뜬 뒤에
+     * 나타나기도 해서, 너무 일찍 누르면 헛손질이 됩니다.
+     * '취소'를 누릅니다 — '확인'을 누르면 지난 초안을 이어받아 우리 원고와 섞입니다.
+     */
+    let popupGone = false;
+    for (let n = 1; n <= 10 && !popupGone; n++) {
+      let found = false;
+      for (const f of page.frames()) {
+        const r = await f.evaluate(() => {
+          const visible = (el) => {
+            const b = el.getBoundingClientRect();
+            const st = getComputedStyle(el);
+            return b.width > 0 && b.height > 0 && st.visibility !== "hidden" && st.display !== "none";
+          };
+          const hasPopup = /작성 중인 글이 있습니다|작성중이던 글|이어서 작성/.test(document.body?.innerText || "");
+          if (!hasPopup) return { popup: false };
+          const cancel = [...document.querySelectorAll("button, a")].filter(visible)
+            .find((b) => /^\s*취소\s*$/.test(b.textContent || ""));
+          if (cancel) { cancel.click(); return { popup: true, clicked: true }; }
+          return { popup: true, clicked: false };
+        }).catch(() => ({ popup: false }));
+        if (r.popup) { found = true; if (r.clicked) say(`      '작성 중인 글' 팝업 닫음`); }
+      }
+      if (!found) { popupGone = true; break; }
+      await sleep(1200);
+    }
+    if (!popupGone) say("      ⚠ 팝업이 안 닫혔습니다 — 붙여넣기가 막힐 수 있습니다");
+    await sleep(1200);
 
     /**
      * 편집기 찾기. 스마트에디터가 어느 프레임에 있는지는 그때그때 다릅니다.
@@ -287,10 +392,17 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 요소를 직접 잡아 클릭하면 퍼펫티어가 프레임 위치를 알아서 더해줍니다.
      */
     const handle = await frameE.evaluateHandle(() => {
+      /**
+       * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
+       * 실측: 제목 문단이 .se-documentTitle의 자손이 아니라서 필터를 그냥 통과했고,
+       * 그 결과 **제목 칸에 본문이 통째로 붙었습니다.**
+       * 이 편집기는 문단이 2개(제목·본문)뿐이고 **본문이 항상 마지막**입니다. 그걸로 고릅니다.
+       */
       const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
+      const pickBody = (list) => (list.length ? list[list.length - 1] : null);
       const paras = [...document.querySelectorAll(".se-text-paragraph")]
         .filter((n) => !inTitle(n));
-      return paras[0]
+      return pickBody(paras)
         || [...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n))[0]
         || document.querySelector(".se-main-container, .se-content")
         || document.body;
@@ -308,6 +420,46 @@ ${blogId} 로그인이 안 돼 있습니다.
     await sleep(900);
 
     /**
+     * ⓪-1 **운영체제 클립보드 + 진짜 Ctrl+V** — 이게 주 경로입니다.
+     *
+     * 앞서 실패한 것들: 브라우저 클립보드 + CDP 키(0자), 합성 paste 이벤트(무시됨),
+     * CDP Input.insertText(안 들어감), 확장의 붙여넣기(퍼펫티어가 debugger를 점유해 막힘).
+     * 남은 길은 **사람이 하는 것과 물리적으로 같은 입력**입니다.
+     * 윈도우 클립보드에 서식째 담고, 크롬 창을 앞으로 불러 SendKeys로 Ctrl+V를 보냅니다.
+     */
+    // 커서가 어디에 있는지 먼저 봅니다. 붙여넣기는 커서가 본문에 있어야 들어갑니다.
+    const focusInfo = await frameE.evaluate(() => {
+      const a = document.activeElement;
+      if (!a) return "없음";
+      const cls = (a.className || "").toString().slice(0, 40);
+      const inTitle = Boolean(a.closest?.(".se-documentTitle"));
+      const sel = window.getSelection();
+      return `${a.tagName}.${cls} | 제목안=${inTitle} | 선택=${sel?.rangeCount || 0}`;
+    }).catch(() => "확인실패");
+    say(`      커서 위치: ${focusInfo}`);
+
+    /**
+     * ⚠️⚠️ **기본으로 끕니다.** (2026-09-01 사고)
+     * 이 방식은 크롬 창을 **앞으로 불러내고** 키를 보냅니다. 그런데 사장님이 그때 다른 창에서
+     * 일하고 계시면 **그 창이 키를 받습니다.** 실제로 사장님 이메일 작성 창에 원고가 붙었습니다.
+     * 남의 작업을 가로채는 방식은 자동화로 쓰면 안 됩니다.
+     * 정말 필요할 때만 --focus 를 직접 주십시오. 그때는 다른 일을 멈추고 지켜보셔야 합니다.
+     */
+    let osOk = false;
+    if (copied.html && allowFocus) {
+      try {
+        const put = setWindowsClipboard(copied.html, copied.body || "");
+        say(`      윈도우 클립보드에 담기 ${put ? "성공" : "실패"}`);
+        if (put) {
+          const pid = browser.process()?.pid;
+          osOk = pid ? osPaste(pid) : false;
+          say(`      진짜 Ctrl+V ${osOk ? "보냄" : "실패"}`);
+          if (osOk) await sleep(copied.photos ? 22000 : 7000);
+        }
+      } catch (e) { say(`      OS 붙여넣기 실패: ${e.message.slice(0, 60)}`); }
+    }
+
+    /**
      * ⓪ **확장의 "원고 붙이기" 버튼을 먼저 누릅니다.**
      * 이 버튼 뒤의 코드는 몇 주 동안 실제 사고를 겪으며 다듬어진 것입니다 —
      * 제목이 편집기 모델까지 들어가게 하는 순서, 소제목 전환, 서식, 사진 자리까지 전부 처리합니다.
@@ -315,7 +467,13 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 편집국이 /api/last-copied로 원고를 이미 넘겨놨으므로 버튼만 누르면 됩니다.
      */
     let byExtension = false;
-    for (const f of page.frames()) {
+    const already = await frameE.evaluate(() => {
+      const root = document.querySelector(".se-main-container, .se-content");
+      const t = (document.querySelector(".se-documentTitle")?.innerText || "").replace(/\s/g, "");
+      return Math.max(0, (root?.innerText || "").replace(/\s/g, "").length - t.length);
+    }).catch(() => 0);
+    if (already >= 200) say(`      이미 본문 ${already.toLocaleString()}자 들어감 — 나머지 단계 건너뜀`);
+    for (const f of (already >= 200 ? [] : page.frames())) {
       const clicked = await f.evaluate(() => {
         const visible = (el) => {
           const r = el.getBoundingClientRect();
@@ -365,7 +523,14 @@ ${blogId} 로그인이 안 돼 있습니다.
     if ((await measure(frameE)) < 200) {
       for (const f of page.frames()) {
         const ok = await f.evaluate((html, plain) => {
-          const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
+          /**
+       * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
+       * 실측: 제목 문단이 .se-documentTitle의 자손이 아니라서 필터를 그냥 통과했고,
+       * 그 결과 **제목 칸에 본문이 통째로 붙었습니다.**
+       * 이 편집기는 문단이 2개(제목·본문)뿐이고 **본문이 항상 마지막**입니다. 그걸로 고릅니다.
+       */
+      const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
+      const pickBody = (list) => (list.length ? list[list.length - 1] : null);
           const cands = [...document.querySelectorAll("[contenteditable='true']")].filter((n) => !inTitle(n));
           if (!cands.length) return false;
           for (const editable of cands) {
@@ -398,12 +563,19 @@ ${blogId} 로그인이 안 돼 있습니다.
      * Input.insertText는 사람이 타자 친 것과 같은 취급이라 편집기 모델까지 채워집니다.
      * 서식·사진은 안 실립니다 — 글자만 들어갑니다. 그래도 빈 초안보다 낫습니다.
      */
-    if ((await measure(frameE)) < 200 && (copied.body || "").length > 200) {
+    if (already < 200 && (await measure(frameE)) < 200 && (copied.body || "").length > 200) {
       say("      CDP로 글자 직접 넣기 (서식 없이 본문만)");
       const focused = await frameE.evaluate(() => {
-        const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
-        const el = [...document.querySelectorAll("[contenteditable='true']")].filter((n) => !inTitle(n))[0]
-          || [...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n))[0];
+        /**
+       * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
+       * 실측: 제목 문단이 .se-documentTitle의 자손이 아니라서 필터를 그냥 통과했고,
+       * 그 결과 **제목 칸에 본문이 통째로 붙었습니다.**
+       * 이 편집기는 문단이 2개(제목·본문)뿐이고 **본문이 항상 마지막**입니다. 그걸로 고릅니다.
+       */
+      const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
+      const pickBody = (list) => (list.length ? list[list.length - 1] : null);
+        const el = pickBody([...document.querySelectorAll("[contenteditable='true']")].filter((n) => !inTitle(n)))
+          || pickBody([...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n)));
         if (!el) return false;
         el.focus?.();
         const r = document.createRange();
@@ -432,9 +604,16 @@ ${blogId} 로그인이 안 돼 있습니다.
       return Math.max(0, (root?.innerText || "").replace(/\s/g, "").length - t.length);
     }).catch(() => 0) : 0;
 
-    const pasted = alreadyIn >= 200 ? true : await frameE.evaluate((html, plain) => {
+    const pasted = (already >= 200 || alreadyIn >= 200) ? true : await frameE.evaluate((html, plain) => {
+      /**
+       * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
+       * 실측: 제목 문단이 .se-documentTitle의 자손이 아니라서 필터를 그냥 통과했고,
+       * 그 결과 **제목 칸에 본문이 통째로 붙었습니다.**
+       * 이 편집기는 문단이 2개(제목·본문)뿐이고 **본문이 항상 마지막**입니다. 그걸로 고릅니다.
+       */
       const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
-      const el = [...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n))[0]
+      const pickBody = (list) => (list.length ? list[list.length - 1] : null);
+      const el = pickBody([...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n)))
         || document.querySelector(".se-main-container, .se-content");
       if (!el) return false;
       const editable = el.closest("[contenteditable='true']") || el;
@@ -547,8 +726,16 @@ ${blogId} 로그인이 안 돼 있습니다.
       if (!show) await browser.close();
       process.exit(1);
     }
-    await sleep(4000);
-    say(`      "${saved.label}" 눌렀습니다.`);
+    await sleep(5000);
+    /**
+     * 눌렀다고 저장된 게 아닙니다. 편집기 위쪽 "저장 N"의 숫자가 늘었는지로 확인합니다.
+     * 버튼만 누르고 "됐다"고 보고하면, 안 됐을 때 사장님이 나중에 빈손으로 발견합니다.
+     */
+    const savedCount = await frameE.evaluate(() => {
+      const m = /저장\s*(\d+)/.exec(document.body?.innerText || "");
+      return m ? Number(m[1]) : null;
+    }).catch(() => null);
+    say(`      "${saved.label}" 눌렀습니다. 임시저장 목록: ${savedCount ?? "확인 못 함"}건`);
     say("\n✔ 임시저장까지 끝났습니다. 발행은 사장님이 직접 하십시오.");
     say(`   확인: https://blog.naver.com/${blogId}/postwrite`);
 
