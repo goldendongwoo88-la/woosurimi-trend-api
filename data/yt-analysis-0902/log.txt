@@ -1,0 +1,445 @@
+[01] 쇼핑쇼츠 / YEkNHXXIK_I ... [youtube] Extracting URL: https://www.youtube.com/watch?v=YEkNHXXIK_I
+[youtube] YEkNHXXIK_I: Downloading webpage
+[youtube] YEkNHXXIK_I: Downloading visionos player API JSON
+[youtube] YEkNHXXIK_I: Downloading m3u8 information
+[info] YEkNHXXIK_I: Downloading subtitles: ko
+[info] YEkNHXXIK_I: Downloading 1 format(s): 401+251-2
+[info] Writing video subtitles to: vtt\���μ���_YEkNHXXIK_I.ko.vtt
+[download] Destination: vtt\���μ���_YEkNHXXIK_I.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    5.92MiB/s (00:00:00)[download]   15.00KiB at    2.57MiB/s (00:00:00)[download]   31.00KiB at    1.01MiB/s (00:00:00)[download]   63.00KiB at    1.31MiB/s (00:00:00)[download]  127.00KiB at    1.57MiB/s (00:00:00)[download]  146.86KiB at    1.61MiB/s (00:00:00)[download] 100% of  146.86KiB in 00:00:00 at 271.36KiB/s
+OK
+[02] 쇼핑쇼츠 / R6WcDwUkOes ... [youtube] Extracting URL: https://www.youtube.com/watch?v=R6WcDwUkOes
+[youtube] R6WcDwUkOes: Downloading webpage
+[youtube] R6WcDwUkOes: Downloading visionos player API JSON
+[youtube] R6WcDwUkOes: Downloading m3u8 information
+[info] R6WcDwUkOes: Downloading subtitles: ko
+[info] R6WcDwUkOes: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\���μ���_R6WcDwUkOes.ko.vtt
+[download] Destination: vtt\���μ���_R6WcDwUkOes.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    6.51MiB/s (00:00:00)[download]   15.00KiB at    2.52MiB/s (00:00:00)[download]   31.00KiB at    1.00MiB/s (00:00:00)[download]   63.00KiB at    1.30MiB/s (00:00:00)[download]  127.00KiB at    1.57MiB/s (00:00:00)[download]  255.00KiB at    1.85MiB/s (00:00:00)[download]  511.00KiB at    1.92MiB/s (00:00:00)[download]  567.90KiB at    2.09MiB/s (00:00:00)[download] 100% of  567.90KiB in 00:00:00 at 1.01MiB/s
+OK
+[03] 쇼핑쇼츠 / hARrKi7csZc ... [youtube] Extracting URL: https://www.youtube.com/watch?v=hARrKi7csZc
+[youtube] hARrKi7csZc: Downloading webpage
+[youtube] hARrKi7csZc: Downloading initial data API JSON
+[youtube] hARrKi7csZc: Downloading visionos player API JSON
+[youtube] hARrKi7csZc: Downloading m3u8 information
+[youtube] hARrKi7csZc: Downloading player e937390a-main
+[youtube] [jsc:deno] Solving JS challenges using deno
+[info] hARrKi7csZc: Downloading subtitles: ko
+[info] hARrKi7csZc: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\���μ���_hARrKi7csZc.ko.vtt
+[download] Destination: vtt\���μ���_hARrKi7csZc.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.87MiB/s (00:00:00)[download]   15.00KiB at    1.79MiB/s (00:00:00)[download]   31.00KiB at  831.71KiB/s (00:00:00)[download]   63.00KiB at    1.05MiB/s (00:00:00)[download]   86.41KiB at    1.12MiB/s (00:00:00)[download] 100% of   86.41KiB in 00:00:00 at 250.51KiB/s
+OK
+[04] 쇼핑쇼츠 / aJ9LeNEA60s ... [youtube] Extracting URL: https://www.youtube.com/watch?v=aJ9LeNEA60s
+[youtube] aJ9LeNEA60s: Downloading webpage
+[youtube] aJ9LeNEA60s: Downloading visionos player API JSON
+[youtube] aJ9LeNEA60s: Downloading m3u8 information
+[info] aJ9LeNEA60s: Downloading subtitles: ko
+[info] aJ9LeNEA60s: Downloading 1 format(s): 399+251
+[info] Writing video subtitles to: vtt\���μ���_aJ9LeNEA60s.ko.vtt
+[download] Destination: vtt\���μ���_aJ9LeNEA60s.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.88MiB/s (00:00:00)[download]   15.00KiB at    1.79MiB/s (00:00:00)[download]   31.00KiB at  860.23KiB/s (00:00:00)[download]   63.00KiB at    1.08MiB/s (00:00:00)[download]  127.00KiB at  814.30KiB/s (00:00:00)[download]  255.00KiB at  824.62KiB/s (00:00:00)[download]  511.00KiB at    1.00MiB/s (00:00:01)[download] 1023.00KiB at    1.57MiB/s (00:00:01)[download]    1.40MiB at    1.91MiB/s (00:00:01)[download] 100% of    1.40MiB in 00:00:01 at 1.04MiB/s
+OK
+[05] 쇼핑쇼츠 / bHpuGDciQq8 ... [youtube] Extracting URL: https://www.youtube.com/watch?v=bHpuGDciQq8
+[youtube] bHpuGDciQq8: Downloading webpage
+[youtube] bHpuGDciQq8: Downloading visionos player API JSON
+[youtube] bHpuGDciQq8: Downloading m3u8 information
+[info] bHpuGDciQq8: Downloading subtitles: ko
+[info] bHpuGDciQq8: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\���μ���_bHpuGDciQq8.ko.vtt
+[download] Destination: vtt\���μ���_bHpuGDciQq8.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    3.10MiB/s (00:00:00)[download]   15.00KiB at    1.90MiB/s (00:00:00)[download]   31.00KiB at  926.03KiB/s (00:00:00)[download]   63.00KiB at    1.14MiB/s (00:00:00)[download]  127.00KiB at    1.43MiB/s (00:00:00)[download]  182.34KiB at    1.67MiB/s (00:00:00)[download] 100% of  182.34KiB in 00:00:00 at 435.81KiB/s
+OK
+[06] 쇼핑쇼츠 / UcvkMztSVjk ... [youtube] Extracting URL: https://www.youtube.com/watch?v=UcvkMztSVjk
+[youtube] UcvkMztSVjk: Downloading webpage
+[youtube] UcvkMztSVjk: Downloading visionos player API JSON
+[youtube] UcvkMztSVjk: Downloading m3u8 information
+[info] UcvkMztSVjk: Downloading subtitles: ko
+[info] UcvkMztSVjk: Downloading 1 format(s): 401+251
+[info] Writing video subtitles to: vtt\���μ���_UcvkMztSVjk.ko.vtt
+[download] Destination: vtt\���μ���_UcvkMztSVjk.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.85MiB/s (00:00:00)[download]   15.00KiB at    1.96MiB/s (00:00:00)[download]   31.00KiB at  944.86KiB/s (00:00:00)[download]   63.00KiB at    1.18MiB/s (00:00:00)[download]  127.00KiB at    1.43MiB/s (00:00:00)[download]  233.88KiB at    1.94MiB/s (00:00:00)[download] 100% of  233.88KiB in 00:00:00 at 530.38KiB/s
+OK
+[07] 쇼핑쇼츠 / GrzY1MiDHVw ... [youtube] Extracting URL: https://www.youtube.com/watch?v=GrzY1MiDHVw
+[youtube] GrzY1MiDHVw: Downloading webpage
+[youtube] GrzY1MiDHVw: Downloading visionos player API JSON
+[youtube] GrzY1MiDHVw: Downloading m3u8 information
+[info] GrzY1MiDHVw: Downloading subtitles: ko
+[info] GrzY1MiDHVw: Downloading 1 format(s): 401+251
+[info] Writing video subtitles to: vtt\���μ���_GrzY1MiDHVw.ko.vtt
+[download] Destination: vtt\���μ���_GrzY1MiDHVw.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.85MiB/s (00:00:00)[download]   15.00KiB at    1.79MiB/s (00:00:00)[download]   31.00KiB at  873.30KiB/s (00:00:00)[download]   63.00KiB at    1.08MiB/s (00:00:00)[download]   86.03KiB at    1.14MiB/s (00:00:00)[download] 100% of   86.03KiB in 00:00:00 at 184.05KiB/s
+OK
+[08] 쇼핑쇼츠 / NdTbyc6zQWw ... [youtube] Extracting URL: https://www.youtube.com/watch?v=NdTbyc6zQWw
+[youtube] NdTbyc6zQWw: Downloading webpage
+[youtube] NdTbyc6zQWw: Downloading visionos player API JSON
+[youtube] NdTbyc6zQWw: Downloading m3u8 information
+[info] NdTbyc6zQWw: Downloading subtitles: ko
+[info] NdTbyc6zQWw: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\���μ���_NdTbyc6zQWw.ko.vtt
+[download] Destination: vtt\���μ���_NdTbyc6zQWw.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:10)[download]    3.00KiB at  Unknown B/s (00:00:10)[download]    7.00KiB at    3.16MiB/s (00:00:10)[download]   15.00KiB at    1.90MiB/s (00:00:10)[download]   31.00KiB at  898.10KiB/s (00:00:10)[download]   63.00KiB at    1.13MiB/s (00:00:10)[download]  127.00KiB at    1.40MiB/s (00:00:10)[download]  212.40KiB at    1.80MiB/s (00:00:10)[download] 100% of  212.40KiB in 00:00:10 at 20.26KiB/s
+OK
+[09] 무편집유튜브 / R1wRgVwWIbs ... [youtube] Extracting URL: https://www.youtube.com/watch?v=R1wRgVwWIbs
+[youtube] R1wRgVwWIbs: Downloading webpage
+[youtube] R1wRgVwWIbs: Downloading visionos player API JSON
+[youtube] R1wRgVwWIbs: Downloading m3u8 information
+[info] R1wRgVwWIbs: Downloading subtitles: ko
+[info] R1wRgVwWIbs: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\��������Ʃ��_R1wRgVwWIbs.ko.vtt
+[download] Destination: vtt\��������Ʃ��_R1wRgVwWIbs.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    5.10MiB/s (00:00:00)[download]   15.00KiB at    2.08MiB/s (00:00:00)[download]   31.00KiB at  878.41KiB/s (00:00:00)[download]   63.00KiB at    1.10MiB/s (00:00:00)[download]  127.00KiB at    1.33MiB/s (00:00:00)[download]  255.00KiB at    1.90MiB/s (00:00:00)[download]  255.36KiB at    1.89MiB/s (00:00:00)[download] 100% of  255.36KiB in 00:00:00 at 632.33KiB/s
+OK
+[10] 무편집유튜브 / csLSuPCgp1g ... [youtube] Extracting URL: https://www.youtube.com/watch?v=csLSuPCgp1g
+[youtube] csLSuPCgp1g: Downloading webpage
+[youtube] csLSuPCgp1g: Downloading visionos player API JSON
+[youtube] csLSuPCgp1g: Downloading m3u8 information
+[info] csLSuPCgp1g: Downloading subtitles: ko
+[info] csLSuPCgp1g: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\��������Ʃ��_csLSuPCgp1g.ko.vtt
+[download] Destination: vtt\��������Ʃ��_csLSuPCgp1g.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    3.16MiB/s (00:00:00)[download]   15.00KiB at    2.06MiB/s (00:00:00)[download]   31.00KiB at  904.98KiB/s (00:00:00)[download]   63.00KiB at    1.16MiB/s (00:00:00)[download]  127.00KiB at    1.43MiB/s (00:00:00)[download]  255.00KiB at    2.02MiB/s (00:00:00)[download]  264.50KiB at    2.05MiB/s (00:00:00)[download] 100% of  264.50KiB in 00:00:00 at 438.77KiB/s
+OK
+[11] 무편집유튜브 / PZhWhvJofso ... [youtube] Extracting URL: https://www.youtube.com/watch?v=PZhWhvJofso
+[youtube] PZhWhvJofso: Downloading webpage
+[youtube] PZhWhvJofso: Downloading visionos player API JSON
+[youtube] PZhWhvJofso: Downloading m3u8 information
+[info] PZhWhvJofso: Downloading subtitles: ko
+[info] PZhWhvJofso: Downloading 1 format(s): 399+251
+[info] Writing video subtitles to: vtt\��������Ʃ��_PZhWhvJofso.ko.vtt
+[download] Destination: vtt\��������Ʃ��_PZhWhvJofso.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.71MiB/s (00:00:00)[download]   15.00KiB at    1.83MiB/s (00:00:00)[download]   31.00KiB at  840.47KiB/s (00:00:00)[download]   63.00KiB at    1.05MiB/s (00:00:00)[download]  127.00KiB at    1.32MiB/s (00:00:00)[download]  231.19KiB at    1.76MiB/s (00:00:00)[download] 100% of  231.19KiB in 00:00:00 at 311.76KiB/s
+OK
+[12] 무편집유튜브 / tblaJHbvHPw ... [youtube] Extracting URL: https://www.youtube.com/watch?v=tblaJHbvHPw
+[youtube] tblaJHbvHPw: Downloading webpage
+[youtube] tblaJHbvHPw: Downloading visionos player API JSON
+[youtube] tblaJHbvHPw: Downloading m3u8 information
+[info] tblaJHbvHPw: Downloading subtitles: ko
+[info] tblaJHbvHPw: Downloading 1 format(s): 401+251
+[info] Writing video subtitles to: vtt\��������Ʃ��_tblaJHbvHPw.ko.vtt
+[download] Destination: vtt\��������Ʃ��_tblaJHbvHPw.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    5.99MiB/s (00:00:00)[download]   15.00KiB at    2.51MiB/s (00:00:00)[download]   31.00KiB at  951.49KiB/s (00:00:00)[download]   63.00KiB at    1.23MiB/s (00:00:00)[download]  127.00KiB at    1.50MiB/s (00:00:00)[download]  255.00KiB at    1.86MiB/s (00:00:00)[download]  511.00KiB at    1.94MiB/s (00:00:00)[download]  562.13KiB at    2.09MiB/s (00:00:00)[download] 100% of  562.13KiB in 00:00:00 at 1010.14KiB/s
+OK
+[13] 무편집유튜브 / 3Yz8ZYlveRU ... [youtube] Extracting URL: https://www.youtube.com/watch?v=3Yz8ZYlveRU
+[youtube] 3Yz8ZYlveRU: Downloading webpage
+[youtube] 3Yz8ZYlveRU: Downloading visionos player API JSON
+[youtube] 3Yz8ZYlveRU: Downloading m3u8 information
+[info] 3Yz8ZYlveRU: Downloading subtitles: ko
+[info] 3Yz8ZYlveRU: Downloading 1 format(s): 399+251
+[info] Writing video subtitles to: vtt\��������Ʃ��_3Yz8ZYlveRU.ko.vtt
+[download] Destination: vtt\��������Ʃ��_3Yz8ZYlveRU.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.75MiB/s (00:00:00)[download]   15.00KiB at    1.89MiB/s (00:00:00)[download]   31.00KiB at  903.40KiB/s (00:00:00)[download]   63.00KiB at    1.13MiB/s (00:00:00)[download]  127.00KiB at    1.42MiB/s (00:00:00)[download]  255.00KiB at    1.29MiB/s (00:00:00)[download]  323.04KiB at    1.57MiB/s (00:00:00)[download] 100% of  323.04KiB in 00:00:00 at 577.08KiB/s
+OK
+[14] 무편집유튜브 / LfipHemb2gA ... [youtube] Extracting URL: https://www.youtube.com/watch?v=LfipHemb2gA
+[youtube] LfipHemb2gA: Downloading webpage
+[youtube] LfipHemb2gA: Downloading visionos player API JSON
+[youtube] LfipHemb2gA: Downloading m3u8 information
+[youtube] LfipHemb2gA: Downloading player e937390a-main
+[youtube] [jsc:deno] Solving JS challenges using deno
+[info] LfipHemb2gA: Downloading subtitles: ko
+[info] LfipHemb2gA: Downloading 1 format(s): 616+251-1
+[info] Writing video subtitles to: vtt\��������Ʃ��_LfipHemb2gA.ko.vtt
+[download] Destination: vtt\��������Ʃ��_LfipHemb2gA.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    3.14MiB/s (00:00:00)[download]   15.00KiB at    1.91MiB/s (00:00:00)[download]   31.00KiB at  961.15KiB/s (00:00:00)[download]   63.00KiB at    1.18MiB/s (00:00:00)[download]  127.00KiB at    1.47MiB/s (00:00:00)[download]  170.87KiB at    1.67MiB/s (00:00:00)[download] 100% of  170.87KiB in 00:00:00 at 350.95KiB/s
+OK
+[15] 채널전략 / mIJK1F8HXXM ... [youtube] Extracting URL: https://www.youtube.com/watch?v=mIJK1F8HXXM
+[youtube] mIJK1F8HXXM: Downloading webpage
+[youtube] mIJK1F8HXXM: Downloading visionos player API JSON
+[youtube] mIJK1F8HXXM: Downloading m3u8 information
+[info] mIJK1F8HXXM: Downloading subtitles: ko
+[info] mIJK1F8HXXM: Downloading 1 format(s): 399+251-1
+[info] Writing video subtitles to: vtt\ä������_mIJK1F8HXXM.ko.vtt
+[download] Destination: vtt\ä������_mIJK1F8HXXM.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    3.06MiB/s (00:00:00)[download]   15.00KiB at    1.84MiB/s (00:00:00)[download]   31.00KiB at  860.58KiB/s (00:00:00)[download]   63.00KiB at    1.09MiB/s (00:00:00)[download]  127.00KiB at    1.31MiB/s (00:00:00)[download]  185.72KiB at    1.53MiB/s (00:00:00)[download] 100% of  185.72KiB in 00:00:00 at 413.37KiB/s
+OK
+[16] 채널전략 / KqwmvT3CJtY ... [youtube] Extracting URL: https://www.youtube.com/watch?v=KqwmvT3CJtY
+[youtube] KqwmvT3CJtY: Downloading webpage
+[youtube] KqwmvT3CJtY: Downloading visionos player API JSON
+[youtube] KqwmvT3CJtY: Downloading m3u8 information
+[info] KqwmvT3CJtY: Downloading subtitles: ko
+[info] KqwmvT3CJtY: Downloading 1 format(s): 401+251
+[info] Writing video subtitles to: vtt\ä������_KqwmvT3CJtY.ko.vtt
+[download] Destination: vtt\ä������_KqwmvT3CJtY.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    3.40MiB/s (00:00:00)[download]   15.00KiB at    2.07MiB/s (00:00:00)[download]   31.00KiB at  939.89KiB/s (00:00:00)[download]   63.00KiB at    1.19MiB/s (00:00:00)[download]  113.25KiB at    1.40MiB/s (00:00:00)[download] 100% of  113.25KiB in 00:00:00 at 266.07KiB/s
+OK
+[17] 채널전략 / uhRTrXT1efQ ... [youtube] Extracting URL: https://www.youtube.com/watch?v=uhRTrXT1efQ
+[youtube] uhRTrXT1efQ: Downloading webpage
+[youtube] uhRTrXT1efQ: Downloading visionos player API JSON
+[youtube] uhRTrXT1efQ: Downloading m3u8 information
+[info] uhRTrXT1efQ: Downloading subtitles: ko
+[info] uhRTrXT1efQ: Downloading 1 format(s): 401+251
+[info] Writing video subtitles to: vtt\ä������_uhRTrXT1efQ.ko.vtt
+[download] Destination: vtt\ä������_uhRTrXT1efQ.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.88MiB/s (00:00:00)[download]   15.00KiB at    1.93MiB/s (00:00:00)[download]   31.00KiB at  839.43KiB/s (00:00:00)[download]   63.00KiB at    1.08MiB/s (00:00:00)[download]  127.00KiB at    1.33MiB/s (00:00:00)[download]  255.00KiB at    1.91MiB/s (00:00:00)[download]  260.49KiB at    1.90MiB/s (00:00:00)[download] 100% of  260.49KiB in 00:00:00 at 421.67KiB/s
+OK
+[18] 채널전략 / YOQcocU-guc ... [youtube] Extracting URL: https://www.youtube.com/watch?v=YOQcocU-guc
+[youtube] YOQcocU-guc: Downloading webpage
+[youtube] YOQcocU-guc: Downloading visionos player API JSON
+[youtube] YOQcocU-guc: Downloading m3u8 information
+[youtube] YOQcocU-guc: Downloading player e937390a-main
+[youtube] [jsc:deno] Solving JS challenges using deno
+[info] YOQcocU-guc: Downloading subtitles: ko
+[info] YOQcocU-guc: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\ä������_YOQcocU-guc.ko.vtt
+[download] Destination: vtt\ä������_YOQcocU-guc.ko.vtt
+[download]    1.00KiB at  109.82KiB/s (00:00:00)[download]    3.00KiB at  319.42KiB/s (00:00:00)[download]    7.00KiB at  734.00KiB/s (00:00:00)[download]   15.00KiB at    1.50MiB/s (00:00:00)[download]   31.00KiB at  882.10KiB/s (00:00:00)[download]   63.00KiB at    1.11MiB/s (00:00:00)[download]  127.00KiB at    1.38MiB/s (00:00:00)[download]  201.51KiB at    1.72MiB/s (00:00:00)[download] 100% of  201.51KiB in 00:00:00 at 409.20KiB/s
+OK
+[19] 영상자동화 / 9kn-7C2ldas ... [youtube] Extracting URL: https://www.youtube.com/watch?v=9kn-7C2ldas
+[youtube] 9kn-7C2ldas: Downloading webpage
+[youtube] 9kn-7C2ldas: Downloading visionos player API JSON
+[youtube] 9kn-7C2ldas: Downloading m3u8 information
+[info] 9kn-7C2ldas: Downloading subtitles: ko
+[info] 9kn-7C2ldas: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\�����ڵ�ȭ_9kn-7C2ldas.ko.vtt
+[download] Destination: vtt\�����ڵ�ȭ_9kn-7C2ldas.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    3.01MiB/s (00:00:00)[download]   15.00KiB at    1.90MiB/s (00:00:00)[download]   31.00KiB at  873.57KiB/s (00:00:00)[download]   63.00KiB at    1.11MiB/s (00:00:00)[download]  127.00KiB at    1.38MiB/s (00:00:00)[download]  218.90KiB at    1.81MiB/s (00:00:00)[download] 100% of  218.90KiB in 00:00:00 at 403.85KiB/s
+OK
+[20] 영상자동화 / mOoljoYJYZM ... [youtube] Extracting URL: https://www.youtube.com/watch?v=mOoljoYJYZM
+[youtube] mOoljoYJYZM: Downloading webpage
+[youtube] mOoljoYJYZM: Downloading visionos player API JSON
+[youtube] mOoljoYJYZM: Downloading m3u8 information
+[info] mOoljoYJYZM: Downloading subtitles: ko
+[info] mOoljoYJYZM: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\�����ڵ�ȭ_mOoljoYJYZM.ko.vtt
+[download] Destination: vtt\�����ڵ�ȭ_mOoljoYJYZM.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    5.30MiB/s (00:00:00)[download]   15.00KiB at    2.03MiB/s (00:00:00)[download]   31.00KiB at  861.24KiB/s (00:00:00)[download]   63.00KiB at    1.09MiB/s (00:00:00)[download]  100.61KiB at    1.23MiB/s (00:00:00)[download] 100% of  100.61KiB in 00:00:00 at 250.08KiB/s
+OK
+[21] 영상자동화 / iq232J1LA8Y ... [youtube] Extracting URL: https://www.youtube.com/watch?v=iq232J1LA8Y
+[youtube] iq232J1LA8Y: Downloading webpage
+[youtube] iq232J1LA8Y: Downloading visionos player API JSON
+[youtube] iq232J1LA8Y: Downloading m3u8 information
+[info] iq232J1LA8Y: Downloading subtitles: ko
+[info] iq232J1LA8Y: Downloading 1 format(s): 399+251-1
+[info] Writing video subtitles to: vtt\�����ڵ�ȭ_iq232J1LA8Y.ko.vtt
+[download] Destination: vtt\�����ڵ�ȭ_iq232J1LA8Y.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    4.27MiB/s (00:00:00)[download]   15.00KiB at    2.07MiB/s (00:00:00)[download]   31.00KiB at  888.88KiB/s (00:00:00)[download]   63.00KiB at    1.12MiB/s (00:00:00)[download]  101.25KiB at    1.27MiB/s (00:00:00)[download] 100% of  101.25KiB in 00:00:00 at 299.47KiB/s
+OK
+[22] 영상자동화 / BrvTE0MHxYk ... [youtube] Extracting URL: https://www.youtube.com/watch?v=BrvTE0MHxYk
+[youtube] BrvTE0MHxYk: Downloading webpage
+[youtube] BrvTE0MHxYk: Downloading visionos player API JSON
+[youtube] BrvTE0MHxYk: Downloading m3u8 information
+[info] BrvTE0MHxYk: Downloading subtitles: ko
+[info] BrvTE0MHxYk: Downloading 1 format(s): 399+251
+[info] Writing video subtitles to: vtt\�����ڵ�ȭ_BrvTE0MHxYk.ko.vtt
+[download] Destination: vtt\�����ڵ�ȭ_BrvTE0MHxYk.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.98MiB/s (00:00:00)[download]   15.00KiB at    1.93MiB/s (00:00:00)[download]   31.00KiB at  891.96KiB/s (00:00:00)[download]   63.00KiB at    1.13MiB/s (00:00:00)[download]   95.83KiB at    1.27MiB/s (00:00:00)[download] 100% of   95.83KiB in 00:00:00 at 238.60KiB/s
+OK
+[23] AI영상툴 / sNk_bZDxM5w ... [youtube] Extracting URL: https://www.youtube.com/watch?v=sNk_bZDxM5w
+[youtube] sNk_bZDxM5w: Downloading webpage
+[youtube] sNk_bZDxM5w: Downloading visionos player API JSON
+[youtube] sNk_bZDxM5w: Downloading m3u8 information
+[info] sNk_bZDxM5w: Downloading subtitles: ko
+[info] sNk_bZDxM5w: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\AI������_sNk_bZDxM5w.ko.vtt
+[download] Destination: vtt\AI������_sNk_bZDxM5w.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    6.28MiB/s (00:00:00)[download]   15.00KiB at    2.49MiB/s (00:00:00)[download]   28.14KiB at    2.04MiB/s (00:00:00)[download] 100% of   28.14KiB in 00:00:00 at 117.92KiB/s
+OK
+[24] AI영상툴 / FWROhgUyUDg ... [youtube] Extracting URL: https://www.youtube.com/watch?v=FWROhgUyUDg
+[youtube] FWROhgUyUDg: Downloading webpage
+[youtube] FWROhgUyUDg: Downloading visionos player API JSON
+[youtube] FWROhgUyUDg: Downloading m3u8 information
+[info] FWROhgUyUDg: Downloading subtitles: ko
+[info] FWROhgUyUDg: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\AI������_FWROhgUyUDg.ko.vtt
+[download] Destination: vtt\AI������_FWROhgUyUDg.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.79MiB/s (00:00:00)[download]   15.00KiB at    1.92MiB/s (00:00:00)[download]   31.00KiB at  907.33KiB/s (00:00:00)[download]   63.00KiB at    1.14MiB/s (00:00:00)[download]   63.40KiB at    1.13MiB/s (00:00:00)[download] 100% of   63.40KiB in 00:00:00 at 138.98KiB/s
+OK
+[25] AI영상툴 / eF2yf9WXS9w ... [youtube] Extracting URL: https://www.youtube.com/watch?v=eF2yf9WXS9w
+[youtube] eF2yf9WXS9w: Downloading webpage
+[youtube] eF2yf9WXS9w: Downloading visionos player API JSON
+[youtube] eF2yf9WXS9w: Downloading m3u8 information
+[info] eF2yf9WXS9w: Downloading subtitles: ko
+[info] eF2yf9WXS9w: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\AI������_eF2yf9WXS9w.ko.vtt
+[download] Destination: vtt\AI������_eF2yf9WXS9w.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    3.98MiB/s (00:00:00)[download]   15.00KiB at    1.79MiB/s (00:00:00)[download]   31.00KiB at  728.73KiB/s (00:00:00)[download]   63.00KiB at  956.56KiB/s (00:00:00)[download]   63.71KiB at  933.75KiB/s (00:00:00)[download] 100% of   63.71KiB in 00:00:00 at 184.91KiB/s
+OK
+[26] 블로그 / alLqwclaCu0 ... [youtube] Extracting URL: https://www.youtube.com/watch?v=alLqwclaCu0
+[youtube] alLqwclaCu0: Downloading webpage
+[youtube] alLqwclaCu0: Downloading visionos player API JSON
+[youtube] alLqwclaCu0: Downloading m3u8 information
+[info] alLqwclaCu0: Downloading subtitles: ko
+[info] alLqwclaCu0: Downloading 1 format(s): 399+251
+[info] Writing video subtitles to: vtt\���α�_alLqwclaCu0.ko.vtt
+[download] Destination: vtt\���α�_alLqwclaCu0.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.56MiB/s (00:00:00)[download]   15.00KiB at    1.73MiB/s (00:00:00)[download]   31.00KiB at  795.22KiB/s (00:00:00)[download]   63.00KiB at    1.02MiB/s (00:00:00)[download]   70.28KiB at    1.03MiB/s (00:00:00)[download] 100% of   70.28KiB in 00:00:00 at 165.39KiB/s
+OK
+[27] 블로그 / Q7FZpeumFws ... [youtube] Extracting URL: https://www.youtube.com/watch?v=Q7FZpeumFws
+[youtube] Q7FZpeumFws: Downloading webpage
+[youtube] Q7FZpeumFws: Downloading visionos player API JSON
+[youtube] Q7FZpeumFws: Downloading m3u8 information
+[info] Q7FZpeumFws: Downloading subtitles: ko
+[info] Q7FZpeumFws: Downloading 1 format(s): 137+251
+[info] Writing video subtitles to: vtt\���α�_Q7FZpeumFws.ko.vtt
+[download] Destination: vtt\���α�_Q7FZpeumFws.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    5.82MiB/s (00:00:00)[download]   15.00KiB at    2.18MiB/s (00:00:00)[download]   31.00KiB at  887.20KiB/s (00:00:00)[download]   63.00KiB at    1.12MiB/s (00:00:00)[download]  106.27KiB at    1.30MiB/s (00:00:00)[download] 100% of  106.27KiB in 00:00:00 at 305.18KiB/s
+OK
+[28] 블로그 / Ks_VKWa5qHU ... [youtube] Extracting URL: https://www.youtube.com/watch?v=Ks_VKWa5qHU
+[youtube] Ks_VKWa5qHU: Downloading webpage
+[youtube] Ks_VKWa5qHU: Downloading visionos player API JSON
+[youtube] Ks_VKWa5qHU: Downloading m3u8 information
+[info] Ks_VKWa5qHU: Downloading subtitles: ko
+[info] Ks_VKWa5qHU: Downloading 1 format(s): 399+251
+[info] Writing video subtitles to: vtt\���α�_Ks_VKWa5qHU.ko.vtt
+[download] Destination: vtt\���α�_Ks_VKWa5qHU.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.92MiB/s (00:00:00)[download]   15.00KiB at    1.84MiB/s (00:00:00)[download]   31.00KiB at  823.93KiB/s (00:00:00)[download]   63.00KiB at    1.05MiB/s (00:00:00)[download]  106.72KiB at    1.23MiB/s (00:00:00)[download] 100% of  106.72KiB in 00:00:00 at 245.02KiB/s
+OK
+[29] SNS / -mxQ5yWjIx4 ... [youtube] Extracting URL: https://www.youtube.com/watch?v=-mxQ5yWjIx4
+[youtube] -mxQ5yWjIx4: Downloading webpage
+[youtube] -mxQ5yWjIx4: Downloading visionos player API JSON
+[youtube] -mxQ5yWjIx4: Downloading m3u8 information
+[info] -mxQ5yWjIx4: Downloading subtitles: ko
+[info] -mxQ5yWjIx4: Downloading 1 format(s): 399+251-1
+[info] Writing video subtitles to: vtt\SNS_-mxQ5yWjIx4.ko.vtt
+[download] Destination: vtt\SNS_-mxQ5yWjIx4.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    5.16MiB/s (00:00:00)[download]   15.00KiB at    2.11MiB/s (00:00:00)[download]   31.00KiB at  884.68KiB/s (00:00:00)[download]   63.00KiB at    1.10MiB/s (00:00:00)[download]  127.00KiB at    1.34MiB/s (00:00:00)[download]  255.00KiB at    1.90MiB/s (00:00:00)[download]  279.79KiB at    1.88MiB/s (00:00:00)[download] 100% of  279.79KiB in 00:00:00 at 684.88KiB/s
+OK
+[30] SNS / BO0Y4-loEVk ... [youtube] Extracting URL: https://www.youtube.com/shorts/BO0Y4-loEVk
+[youtube] BO0Y4-loEVk: Downloading webpage
+[youtube] BO0Y4-loEVk: Downloading visionos player API JSON
+[youtube] BO0Y4-loEVk: Downloading m3u8 information
+[info] BO0Y4-loEVk: Downloading subtitles: ko
+[info] BO0Y4-loEVk: Downloading 1 format(s): 399+251-1
+[info] Writing video subtitles to: vtt\SNS_BO0Y4-loEVk.ko.vtt
+[download] Destination: vtt\SNS_BO0Y4-loEVk.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    5.78MiB/s (00:00:00)[download]    9.98KiB at    2.00MiB/s (00:00:00)[download] 100% of    9.98KiB in 00:00:00 at 37.64KiB/s
+OK
+[31] SNS / sclygD6ieJA ... [youtube] Extracting URL: https://www.youtube.com/shorts/sclygD6ieJA
+[youtube] sclygD6ieJA: Downloading webpage
+[youtube] sclygD6ieJA: Downloading visionos player API JSON
+[youtube] sclygD6ieJA: Downloading m3u8 information
+[info] sclygD6ieJA: Downloading subtitles: ko
+[info] Testing format 616
+[info] sclygD6ieJA: Downloading 1 format(s): 616+251
+[info] Writing video subtitles to: vtt\SNS_sclygD6ieJA.ko.vtt
+[download] Destination: vtt\SNS_sclygD6ieJA.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    1.41KiB at    1.29MiB/s (00:00:00)[download] 100% of    1.41KiB in 00:00:00 at 4.56KiB/s
+OK
+[32] 개발 / 46FKpw5AdnI ... [youtube] Extracting URL: https://www.youtube.com/watch?v=46FKpw5AdnI
+[youtube] 46FKpw5AdnI: Downloading webpage
+[youtube] 46FKpw5AdnI: Downloading visionos player API JSON
+[youtube] 46FKpw5AdnI: Downloading m3u8 information
+[info] 46FKpw5AdnI: Downloading subtitles: ko
+[info] 46FKpw5AdnI: Downloading 1 format(s): 400+251
+[info] Writing video subtitles to: vtt\����_46FKpw5AdnI.ko.vtt
+[download] Destination: vtt\����_46FKpw5AdnI.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.55MiB/s (00:00:00)[download]   15.00KiB at    1.75MiB/s (00:00:00)[download]   31.00KiB at  858.51KiB/s (00:00:00)[download]   63.00KiB at    1.07MiB/s (00:00:00)[download]  127.00KiB at    1.31MiB/s (00:00:00)[download]  161.25KiB at    1.39MiB/s (00:00:00)[download] 100% of  161.25KiB in 00:00:00 at 310.01KiB/s
+OK
+[33] 개발 / Sed9O2Mn3uE ... [youtube] Extracting URL: https://www.youtube.com/watch?v=Sed9O2Mn3uE
+[youtube] Sed9O2Mn3uE: Downloading webpage
+[youtube] Sed9O2Mn3uE: Downloading visionos player API JSON
+[youtube] Sed9O2Mn3uE: Downloading m3u8 information
+[info] Sed9O2Mn3uE: Downloading subtitles: ko
+[info] Sed9O2Mn3uE: Downloading 1 format(s): 401+251-1
+[info] Writing video subtitles to: vtt\����_Sed9O2Mn3uE.ko.vtt
+[download] Destination: vtt\����_Sed9O2Mn3uE.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    4.10MiB/s (00:00:00)[download]   15.00KiB at    2.06MiB/s (00:00:00)[download]   31.00KiB at  865.23KiB/s (00:00:00)[download]   63.00KiB at    1.10MiB/s (00:00:00)[download]   64.59KiB at    1.07MiB/s (00:00:00)[download] 100% of   64.59KiB in 00:00:00 at 193.54KiB/s
+OK
+[34] 개발 / CGDibbwGfvk ... [youtube] Extracting URL: https://www.youtube.com/watch?v=CGDibbwGfvk
+[youtube] CGDibbwGfvk: Downloading webpage
+[youtube] CGDibbwGfvk: Downloading visionos player API JSON
+[youtube] CGDibbwGfvk: Downloading m3u8 information
+[info] CGDibbwGfvk: Downloading subtitles: ko
+[info] CGDibbwGfvk: Downloading 1 format(s): 399+251-2
+[info] Writing video subtitles to: vtt\����_CGDibbwGfvk.ko.vtt
+[download] Destination: vtt\����_CGDibbwGfvk.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:10)[download]    3.00KiB at  Unknown B/s (00:00:10)[download]    7.00KiB at    5.53MiB/s (00:00:10)[download]   15.00KiB at    2.08MiB/s (00:00:10)[download]   31.00KiB at  831.71KiB/s (00:00:10)[download]   63.00KiB at    1.07MiB/s (00:00:10)[download]  127.00KiB at    1.30MiB/s (00:00:10)[download]  190.84KiB at    1.55MiB/s (00:00:10)[download] 100% of  190.84KiB in 00:00:10 at 18.36KiB/s
+OK
+[35] 콘텐츠참고 / lW0spyK84og ... [youtube] Extracting URL: https://www.youtube.com/watch?v=lW0spyK84og
+[youtube] lW0spyK84og: Downloading webpage
+[youtube] lW0spyK84og: Downloading visionos player API JSON
+[youtube] lW0spyK84og: Downloading m3u8 information
+[info] lW0spyK84og: Downloading subtitles: ko
+[info] Testing format 616
+[info] lW0spyK84og: Downloading 1 format(s): 616+251-2
+[info] Writing video subtitles to: vtt\����������_lW0spyK84og.ko.vtt
+[download] Destination: vtt\����������_lW0spyK84og.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    4.31MiB/s (00:00:00)[download]   15.00KiB at    2.15MiB/s (00:00:00)[download]   31.00KiB at  872.08KiB/s (00:00:00)[download]   63.00KiB at    1.11MiB/s (00:00:00)[download]   99.11KiB at    1.25MiB/s (00:00:00)[download] 100% of   99.11KiB in 00:00:00 at 230.26KiB/s
+OK
+[36] 콘텐츠참고 / k7dOt4pZipk ... [youtube] Extracting URL: https://www.youtube.com/watch?v=k7dOt4pZipk
+[youtube] k7dOt4pZipk: Downloading webpage
+[youtube] k7dOt4pZipk: Downloading visionos player API JSON
+[youtube] k7dOt4pZipk: Downloading m3u8 information
+[info] k7dOt4pZipk: Downloading subtitles: ko
+[info] Testing format 616
+[info] k7dOt4pZipk: Downloading 1 format(s): 616+251-1
+[info] Writing video subtitles to: vtt\����������_k7dOt4pZipk.ko.vtt
+[download] Destination: vtt\����������_k7dOt4pZipk.ko.vtt
+[download]    1.00KiB at  Unknown B/s (00:00:00)[download]    3.00KiB at  Unknown B/s (00:00:00)[download]    7.00KiB at    2.73MiB/s (00:00:00)[download]   15.00KiB at    1.97MiB/s (00:00:00)[download]   31.00KiB at  849.90KiB/s (00:00:00)[download]   63.00KiB at    1.10MiB/s (00:00:00)[download]  127.00KiB at    1.35MiB/s (00:00:00)[download]  143.85KiB at    1.37MiB/s (00:00:00)[download] 100% of  143.85KiB in 00:00:00 at 317.12KiB/s
+OK
+----
+총 36 / 자막확보 36 / 실패 0
+AI영상툴_eF2yf9WXS9w.ko.vtt  ->  AI영상툴_eF2yf9WXS9w.txt
+   63.7KB -> 3.8KB · 205줄 · 3840자
+AI영상툴_FWROhgUyUDg.ko.vtt  ->  AI영상툴_FWROhgUyUDg.txt
+   63.4KB -> 3.7KB · 203줄 · 3806자
+AI영상툴_sNk_bZDxM5w.ko.vtt  ->  AI영상툴_sNk_bZDxM5w.txt
+   28.1KB -> 8.9KB · 232줄 · 9114자
+SNS_-mxQ5yWjIx4.ko.vtt  ->  SNS_-mxQ5yWjIx4.txt
+   279.8KB -> 17.6KB · 918줄 · 18040자
+SNS_BO0Y4-loEVk.ko.vtt  ->  SNS_BO0Y4-loEVk.txt
+   10.0KB -> 0.6KB · 32줄 · 613자
+SNS_sclygD6ieJA.ko.vtt  ->  SNS_sclygD6ieJA.txt
+   1.4KB -> 0.1KB · 9줄 · 91자
+개발_46FKpw5AdnI.ko.vtt  ->  개발_46FKpw5AdnI.txt
+   161.2KB -> 9.3KB · 498줄 · 9508자
+개발_CGDibbwGfvk.ko.vtt  ->  개발_CGDibbwGfvk.txt
+   190.8KB -> 11.1KB · 585줄 · 11349자
+개발_Sed9O2Mn3uE.ko.vtt  ->  개발_Sed9O2Mn3uE.txt
+   64.6KB -> 14.7KB · 941줄 · 15070자
+무편집유튜브_3Yz8ZYlveRU.ko.vtt  ->  무편집유튜브_3Yz8ZYlveRU.txt
+   323.0KB -> 20.9KB · 1084줄 · 21397자
+무편집유튜브_csLSuPCgp1g.ko.vtt  ->  무편집유튜브_csLSuPCgp1g.txt
+   264.5KB -> 16.0KB · 867줄 · 16398자
+무편집유튜브_LfipHemb2gA.ko.vtt  ->  무편집유튜브_LfipHemb2gA.txt
+   170.9KB -> 9.7KB · 517줄 · 9964자
+무편집유튜브_PZhWhvJofso.ko.vtt  ->  무편집유튜브_PZhWhvJofso.txt
+   231.2KB -> 14.1KB · 745줄 · 14438자
+무편집유튜브_R1wRgVwWIbs.ko.vtt  ->  무편집유튜브_R1wRgVwWIbs.txt
+   255.4KB -> 15.7KB · 822줄 · 16113자
+무편집유튜브_tblaJHbvHPw.ko.vtt  ->  무편집유튜브_tblaJHbvHPw.txt
+   562.1KB -> 32.9KB · 1749줄 · 33734자
+블로그_alLqwclaCu0.ko.vtt  ->  블로그_alLqwclaCu0.txt
+   70.3KB -> 4.0KB · 217줄 · 4140자
+블로그_Ks_VKWa5qHU.ko.vtt  ->  블로그_Ks_VKWa5qHU.txt
+   106.7KB -> 6.2KB · 328줄 · 6351자
+블로그_Q7FZpeumFws.ko.vtt  ->  블로그_Q7FZpeumFws.txt
+   106.3KB -> 6.1KB · 336줄 · 6287자
+쇼핑쇼츠_aJ9LeNEA60s.ko.vtt  ->  쇼핑쇼츠_aJ9LeNEA60s.txt
+   1436.7KB -> 82.1KB · 4784줄 · 84084자
+쇼핑쇼츠_bHpuGDciQq8.ko.vtt  ->  쇼핑쇼츠_bHpuGDciQq8.txt
+   182.3KB -> 10.5KB · 562줄 · 10780자
+쇼핑쇼츠_GrzY1MiDHVw.ko.vtt  ->  쇼핑쇼츠_GrzY1MiDHVw.txt
+   86.0KB -> 4.9KB · 268줄 · 5066자
+쇼핑쇼츠_hARrKi7csZc.ko.vtt  ->  쇼핑쇼츠_hARrKi7csZc.txt
+   86.4KB -> 5.0KB · 268줄 · 5133자
+쇼핑쇼츠_NdTbyc6zQWw.ko.vtt  ->  쇼핑쇼츠_NdTbyc6zQWw.txt
+   212.4KB -> 13.1KB · 694줄 · 13445자
+쇼핑쇼츠_R6WcDwUkOes.ko.vtt  ->  쇼핑쇼츠_R6WcDwUkOes.txt
+   567.9KB -> 33.2KB · 1778줄 · 34045자
+쇼핑쇼츠_UcvkMztSVjk.ko.vtt  ->  쇼핑쇼츠_UcvkMztSVjk.txt
+   233.9KB -> 13.7KB · 769줄 · 14022자
+쇼핑쇼츠_YEkNHXXIK_I.ko.vtt  ->  쇼핑쇼츠_YEkNHXXIK_I.txt
+   146.9KB -> 8.5KB · 452줄 · 8726자
+영상자동화_9kn-7C2ldas.ko.vtt  ->  영상자동화_9kn-7C2ldas.txt
+   218.9KB -> 13.9KB · 736줄 · 14256자
+영상자동화_BrvTE0MHxYk.ko.vtt  ->  영상자동화_BrvTE0MHxYk.txt
+   95.8KB -> 5.6KB · 305줄 · 5765자
+영상자동화_iq232J1LA8Y.ko.vtt  ->  영상자동화_iq232J1LA8Y.txt
+   101.2KB -> 5.9KB · 324줄 · 6091자
+영상자동화_mOoljoYJYZM.ko.vtt  ->  영상자동화_mOoljoYJYZM.txt
+   100.6KB -> 5.8KB · 310줄 · 5897자
+채널전략_KqwmvT3CJtY.ko.vtt  ->  채널전략_KqwmvT3CJtY.txt
+   113.2KB -> 6.5KB · 360줄 · 6694자
+채널전략_mIJK1F8HXXM.ko.vtt  ->  채널전략_mIJK1F8HXXM.txt
+   185.7KB -> 11.2KB · 591줄 · 11498자
+채널전략_uhRTrXT1efQ.ko.vtt  ->  채널전략_uhRTrXT1efQ.txt
+   260.5KB -> 16.6KB · 875줄 · 17027자
+채널전략_YOQcocU-guc.ko.vtt  ->  채널전략_YOQcocU-guc.txt
+   201.5KB -> 12.3KB · 651줄 · 12645자
+콘텐츠참고_k7dOt4pZipk.ko.vtt  ->  콘텐츠참고_k7dOt4pZipk.txt
+   143.9KB -> 8.5KB · 440줄 · 8684자
+콘텐츠참고_lW0spyK84og.ko.vtt  ->  콘텐츠참고_lW0spyK84og.txt
+   99.1KB -> 5.8KB · 304줄 · 5888자
+정리 완료: txt/ 폴더

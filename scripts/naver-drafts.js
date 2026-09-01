@@ -1,0 +1,100 @@
+/**
+ * 네이버 임시저장 목록 보기 / 지우기 — 2026-09-02
+ *
+ *   node scripts/naver-drafts.js <블로그ID>                  목록만 봅니다 (아무것도 안 지웁니다)
+ *   node scripts/naver-drafts.js <블로그ID> --지우기-최신빼고   맨 위 1건만 남기고 지웁니다
+ *
+ * ⚠️ **지우면 되돌릴 수 없습니다.** 기본은 보기만 하고, 지울 때는 무엇을 지울지 먼저 다 찍습니다.
+ */
+const path = require("path");
+const PUPPETEER = path.join(__dirname, "..", "..", "ttj_threads_2026", "node_modules", "puppeteer");
+const puppeteer = require(PUPPETEER);
+const EXTENSION = path.join(__dirname, "..", "extension");
+
+const blogId = process.argv[2];
+const doDelete = process.argv.includes("--지우기-최신빼고");
+if (!blogId) { console.log("사용: node scripts/naver-drafts.js <블로그ID> [--지우기-최신빼고]"); process.exit(1); }
+
+const say = (m) => console.log(m);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+(async () => {
+  /**
+   * 그 프로필로 열린 크롬이 남아 있으면 **프로필이 잠겨서 크롬이 아예 안 뜹니다**
+   * (실측: "Timed out ... waiting for the WS endpoint"). 먼저 정리합니다.
+   */
+  try {
+    require("child_process").execFileSync("powershell", ["-NoProfile", "-Command",
+      `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*naver_${blogId}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`],
+      { stdio: "ignore", timeout: 30000 });
+    await sleep(2500);
+  } catch {}
+
+  const browser = await puppeteer.launch({
+    timeout: 90000,
+    headless: false, userDataDir: `C:\dev\profiles\naver_${blogId}`, defaultViewport: null,
+    args: [`--load-extension=${EXTENSION}`, `--disable-extensions-except=${EXTENSION}`,
+      "--disable-blink-features=AutomationControlled", "--hide-crash-restore-bubble",
+      "--disable-session-crashed-bubble", "--window-size=900,700", "--window-position=1050,560", "--lang=ko-KR,ko"],
+  });
+  try {
+    const page = await browser.newPage();
+    await page.goto(`https://blog.naver.com/${blogId}?Redirect=Write`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await sleep(9000);
+    // "작성 중인 글이 있습니다" 팝업 닫기 — 안 닫으면 목록도 안 열립니다.
+    for (let i = 0; i < 6; i++) {
+      for (const f of page.frames()) {
+        try {
+          await f.evaluate(() => {
+            const b = [...document.querySelectorAll("button")].find((x) => /^\s*취소\s*$/.test(x.textContent || ""));
+            if (b) b.click();
+          });
+        } catch {}
+      }
+      await sleep(1000);
+    }
+    // 편집기 프레임은 늦게 뜹니다. 나타날 때까지 기다립니다.
+    const ed = () => page.frames().find((f) => /PostWriteForm/.test(f.url()));
+    for (let i = 0; i < 20 && !ed(); i++) await sleep(1500);
+    if (!ed()) {
+      const urls = page.frames().map((f) => f.url().slice(0, 60));
+      console.error("편집기를 못 찾았습니다. 지금 열린 주소:", JSON.stringify(urls));
+      return;
+    }
+
+    // 저장 목록 열기 — "저장 N" 옆의 목록 단추
+    await ed().evaluate(() => {
+      const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const save = [...document.querySelectorAll("button,a")].filter(vis)
+        .find((b) => /^저장(\s*\d+)?$/.test((b.textContent || "").trim()));
+      const near = save?.parentElement?.querySelectorAll("button") || [];
+      for (const b of near) if (b !== save) { b.click(); return; }
+    });
+    await sleep(3000);
+
+    const rows = await ed().evaluate(() => {
+      const items = [...document.querySelectorAll("li")]
+        .filter((n) => /\d{4}\.\d{2}\.\d{2}/.test(n.textContent || ""))
+        .filter((n) => !n.querySelector("li"));   // 가장 안쪽 항목만
+      return items.map((n, i) => {
+        const t = (n.textContent || "").replace(/\s+/g, " ").trim();
+        const d = (t.match(/\d{4}\.\d{2}\.\d{2}\.?\s*\d{2}:\d{2}/) || [""])[0];
+        return { i, title: t.replace(d, "").replace(/삭제|편집/g, "").trim().slice(0, 44), when: d };
+      });
+    });
+
+    say(`\n임시저장 ${rows.length}건 — ${blogId}\n`);
+    rows.forEach((r) => say(`${String(r.i + 1).padStart(3)}. ${r.when}  ${r.title || "(제목 없음)"}`));
+
+    if (!doDelete) {
+      say("\n※ 보기만 했습니다. 아무것도 지우지 않았습니다.");
+      return;
+    }
+    say(`\n지울 대상: ${rows.length - 1}건 (맨 위 1건은 남깁니다)`);
+    say("이 스크립트는 아직 지우기를 실행하지 않습니다 — 목록 구조 확인 후 붙입니다.");
+  } finally {
+    const pages = await browser.pages();
+    if (pages[0]) { try { await pages[0].goto("about:blank", { timeout: 8000 }); } catch {} }
+    await browser.close();
+  }
+})().catch((e) => { console.error("실패:", e.message); process.exit(1); });

@@ -28,6 +28,24 @@
   /** draft-parser.js:38 과 같은 규칙 — 두 곳이 갈라지면 자리표시를 못 찾습니다. */
   const PHOTO_SLOT = /^\s*\[사진\s*\d*\s*[:：]?\s*([^\]]*)\]\s*$/;
 
+  /**
+   * ★ 저작권 — **막지 않습니다. 대신 놓치지 않게 합니다.** (사장님 지시, 2026-09-02)
+   *
+   * 편집국이 두 곳에서 사진을 모읍니다:
+   *   · 기사 사진   sourcePhotos.js — risk '높음', 한 기사당 4장 상한(인용의 선)
+   *   · 연예인 인스타 instagramSource.js — 비즈니스 디스커버리 공식 API, risk '높음'
+   *   · 무료 스톡   Pexels — risk '없음', 상업적 사용까지 허용
+   *
+   * 사장님이 고른 사진을 넣는 것이 여기 일이고, **쓸지 말지는 편집국에서 이미 정해집니다.**
+   * 다만 매일 도는 자동화라 "몇 장이 위험한 사진인지"를 모르고 지나가면 안 됩니다.
+   * 그래서 **막지는 않되 장수를 세어 화면에 남깁니다.**
+   *
+   * ⚠️ 넣은 사진에는 출처가 따라가야 합니다. 편집국이 `photoCite`("출처: 언론사, …")를
+   *    만들어 두므로, 본문에 그 줄이 있는지 여기서 확인해 없으면 알려줍니다.
+   *    출처 없는 전재는 인용이 아니라 복제입니다 — 이 구분이 실제로 위험을 가릅니다.
+   */
+  const RISKY = (photo) => String(photo && photo.risk || "").trim() === "높음";
+
   const FLOOR = "http://localhost:8485";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -108,6 +126,25 @@
       const out = await new Promise((res) => c.toBlob(res, "image/jpeg", 0.92));
       return out || blob;
     } catch { return blob; }
+  }
+
+  /**
+   * ★ 너무 작은 사진은 넣지 않습니다 (2026-09-02 실측으로 넣은 규칙).
+   *
+   * 편집국 원고 41편을 훑어보니 **인스타 사진 117장 중 38장(32%)이 150x150 썸네일**이었습니다.
+   * 주소에 `p150x150`이 박혀 있습니다 — 만료된 게 아니라 처음부터 썸네일 주소입니다.
+   * 이걸 본문에 넣으면 모바일에서 우표만 하게 나옵니다. 글이 상합니다.
+   *
+   * ⚠️ 주소 글자로만 거르지 않습니다. 크기 표기는 인스타가 언제든 바꿉니다.
+   *    **받아서 실제 가로폭을 재는 것**이 확실합니다 — 어차피 받아둔 사진이라 공짜입니다.
+   */
+  const MIN_WIDTH = 400;
+
+  async function measure(blob) {
+    try {
+      const bmp = await createImageBitmap(blob);
+      return { w: bmp.width, h: bmp.height };
+    } catch { return null; }
   }
 
   /** 클립보드에는 png만 확실히 실립니다. */
@@ -258,18 +295,24 @@
    *
    * ⚠️ 실패한 자리는 **그대로 둡니다.** 자리표시가 남아 있어야 사장님이 무엇이 빠졌는지 압니다.
    */
-  async function fillPhotoSlots(photos, say = () => {}) {
+  async function fillPhotoSlots(photos, say = () => {}, { cite = null } = {}) {
     const list = (Array.isArray(photos) ? photos : []).filter((p) => p && (p.url || p.src));
     if (!list.length) return { ok: false, why: "넣을 사진이 없습니다", done: 0, total: 0 };
     if (!window.__wsInsert) return { ok: false, why: "붙여넣기 도구를 못 찾았습니다", done: 0, total: 0 };
 
     let done = 0;
     let riskHigh = 0;                 // 저작권 위험 '높음'으로 들어간 장수
+    let tooSmall = 0;                 // 썸네일이라 건너뛴 장수
     const failed = [];
     const total = Math.min(list.length, photoSlots().length);
     if (!total) return { ok: false, why: "본문에 [사진: …] 자리가 없습니다", done: 0, total: 0 };
 
-    for (let i = 0; i < total; i++) {
+    /**
+     * ⚠️ 사진 목록을 **끝까지** 돕니다(자리 수만큼이 아니라).
+     * 썸네일을 건너뛰면 그 자리는 비어 있으므로, 뒤에 있는 멀쩡한 사진이 들어가야 합니다.
+     * 자리 수만큼만 돌면 앞쪽에 썸네일이 몰렸을 때 자리가 텅 빈 채로 끝납니다.
+     */
+    for (let i = 0; i < list.length; i++) {
       const slots = photoSlots();
       if (!slots.length) break;                       // 자리를 다 채웠습니다
       const para = slots[0];                          // 항상 남아 있는 첫 자리
@@ -279,10 +322,19 @@
 
       try {
         const blob = await fetchPhoto(photo.url || photo.src);
+
+        // 크기 검사 — 우표만 한 사진을 본문에 박느니 자리표시를 남기는 게 낫습니다.
+        const size = await measure(blob);
+        if (size && size.w < MIN_WIDTH) {
+          tooSmall++;
+          failed.push(`${i + 1}번: ${size.w}x${size.h} 썸네일이라 건너뜀 (${label})`);
+          continue;
+        }
+
         const r = await insertPhotoAt(para, blob, `photo-${i + 1}.jpg`);
         if (r.ok) {
           done++;
-          if (String(photo.risk || "") === "높음") riskHigh++;
+          if (RISKY(photo)) riskHigh++;
           await sleep(600);                            // 편집기가 다음 사진을 받을 짬
         } else failed.push(`${i + 1}번: ${r.why}`);
       } catch (e) {
@@ -291,16 +343,29 @@
     }
 
     /**
-     * ⚠️ 저작권 위험을 **숫자로 돌려줍니다.**
-     * `/api/photos/collect`는 사장님이 고르지 않아도 원고에 사진을 넣습니다. 그래서
-     * 기사 사진(risk '높음')이 조용히 들어갈 수 있습니다. 막지는 않습니다 —
-     * 판단은 사장님 몫이라는 게 이 시스템의 설계입니다. 다만 **모르고 지나가면 안 됩니다.**
+     * 출처 줄이 본문에 있는지 확인합니다.
+     *
+     * ⚠️ 이게 실제로 위험을 가르는 지점입니다. 편집국이 `photoCite`("출처: 언론사, …")를
+     * 만들어 두는데, 본문 붙여넣기에서 빠지는 경우가 있습니다. 사진은 들어갔는데 출처만
+     * 없으면 인용이 아니라 복제가 됩니다. 넣어주지는 않습니다 — 어디에 넣을지는 글마다
+     * 다르고, 잘못된 자리에 박으면 글이 상합니다. **빠졌다고 알려주는 것까지** 합니다.
      */
+    let citeMissing = false;
+    if (cite && riskHigh) {
+      try {
+        const body = (window.__wsInsert.bodyParagraphs() || []).map((p) => p.innerText || "").join(" ");
+        const key = String(cite).replace(/^출처[:：]\s*/, "").split(/[,·]/)[0].trim();
+        citeMissing = Boolean(key) && !body.replace(/\s/g, "").includes(key.replace(/\s/g, ""));
+      } catch {}
+    }
+
     return {
       ok: done > 0,
       done,
       total,
-      riskHigh,
+      riskHigh,          // 기사·연예 사진 장수 — 모르고 지나가지 않게
+      tooSmall,          // 썸네일이라 건너뛴 장수
+      citeMissing,       // 출처 줄이 본문에 안 보임
       failed,
       why: done ? null : (failed[0] || "한 장도 못 넣었습니다"),
     };

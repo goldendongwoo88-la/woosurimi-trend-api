@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>우수리미 최종 분석 · 수익화 실행계획 2026-09-02</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+
+  :root {
+    --ink: #14181C;
+    --ink2: #454F58;
+    --ink3: #77828C;
+    --rule: #D8DEE4;
+    --rule2: #EBEFF3;
+    --accent: #0B5F6B;
+    --accent-bg: #E4F1F2;
+    --warn: #9A3412;
+    --warn-bg: #FBEAE1;
+    --ok: #14663F;
+    --ok-bg: #E3F1E9;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Pretendard", "Malgun Gothic", "맑은 고딕", -apple-system, sans-serif;
+    color: var(--ink);
+    font-size: 10.2pt;
+    line-height: 1.62;
+    margin: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1 { font-size: 22pt; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.02em; }
+  h2 {
+    font-size: 14pt; margin: 26px 0 10px; padding-bottom: 6px;
+    border-bottom: 2px solid var(--ink); letter-spacing: -.01em;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 11.4pt; margin: 18px 0 7px; color: var(--accent);
+    page-break-after: avoid;
+  }
+  h4 { font-size: 10.4pt; margin: 13px 0 5px; page-break-after: avoid; }
+  p { margin: 0 0 8px; }
+  ul, ol { margin: 0 0 10px; padding-left: 18px; }
+  li { margin-bottom: 4px; }
+  code {
+    font-family: "D2Coding", "Consolas", monospace;
+    font-size: 8.8pt; background: #F1F4F7; padding: 1px 4px;
+    border-radius: 2px; word-break: break-all;
+  }
+  strong { font-weight: 700; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 8px 0 14px;
+    font-size: 9.2pt; page-break-inside: avoid;
+  }
+  th {
+    background: #F4F7F9; text-align: left; font-weight: 600;
+    padding: 6px 8px; border: 1px solid var(--rule); color: var(--ink2);
+    font-size: 8.8pt;
+  }
+  td { padding: 6px 8px; border: 1px solid var(--rule2); vertical-align: top; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .cover {
+    border-bottom: 3px solid var(--ink); padding-bottom: 18px; margin-bottom: 22px;
+  }
+  .eyebrow {
+    font-size: 8.6pt; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--ink3); margin-bottom: 10px;
+  }
+  .lead {
+    font-size: 11.4pt; color: var(--ink2); margin-top: 10px; line-height: 1.55;
+  }
+  .meta { font-size: 8.8pt; color: var(--ink3); margin-top: 12px; }
+
+  .callout {
+    background: var(--accent-bg); border-left: 4px solid var(--accent);
+    padding: 11px 14px; margin: 12px 0; page-break-inside: avoid;
+  }
+  .callout.warn { background: var(--warn-bg); border-left-color: var(--warn); }
+  .callout.ok { background: var(--ok-bg); border-left-color: var(--ok); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .label {
+    font-size: 8.4pt; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; display: block; margin-bottom: 4px;
+  }
+  .callout.warn .label { color: var(--warn); }
+  .callout.ok .label { color: var(--ok); }
+
+  .pill {
+    display: inline-block; font-size: 8pt; font-weight: 600;
+    padding: 1px 7px; border-radius: 9px; margin-right: 4px;
+  }
+  .p-new { background: var(--ok-bg); color: var(--ok); }
+  .p-dup { background: #F1F4F7; color: var(--ink3); }
+  .p-fix { background: var(--warn-bg); color: var(--warn); }
+
+  .sector {
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: 14px 16px; margin: 14px 0; page-break-inside: avoid;
+  }
+  .sector h3 { margin-top: 0; }
+  .sector .row {
+    display: grid; grid-template-columns: 88px 1fr; gap: 4px 10px;
+    font-size: 9.4pt; margin-bottom: 3px;
+  }
+  .sector .row .k { color: var(--ink3); font-weight: 600; font-size: 8.8pt; padding-top: 1px; }
+
+  .do { background: #FAFBFC; border: 1px solid var(--rule2); padding: 9px 12px; margin-top: 9px; }
+  .do .t { font-size: 8.4pt; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); font-weight: 700; margin-bottom: 5px; }
+  .do ol { margin-bottom: 0; }
+
+  .pagebreak { page-break-before: always; }
+  footer { margin-top: 26px; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 8.4pt; color: var(--ink3); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="eyebrow">우수리미 · 통합 분석 보고서</div>
+  <h1>수익화 실행계획</h1>
+  <p class="lead">
+    유튜브 36편 자막 전수 분석 + 기존 분석 5종 통합.<br>
+    <strong>분야별로 무엇을 자동화에 붙이고, 그걸로 어떻게 돈을 벌고, 이번 주에 무엇을 누를지</strong>까지.
+  </p>
+  <div class="meta">
+    2026-09-02 작성 · 근거: 36편 자막 1,090KB(<code>data/yt-analysis-0902/</code>) ·
+    「수익화 채널 33개 분석」 ·「돈농부 김정빈 라이브 103분」 ·「링크 25개 분석」 ·
+    「유튜브 롱폼 자동화 노하우」 ·「수익화 전체플랜 0902」
+  </div>
+</div>
+
+<div class="callout warn">
+  <span class="label">한 줄 진단 — 이번에도 같습니다</span>
+  <p><strong>만드는 건 끝났습니다. 팔러 나간 게 아직 0건입니다.</strong>
+  36편을 다 읽은 결론도 바뀌지 않았습니다. 그들이 우리보다 나은 점은 기술이 아니라
+  <strong>이미 팔고 있다는 것</strong> 하나뿐입니다. 이 문서의 실행 항목은
+  &lsquo;만들기&rsquo;가 아니라 &lsquo;연결하기&rsquo;에 무게를 뒀습니다.</p>
+</div>
+
+<h2>1. 36편에서 실제로 새로 얻은 것</h2>
+
+<p>36편 중 <strong>29편은 우리가 이미 아는 내용</strong>이었습니다. 새로 얻은 건 7가지입니다.</p>
+
+<table>
+  <thead><tr><th style="width:24%">발견</th><th style="width:38%">내용</th><th>우리 조치</th></tr></thead>
+  <tbody>
+    <tr><td><strong>재해석 3요소</strong></td>
+        <td>유튜브 공식 수익창출 기준은 "오디오·시각 효과를 더한 실질적 편집". 나레이션·자막·시각효과 중 하나라도 빠지면 재사용 콘텐츠로 분류</td>
+        <td><span class="pill p-new">완료</span> <code>reinterpret.js</code> 신규</td></tr>
+    <tr><td><strong>변형도 = 안전</strong></td>
+        <td>원본과 달라질수록 알고리즘이 저작권을 못 잡는다. 컷을 잘게 썰고 잘라낸 구간을 만들어야 함</td>
+        <td><span class="pill p-new">완료</span> 컷 수 자동 계산</td></tr>
+    <tr><td><strong>자막 이원화</strong></td>
+        <td>내 나레이션 자막은 <strong>다른 색·다른 폰트</strong>로. 항소할 때 "이건 내 창작"이라는 유일한 증빙</td>
+        <td><span class="pill p-new">완료</span> 지시서에 규칙 고정</td></tr>
+    <tr><td><strong>경고 누적 구조</strong></td>
+        <td>유튜브는 위반 5~10개를 <strong>묶어서</strong> 경고 1회로 준다. 3회면 채널 삭제. 즉 한 소스 계열로 5편 이상 올리면 한 방에 간다</td>
+        <td><span class="pill p-new">완료</span> 채널별 경고 장부</td></tr>
+    <tr><td><strong>중복도 ≠ 저작권</strong></td>
+        <td>소스 10~20개를 섞으라는 건 저작권이 아니라 <strong>중복도</strong> 때문. 같은 소스만 쓰면 재사용 판정</td>
+        <td><span class="pill p-new">완료</span> 소스 개수 지시</td></tr>
+    <tr><td><strong>실시간 키워드</strong></td>
+        <td>네이버 뉴스탭 최신/인기 → 지금 뜨는 키워드 + 서브키워드. 블로그 나이가 어려도 속도로 이긴다</td>
+        <td><span class="pill p-fix">이번 주</span> 키워드 발굴기</td></tr>
+    <tr><td><strong>캡컷 트랙 스타일</strong></td>
+        <td>폰트·색상·위치·굵기를 프리셋으로 저장 → 클릭 한 번. 자막 수동 맞춤 공정이 통째로 사라짐</td>
+        <td><span class="pill p-fix">이번 주</span> 프리셋 제작</td></tr>
+  </tbody>
+</table>
+
+<h3>기존 분석과 어긋나 정정이 필요한 것</h3>
+
+<table>
+  <thead><tr><th style="width:30%">항목</th><th>기존 기록</th><th>36편 기준</th></tr></thead>
+  <tbody>
+    <tr><td>유튜브 제품태그 조건</td><td>구독자 500명 (33개 분석)</td><td><strong>1,000명</strong> — 2편이 일치. 500명은 과거 수치</td></tr>
+    <tr><td>쿠팡 수수료</td><td>간접 3% / 직접 9% (돈농부 2부)</td><td>유튜브 경유 <strong>6.7%</strong> / 타 SNS 3% — 경로별 구분이 더 정확</td></tr>
+    <tr><td>쇼츠 수익창출 요건</td><td>미기재</td><td><strong>구독자 1,000명 + 91일 내 누적 1,000만 조회</strong></td></tr>
+    <tr><td>드라마쇼츠 단가</td><td>미기재</td><td>조회 1,000당 <strong>0.3원</strong> — 양으로만 승부하는 판</td></tr>
+  </tbody>
+</table>
+
+<div class="pagebreak"></div>
+<h2>2. 분야별 계획</h2>
+
+<p>7개 분야로 나눴습니다. 각 분야는 <strong>현재 → 붙일 것 → 돈 되는 경로 → 이번 주 실행</strong> 순서입니다.</p>
+
+<div class="sector">
+  <h3>① 쇼핑 쇼츠 <span class="pill p-fix">막혀 있음</span></h3>
+  <div class="row"><span class="k">현재</span><span><code>golden-shop-shorts</code>(8489) + <code>scripts/shopping-shorts.js</code> + <code>make-coupang-contents</code> 스킬. 렌더러·후킹엔진·조사 완비</span></div>
+  <div class="row"><span class="k">막힌 곳</span><span><strong><code>.env</code>의 <code>COUPANG_ACCESS_KEY</code> 두 줄이 비어 있어 라인 전체가 정지</strong></span></div>
+  <div class="row"><span class="k">붙일 것</span><span>홈쇼핑 편성표 → 소재 큐 (돈농부 공식 1). 검색량보다 빠른 선행지표</span></div>
+  <div class="row"><span class="k">돈 경로</span><span>유튜브 경유 6.7% · 클릭 후 24시간 내 산 <em>아무 물건</em>이 다 잡힘 · 조회수 수익 대비 10~20배</span></div>
+  <div class="do">
+    <div class="t">이번 주 실행</div>
+    <ol>
+      <li><strong>[사장님]</strong> 쿠팡 파트너스 가입(개인 가능·무료) → <code>.env</code>에 키 2줄</li>
+      <li><strong>[클로드]</strong> 키 들어오면 <code>node scripts/shopping-shorts.js "키워드"</code> 로 주 3편 생산 개시</li>
+      <li><strong>[클로드]</strong> 홈쇼핑 편성표 수집기 — 주 1회 크롤 → 소재 큐 적재</li>
+    </ol>
+  </div>
+  <div class="row"><span class="k">성공 기준</span><span>2주 안에 <strong>쿠팡 클릭 1건</strong>. 매출이 아니라 계측기가 켜지는 것이 목표</span></div>
+</div>
+
+<div class="sector">
+  <h3>② 무편집 유튜브 (드라마·영화·해외) <span class="pill p-new">신규 무기 확보</span></h3>
+  <div class="row"><span class="k">현재</span><span><code>gw_global_shorts_2026/screener.js</code> — 소스 가부 판별(4원칙)</span></div>
+  <div class="row"><span class="k">오늘 추가</span><span><strong><code>reinterpret.js</code> 완성</strong> — 컷 수·소스 개수·자막 규칙·TTS·경고 장부를 지시서로 출력</span></div>
+  <div class="row"><span class="k">돈 경로</span><span>조회 1,000당 0.3원 → <strong>양이 답</strong>. 다만 쿠팡 링크를 붙이면 이중 수익(박준휘 구조)</span></div>
+  <div class="row"><span class="k">위험</span><span>경고 3회 = 채널 삭제. <strong>같은 소스 계열 5편 이상 금지</strong></span></div>
+  <div class="do">
+    <div class="t">이번 주 실행</div>
+    <ol>
+      <li><code>node reinterpret.js "&lt;소스&gt;" --길이 45 --장르 드라마 --배급사 &lt;배급사&gt;</code> 로 지시서 생성</li>
+      <li>지시서대로 <strong>시험 3편</strong>만 제작 → 신규 채널에 업로드 → 2주 관찰</li>
+      <li>경고 오면 <code>node reinterpret.js --채널 &lt;채널&gt; --경고</code> 로 기록. 배급사 위험표에 반영</li>
+    </ol>
+  </div>
+  <div class="row"><span class="k">성공 기준</span><span>3편 업로드 후 2주간 <strong>경고 0회</strong>. 그때만 편수를 늘린다</span></div>
+</div>
+
+<div class="sector">
+  <h3>③ AI 롱폼 (시니어·경제) <span class="pill p-dup">자산 보유</span></h3>
+  <div class="row"><span class="k">현재</span><span><code>docs/유튜브-롱폼-자동화-노하우.md</code> 정본 + 대본·TTS·썸네일 자산. RPM 10~12원으로 전 라인 최고</span></div>
+  <div class="row"><span class="k">붙일 것</span><span>시니어 롱폼 1황의 <strong>복제형/짜깁기형 2트랙</strong> 개념. 우리는 짜깁기형만 채택(복제형은 저작권 위험)</span></div>
+  <div class="row"><span class="k">돈 경로</span><span>YPP 8,000시간. <strong>기한 2027-02-01</strong> — 오늘 기준 152일</span></div>
+  <div class="do">
+    <div class="t">이번 주 실행</div>
+    <ol>
+      <li><strong>[클로드]</strong> YPP 트래커 재측정 — 8/28 이후 업로드 공백이 있으면 필요 페이스가 올라갔다</li>
+      <li>주 2편 고정 발행 체계로 전환. 편당 20분 이상(시청시간 효율)</li>
+    </ol>
+  </div>
+  <div class="row"><span class="k">성공 기준</span><span>주당 시청시간 <strong>+177시간</strong> 페이스 복귀</span></div>
+</div>
+
+<div class="sector">
+  <h3>④ 블로그 <span class="pill p-fix">앞단 비어 있음</span></h3>
+  <div class="row"><span class="k">현재</span><span><code>golden-blog-floor</code>(8485) + 네이버 임시저장 자동화(9/1 완성) + <code>humanTouch.js</code> 검사기</span></div>
+  <div class="row"><span class="k">빈 곳</span><span><strong>"지금 뜨는 키워드"를 잡아오는 앞단</strong>. 글은 쓸 수 있는데 무엇을 쓸지가 손으로 정해짐</span></div>
+  <div class="row"><span class="k">붙일 것</span><span>실시간 키워드 발굴기 — 뉴스 최신/인기 → 급상승 키워드 → 서브키워드 조합 → 경쟁 약한 순 정렬</span></div>
+  <div class="row"><span class="k">부수</span><span>본문에 <strong>1분 30초 16:9 영상</strong> 삽입 시 순위 상승(3p→2p 실측). 우리는 쇼츠 소재가 이미 있어 공짜로 얻는 이득</span></div>
+  <div class="do">
+    <div class="t">이번 주 실행</div>
+    <ol>
+      <li><strong>[클로드]</strong> 키워드 발굴기 제작 — 언론사 RSS 기반(구글뉴스 링크 함정 회피, 기존 메모리 근거)</li>
+      <li>발굴 → 원고 → <code>humanTouch</code> 검사 → 네이버 임시저장까지 <strong>야간 배치 1회</strong> 연결</li>
+      <li>모든 원고에 기존 쇼츠 소재를 90초 16:9로 재인코딩해 삽입</li>
+    </ol>
+  </div>
+  <div class="row"><span class="k">성공 기준</span><span>아침에 <strong>임시저장 3건</strong>이 키워드 근거와 함께 들어와 있을 것</span></div>
+</div>
+
+<div class="pagebreak"></div>
+
+<div class="sector">
+  <h3>⑤ 스레드 · 인스타 <span class="pill p-dup">가동 중</span></h3>
+  <div class="row"><span class="k">현재</span><span><code>ttj_threads_2026</code> 자동 운영(워밍업 쿼터·시간별 스케줄러) + <code>gw_insta_2026</code></span></div>
+  <div class="row"><span class="k">붙일 것</span><span>없음. 이미 도는 자동화에 <strong>대가성 문구 + 쿠팡 링크</strong>만 붙이면 됨</span></div>
+  <div class="row"><span class="k">돈 경로</span><span>타 SNS 경유 3%. 진입 난이도는 전 라인 최저(준비도 90%)</span></div>
+  <div class="row"><span class="k">주의</span><span><strong>같은 플랫폼에 같은 영상을 여러 계정으로 올리면 계정이 날아간다.</strong> 다른 플랫폼 교차 게시는 허용(돈농부 2부)</span></div>
+  <div class="do">
+    <div class="t">이번 주 실행</div>
+    <ol>
+      <li>쿠팡 키가 들어오는 즉시 스레드 발행 템플릿에 링크 슬롯 + "대가성 문구" 고정 삽입</li>
+      <li>콘텐츠ID를 <code>subId</code>로 넘겨 어느 글이 팔았는지 추적(기존 방침)</li>
+    </ol>
+  </div>
+</div>
+
+<div class="sector">
+  <h3>⑥ 상세페이지 대행 · 전자책 <span class="pill p-fix">여기가 실제 큰 돈</span></h3>
+  <div class="row"><span class="k">현재</span><span>완제품 5묶음이 바탕화면에서 <strong>이틀째 대기 중</strong>. 포트폴리오 3종·판매문안·썸네일까지 완성</span></div>
+  <div class="row"><span class="k">막힌 곳</span><span>크몽 계정이 없음. 코드 문제가 아니라 <strong>클릭 문제</strong></span></div>
+  <div class="row"><span class="k">돈 경로</span><span>상세페이지 대행 <strong>건당 3.9~19만원</strong> — 월 10건이면 39~190만원. 전 라인 중 마진 1위</span></div>
+  <div class="do">
+    <div class="t">이번 주 실행 — 이 문서에서 가장 중요한 항목</div>
+    <ol>
+      <li><strong>[사장님]</strong> 크몽 가입 → 전자책 2종 + 템플릿 5종 + 대행 3단가 등록 (30~60분)</li>
+      <li>절차는 <code>골든-전자책-판매세트-0831/00_먼저-읽으세요.md</code>에 클릭 단위로 있음</li>
+      <li>PDF는 <code>02_인쇄용_*.html</code>을 크롬에서 <code>Ctrl+P</code> → PDF(배경 그래픽 체크) — 5분</li>
+      <li>등록 전 크몽에서 같은 주제 상위 5개의 <strong>현재 가격만</strong> 확인</li>
+    </ol>
+  </div>
+  <div class="row"><span class="k">성공 기준</span><span><strong>첫 입금 1건.</strong> 금액 무관 — 어느 채널이 실제로 도는지 알 근거가 생김</span></div>
+</div>
+
+<div class="sector">
+  <h3>⑦ 영상 제작 자동화 (공통 인프라) <span class="pill p-fix">부분</span></h3>
+  <div class="row"><span class="k">현재</span><span><code>golden-econ-studio</code> 릴스 파이프라인 · Voicebox 무료 TTS · 켄번즈 · <code>shortsAgent.js</code>(H-V-P-R-C + 훅 7유형)</span></div>
+  <div class="row"><span class="k">붙일 것</span><span>① 캡컷 트랙 스타일 프리셋 ② 소스 자동 수집(<code>yt-dlp</code> 기반, 오늘 정리 완료) ③ TTS 배속 1.4 고정</span></div>
+  <div class="row"><span class="k">검토만</span><span><strong>MiniMax H3</strong> — 무료인데 Seedance급이라는 주장. 우리 "시댄스 유료 확정" 결론을 흔들 수 있음. 실측 후 판단</span></div>
+  <div class="row"><span class="k">보류</span><span>ComfyUI + LTX 2.5 — 저장공간 50GB 필요. 지금 손대면 분산</span></div>
+</div>
+
+<div class="pagebreak"></div>
+<h2>3. 자동화에 추가할 것 — 우선순위</h2>
+
+<table>
+  <thead><tr><th style="width:5%">#</th><th style="width:26%">항목</th><th style="width:16%">붙는 곳</th><th style="width:11%">비용</th><th style="width:12%">상태</th><th>왜 이 순서인가</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1</td><td><strong>재해석 지시서</strong></td><td><code>gw_global_shorts_2026</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>채널 삭제를 막는다. 다른 어떤 기능보다 손실 방지가 크다</td></tr>
+    <tr><td class="num">2</td><td><strong>쿠팡 키 연결</strong></td><td><code>.env</code></td><td>0원</td><td><span class="pill p-fix">사장님</span></td><td>라인 하나가 통째로 정지 중. 두 줄이면 풀린다</td></tr>
+    <tr><td class="num">3</td><td><strong>크몽 등록</strong></td><td>—</td><td>0원</td><td><span class="pill p-fix">사장님</span></td><td>완제품이 이틀째 대기. 마진 1위 라인의 유일한 관문</td></tr>
+    <tr><td class="num">4</td><td>실시간 키워드 발굴기</td><td><code>golden-blog-floor</code></td><td>0원</td><td>이번 주</td><td>블로그의 앞단만 비어 있다. 뒤는 다 됨</td></tr>
+    <tr><td class="num">5</td><td>캡컷 트랙 스타일 프리셋</td><td>릴스 파이프라인</td><td>0원</td><td>이번 주</td><td>자막 수동 공정을 없앤다. 편당 수분 절약</td></tr>
+    <tr><td class="num">6</td><td>홈쇼핑 편성표 소재 큐</td><td><code>golden-shop-shorts</code></td><td>0원</td><td>2주차</td><td>검색량보다 빠른 선행지표. 쿠팡 키가 먼저</td></tr>
+    <tr><td class="num">7</td><td>MiniMax H3 실측</td><td><code>ai-video-techniques.md</code></td><td>0원</td><td>2주차</td><td>유료 결론을 뒤집을 수 있으면 비용 구조가 바뀐다</td></tr>
+    <tr><td class="num">8</td><td>블로그 본문 90초 영상 삽입</td><td>블로그 파이프라인</td><td>0원</td><td>2주차</td><td>쇼츠 소재를 재활용해 순위를 올린다. 공짜 이득</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <span class="label">안 할 것 — 그리고 그 이유</span>
+  <p><strong>쇼핑쇼츠 신규 앱</strong> 이미 있음 · <strong>채널전략 도구</strong> 문서로 충분 ·
+  <strong>주식 자동매매</strong> 별개 사업, 지금 손대면 분산 · <strong>SNS 신규</strong> 이미 가동 중 ·
+  <strong>ComfyUI/LTX</strong> 50GB + 학습비용 대비 지금 얻을 게 없음 ·
+  <strong>복제형 더빙 채널</strong> 원본 그대로 번역만 하는 방식은 재해석 기준 미달</p>
+</div>
+
+<h2>4. 4주 실행 캘린더</h2>
+
+<table>
+  <thead><tr><th style="width:11%">시기</th><th style="width:34%">사장님</th><th style="width:38%">클로드</th><th>이 주의 성공 기준</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>1주차<br>이번 주</strong></td>
+      <td>① 크몽 가입 + 7종 등록<br>② 쿠팡 파트너스 가입 + 키 2줄<br><span style="color:#77828C">합계 1~2시간</span></td>
+      <td>· 키워드 발굴기 제작<br>· 재해석 지시서로 시험 3편<br>· YPP 트래커 재측정</td>
+      <td><strong>첫 입금 1건</strong><br>쿠팡 클릭 1건</td>
+    </tr>
+    <tr>
+      <td><strong>2주차</strong></td>
+      <td>크몽 문의 응대<br>(심사 1~3일 후 시작)</td>
+      <td>· 쇼핑쇼츠 주 3편 가동<br>· 블로그 야간 배치 연결<br>· 캡컷 프리셋 제작</td>
+      <td>임시저장 아침 3건<br>쇼핑쇼츠 누적 6편</td>
+    </tr>
+    <tr>
+      <td><strong>3주차</strong></td>
+      <td>대행 문의 1건 응대</td>
+      <td>· 홈쇼핑 편성표 소재 큐<br>· 무편집 채널 경고 관찰 종료<br>· MiniMax H3 실측</td>
+      <td>경고 0회 확인 후<br>편수 확대 결정</td>
+    </tr>
+    <tr>
+      <td><strong>4주차</strong></td>
+      <td>실적 보고 확인 후<br>라인 취사선택</td>
+      <td>· <code>gw_analytics</code>로 라인별 실적 집계<br>· 안 도는 라인 정지 제안</td>
+      <td>어느 라인이 도는지<br><strong>숫자로</strong> 판명</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>5. 돈 계산 — 어디에 시간을 쓸 것인가</h2>
+
+<table>
+  <thead><tr><th style="width:24%">라인</th><th style="width:16%">건당</th><th style="width:18%">월 10건이면</th><th style="width:11%">준비도</th><th>성격</th></tr></thead>
+  <tbody>
+    <tr><td><strong>상세페이지 대행</strong></td><td class="num">3.9~19만원</td><td class="num"><strong>39~190만원</strong></td><td class="num">95%</td><td><strong>실제 큰 돈은 여기</strong></td></tr>
+    <tr><td>전자책</td><td class="num">9,900원</td><td class="num">8만원</td><td class="num">100%</td><td>후기 5개 모이면 14,900원으로</td></tr>
+    <tr><td>디지털 템플릿</td><td class="num">4,900원</td><td class="num">5만원</td><td class="num">100%</td><td>박리다매, 손이 안 감</td></tr>
+    <tr><td>쇼핑 쇼츠</td><td class="num">1만 조회당 ≈450원</td><td class="num">100편에 4.5만원</td><td class="num">80%</td><td>양이 답 · 쿠팡 키 대기</td></tr>
+    <tr><td>드라마·해외 쇼츠</td><td class="num">1천 조회당 0.3원</td><td class="num">—</td><td class="num">70%</td><td>단가 최저, 편수로만</td></tr>
+    <tr><td>AI 롱폼</td><td class="num">RPM 10~12원</td><td class="num">—</td><td class="num">60%</td><td>가장 큰 자산, 가장 느림</td></tr>
+  </tbody>
+</table>
+
+<div class="callout ok">
+  <span class="label">결론</span>
+  <p>작은 돈(전자책·템플릿)으로 <strong>통로를 먼저 뚫고</strong>, 큰 돈은 <strong>상세페이지 대행</strong>에서 납니다.
+  전자책을 "돈이 안 된다"고 건너뛰면 안 되는 이유는 금액이 아니라 <strong>후기와 판매자 등급이 거기서 쌓이기</strong> 때문입니다.
+  쇼츠·롱폼은 시간이 걸리므로 병렬로 돌립니다.</p>
+</div>
+
+<h2>6. 리스크</h2>
+
+<table>
+  <thead><tr><th style="width:26%">리스크</th><th style="width:37%">내용</th><th>대응</th></tr></thead>
+  <tbody>
+    <tr><td><strong>채널 삭제</strong></td><td>경고 3회. 유튜브는 위반 5~10개를 묶어 1회로 준다 — 한 소스 계열을 몰아 올리면 한 방에 간다</td><td><code>reinterpret.js</code> 경고 장부 · 소스 계열당 5편 미만</td></tr>
+    <tr><td><strong>계정 정지</strong></td><td>같은 플랫폼에 같은 영상을 여러 계정으로 올리는 행위</td><td>플랫폼당 1계정 원칙. 교차 게시는 다른 플랫폼끼리만</td></tr>
+    <tr><td><strong>수수료 미확정</strong></td><td>쿠팡 수수료가 자료마다 다름(3%/9%/6.7%)</td><td>첫 정산서로 실측. 그 전까지 어떤 계획도 수수료 기준으로 확정하지 않음</td></tr>
+    <tr><td><strong>기능 과잉</strong></td><td>지난 며칠간 세션들이 계속 새 기능을 추가했고 판매는 0건</td><td>이 문서의 8개 항목 외 <strong>신규 개발 동결</strong>. 첫 입금 후 재개</td></tr>
+    <tr><td><strong>YPP 기한</strong></td><td>8,000시간 요건, 2027-02-01까지 152일</td><td>주 2편 고정. 트래커 재측정 후 페이스 확정</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  우수리미 통합 분석 · 2026-09-02 · 근거 자료는 <code>woosurimi-trend-api/docs/</code>와
+  <code>data/yt-analysis-0902/</code>에 원문 그대로 보관.
+  숫자는 영상 화자의 주장이며 우리 실측치가 아닙니다 — 첫 정산서가 나오면 이 문서를 갱신합니다.
+</footer>
+
+</body>
+</html>

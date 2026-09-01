@@ -826,15 +826,17 @@
         if (!photos.length) return msg("이 원고에 고른 사진이 없습니다. 편집국에서 사진을 먼저 고르세요.", "ws-warn");
 
         e.target.disabled = true;
-        const r = await P.fillPhotoSlots(photos, (m) => msg(m));
+        const r = await P.fillPhotoSlots(photos, (m) => msg(m), { cite: (j.post && j.post.photoCite) || null });
         e.target.disabled = false;
         msg(
           r.done
             ? `✅ 사진 ${r.done}/${r.total} 넣었습니다.` +
-              (r.riskHigh ? ` ⚠️ 그중 ${r.riskHigh}장은 저작권 위험 '높음'입니다.` : "") +
+              (r.riskHigh ? ` (기사·연예 사진 ${r.riskHigh}장)` : "") +
+              (r.tooSmall ? ` ${r.tooSmall}장은 썸네일이라 건너뜀.` : "") +
+              (r.citeMissing ? ` ⚠️ 출처 줄이 본문에 없습니다 — 발행 전에 넣으세요.` : "") +
               (r.failed && r.failed.length ? ` 못 넣은 것: ${r.failed.join(" / ")}` : "")
             : `못 넣었습니다: ${r.why}`,
-          r.done && !r.riskHigh ? "ws-dim" : "ws-warn"
+          r.done && !r.citeMissing ? "ws-dim" : "ws-warn"
         );
       };
 
@@ -3422,7 +3424,7 @@
         showPanel(`<h4>통합 복사 마무리</h4><div class="ws-row">사진을 넣는 중입니다…</div>`);
         ph = await window.__wsPhoto.fillPhotoSlots(post.photos, (m) => {
           showPanel(`<h4>통합 복사 마무리</h4><div class="ws-row">${esc(m)}</div>`);
-        });
+        }, { cite: post.photoCite || null });
       } catch (e) {
         ph = { done: 0, total: 0, failed: [String((e && e.message) || e).slice(0, 80)] };
       }
@@ -3433,7 +3435,9 @@
 
     showPanel(`<h4>통합 복사 마무리</h4>
       <div class="ws-row good">제목 ${title ? "넣음" : "없음"} · 소제목 ${os.done}/${os.total}${ph.total ? ` · 사진 ${ph.done}/${ph.total}` : ""} · 임시저장됨</div>
-      ${ph.riskHigh ? `<div class="ws-warn" style="font-size:11.5px">넣은 사진 중 <b>${ph.riskHigh}장은 저작권 위험 '높음'</b>(기사·연예 사진)입니다. 발행 전에 확인하세요.</div>` : ""}
+      ${ph.citeMissing ? `<div class="ws-warn" style="font-size:11.5px">⚠️ <b>출처 줄이 본문에 안 보입니다.</b> 기사·연예 사진은 출처가 없으면 인용이 아니라 복제가 됩니다 — 발행 전에 넣어주세요: <b>${esc(String(post.photoCite || "")).slice(0, 80)}</b></div>` : ""}
+      ${ph.riskHigh ? `<div class="ws-dim" style="font-size:11.5px">넣은 사진 ${ph.done}장 중 <b>${ph.riskHigh}장</b>이 기사·연예 사진입니다(저작권 위험 '높음').</div>` : ""}
+      ${ph.tooSmall ? `<div class="ws-dim" style="font-size:11.5px">${ph.tooSmall}장은 150px대 <b>썸네일이라 건너뛰었습니다</b> — 편집국이 큰 주소를 못 받아온 사진입니다.</div>` : ""}
       ${ph.failed && ph.failed.length ? `<div class="ws-dim" style="font-size:11.5px">못 넣은 사진: ${esc(ph.failed.join(" / ")).slice(0, 200)} — 그 자리는 [사진: …] 글자가 남아 있습니다.</div>` : ""}
       <div class="ws-dim" style="font-size:11.5px">굵게·형광·색은 붙여넣기에 이미 실려 있어 따로 손대지 않습니다.</div>
       ${os.failed && os.failed.length ? `<div class="ws-dim" style="font-size:11.5px">소제목 ${os.failed.join(", ")}는 문단을 클릭하고 왼쪽 위에서 직접 바꿔주세요.</div>` : ""}`);
