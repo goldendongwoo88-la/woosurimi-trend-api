@@ -111,11 +111,32 @@ function copyrightFlags(v, topComments = []) {
   return flags;
 }
 
+/** 쇼츠로 볼 길이의 상한(초). */
+const SHORTS_MAX_SEC = 90;
+
+/**
+ * 유튜브 검색 "4분 미만" 필터.
+ *
+ * ⚠️ 왜 필요한가 (2026-09-01 실측)
+ * `ytsearchN:키워드`로 찾으면 **롱폼만 나옵니다.** "주방 살림템"으로 찾았더니 1,099초·1,262초
+ * 짜리가 올라와서, 90초 이하만 남기는 --shorts를 켜면 결과가 **늘 0건**이었습니다.
+ * 발굴기가 조용히 빈손이던 진짜 이유입니다.
+ *
+ * 유튜브 검색 화면의 "4분 미만" 필터를 쓰면 8초·40초·73초 같은 것이 나옵니다.
+ * 그래서 쇼츠를 찾을 때는 검색 주소에 그 필터를 붙입니다.
+ */
+const SHORT_FILTER = "EgIYAQ%3D%3D";
+
 /** 후보 검색 (빠름). 목록만 훑습니다. */
 async function searchCandidates(keyword, { count = 25, shortsOnly = false } = {}) {
+  const target = shortsOnly
+    ? `https://www.youtube.com/results?search_query=${encodeURIComponent(keyword)}&sp=${SHORT_FILTER}`
+    : `ytsearch${Math.min(count, 60)}:${keyword}`;
+
   const out = await run([
     "--flat-playlist", "--dump-json", "--no-warnings",
-    `ytsearch${Math.min(count, 60)}:${keyword}`,
+    ...(shortsOnly ? ["--playlist-end", String(Math.min(count, 60))] : []),
+    target,
   ], { timeout: 180000 });
 
   return jsonLines(out)
@@ -128,15 +149,12 @@ async function searchCandidates(keyword, { count = 25, shortsOnly = false } = {}
       channel: v.channel || v.uploader || "",
     }))
     /**
-     * ⚠️ 예전엔 `v.views > 0`으로 걸렀습니다. 그래서 **결과가 늘 0건**이었습니다.
-     * 실측(2026-09-01): `--flat-playlist` 검색 결과에는 view_count 필드가 아예 없습니다.
-     * (id·title·duration·channel은 나오는데 조회수는 안 나옵니다.)
-     * 조회수는 다음 단계(inspect)에서 한 건씩 정밀 조회할 때 들어옵니다.
-     * 그러니 여기서 조회수로 거르면 안 됩니다 — 아직 아무도 조회수를 모르는 시점입니다.
+     * 조회수·길이는 대개 검색 결과에 같이 옵니다(실측: 25만·1099초 정상 수신).
+     * 다만 항목에 따라 빠질 때가 있어서 **없다고 버리지는 않습니다** —
+     * 없으면 다음 단계(inspect)에서 한 건씩 정밀 조회할 때 채워집니다.
      */
     .filter((v) => v.id)
-    // 길이를 못 받은 것은 남깁니다. 쇼츠인지 아닌지는 정밀 조회에서 다시 봅니다.
-    .filter((v) => (shortsOnly ? !(v.duration > 90) : true));
+    .filter((v) => (shortsOnly ? !(v.duration > SHORTS_MAX_SEC) : true));
 }
 
 /** 후보 하나를 자세히 봅니다 (느림). 상위 몇 개에만 씁니다. */
