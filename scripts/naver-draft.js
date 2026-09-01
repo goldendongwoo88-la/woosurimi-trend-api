@@ -496,6 +496,15 @@ ${blogId} 로그인이 안 돼 있습니다.
     };
 
     // ── 4) 본문 칸 클릭 후 진짜 Ctrl+V ──
+    /**
+     * ⚠️ **제목을 본문보다 먼저 넣습니다.**
+     * 편집기가 막 열렸을 때는 커서가 제목 칸에 있어서, 그때 치면 편집기 모델에 정상으로 실립니다.
+     * 본문을 먼저 붙여넣으면 커서가 본문으로 내려가 있어, 제목 칸을 다시 눌러도 절반쯤 빗나갔습니다
+     * (실측 2026-09-02: 화면에는 제목이 보이는데 저장 목록에는 "제목 없음"으로 들어갔습니다).
+     * applyTitle은 함수 선언(호이스팅)이라 아래에서 정의해도 여기서 부를 수 있습니다.
+     */
+    await applyTitle();
+
     say("[4/6] 본문에 붙여넣는 중");
     /**
      * ⚠️ 프레임 안의 좌표로 page.mouse.click을 하면 엉뚱한 곳을 누릅니다.
@@ -947,9 +956,16 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 이러면 편집기가 입력을 정상으로 받아 모델에도 실립니다.
      * (클립보드는 안 씁니다. 사장님 클립보드를 덮어쓰는 사고가 두 번 났습니다.)
      */
-    const wantTitle = String(copied.title || "").trim();
-    if (wantTitle) {
+    await applyTitle();
+
+    async function applyTitle() {
+      const wantTitle = String(copied.title || "").trim();
+      if (!wantTitle) return false;
       const edf = () => page.frames().find((f) => /PostWriteForm/.test(f.url())) || frameE;
+      // 이미 제대로 들어가 있으면 손대지 않습니다.
+      const already2 = await edf().evaluate(() =>
+        (document.querySelector(".se-documentTitle")?.innerText || "").trim()).catch(() => "");
+      if (already2 && already2 !== "제목" && already2.slice(0, 8) === wantTitle.slice(0, 8)) return true;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           /**
@@ -998,24 +1014,12 @@ ${blogId} 로그인이 안 돼 있습니다.
             (document.querySelector(".se-documentTitle")?.innerText || "").trim()).catch(() => "");
           if (now && now !== "제목" && now.slice(0, 8) === wantTitle.slice(0, 8)) {
             say(`      제목 쳐 넣음: ${now.slice(0, 30)}`);
-            if (process.argv.includes("--제목조사")) {
-              const dbg = await edf().evaluate(() => {
-                const t = document.querySelector(".se-documentTitle");
-                return {
-                  html: (t?.outerHTML || "").slice(0, 500),
-                  editables: document.querySelectorAll("[contenteditable='true']").length,
-                  inTitle: Boolean(window.getSelection()?.anchorNode?.parentElement?.closest?.(".se-documentTitle")),
-                  ph: [...document.querySelectorAll(".se-placeholder, .se-placeHolder")]
-                    .map((n) => ({ cls: n.className, txt: (n.textContent || "").slice(0, 10), vis: n.offsetParent !== null })),
-                };
-              }).catch(() => null);
-              say("PROBE " + JSON.stringify(dbg));
-            }
-            break;
+            return true;
           }
           say(`      제목이 안 들어갔습니다 — 다시 시도 (${attempt + 1}/3)`);
         } catch (e) { say(`      제목 넣다 실패: ${String(e.message).slice(0, 50)}`); }
       }
+      return false;
     }
 
     const titleText = String(copied.title || "").trim();

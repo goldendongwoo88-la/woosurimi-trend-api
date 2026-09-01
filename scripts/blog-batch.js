@@ -93,6 +93,28 @@ function runOne(postId) {
   for (const [i, p] of cand.entries()) {
     const head = `${String(i + 1).padStart(2)}/${cand.length}  ${String(p.title || "").slice(0, 34)}`;
     say(head);
+
+    /**
+     * 사진이 아직 없으면 **여기서 먼저 모읍니다.**
+     * naver-draft는 원고에 붙어 있는 사진만 올립니다. 예전에는 사진 붙이는 일을 blog-finish만
+     * 했기 때문에, 일괄로 돌리면 **사진 0장짜리 초안**이 그대로 저장됐습니다(실측: 경제 원고 전부).
+     *   · 연예인 글 → 기사 사진 + 공식 인스타
+     *   · 인물이 없는 글(경제·시사) → 자유 라이선스 사진(위키미디어 공용)
+     */
+    const full = await floor("/api/posts/" + encodeURIComponent(p.id)).catch(() => null);
+    if (!(full?.post?.photos || []).length) {
+      const c = await floor(`/api/photos/candidates?postId=${encodeURIComponent(p.id)}`).catch(() => null);
+      const all = c?.ok ? (c.photos || []) : [];
+      // 연예인 글은 얼굴이 틀리면 안 되므로 공식 인스타만. 인물 없는 글은 자유 라이선스 사진 전부.
+      const pick = c?.celeb === null ? all : all.filter((x) => x.kind === "instagram");
+      if (pick.length) {
+        await floor("/api/photos/choose", { postId: p.id, photos: pick }).catch(() => {});
+        say(`        사진 ${pick.length}장 모음 (${c?.celeb === null ? "자유 라이선스" : "공식 인스타"})`);
+      } else {
+        say(`        사진 못 구했습니다 — ${c?.error || "후보 없음"}`);
+      }
+    }
+
     const r = await runOne(p.id);
     if (r.ok) {
       good++;

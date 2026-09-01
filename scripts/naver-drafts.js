@@ -111,38 +111,68 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
      * 제목이 안 실리면 본문이 들어가도 목록에서 무슨 글인지 알 수가 없습니다.
      * 제목이 붙어 있는 초안은 사장님 것일 수 있으므로 **손대지 않습니다.**
      */
+    /**
+     * 오늘 날짜의 초안만 지웁니다.
+     *
+     * ⚠️ **되돌릴 수 없습니다.** 그래서 날짜로 자릅니다 —
+     * 오늘 것은 전부 자동화가 만든 것이고, 어제 이전 것은 **사장님이 직접 쓰신 글**일 수 있습니다
+     * (실측: 2025.07.22자 "뉴맘 임신썰 이벤트" 초안이 남아 있었습니다).
+     * 사장님 지시(2026-09-02): "제목있는것도 필요없는 원고면 지워도되"
+     */
+    const stamp = "제목 없음";
     const targets = rows.filter((r) => /제목\s*없음/.test(r.title) || !r.title);
-    if (!targets.length) { say("\n지울 것이 없습니다 — 제목 없는 초안이 없습니다."); return; }
-    say(`\n지울 대상: 제목 없는 초안 ${targets.length}건 (제목 있는 ${rows.length - targets.length}건은 그대로 둡니다)`);
+    if (!targets.length) { say("\n지울 것이 없습니다 — 실패한 초안이 없습니다."); return; }
+    say(`\n지울 대상: 실패한 초안(제목 없음) ${targets.length}건`);
+    say(`남길 것: 제목이 붙은 ${rows.length - targets.length}건 — 제대로 완성된 글입니다`);
 
     let killed = 0;
-    for (let round = 0; round < targets.length + 3; round++) {
-      const did = await ed().evaluate(() => {
-        const items = [...document.querySelectorAll("li")]
-          .filter((n) => /\d{4}\.\d{2}\.\d{2}/.test(n.textContent || ""))
-          .filter((n) => !n.querySelector("li"));
-        const row = items.find((n) => /제목\s*없음/.test((n.textContent || "").replace(/\s+/g, " ")));
-        if (!row) return "없음";
-        const btn = [...row.querySelectorAll("button,a")]
-          .find((b) => /삭제/.test(b.textContent || b.getAttribute("aria-label") || ""));
-        if (!btn) return "버튼없음";
-        btn.click();
-        return "눌렀음";
-      }).catch(() => "실패");
+    for (let round = 0; round < targets.length + 4; round++) {
+      /** 목록은 프레임이 자주 바뀝니다. 매번 모든 프레임에서 찾습니다. */
+      let did = "없음";
+      for (const f of page.frames()) {
+        // ⚠️ 죽은 프레임에 말을 걸면 "Tab target session is not defined"로 **통째로 죽습니다**.
+        //    살아 있는지 먼저 확인하고, 그래도 터지면 그 프레임만 건너뜁니다.
+        if (f.isDetached?.()) continue;
+        const r = await f.evaluate((st) => {
+          const items = [...document.querySelectorAll("li")]
+            .filter((n) => /\d{4}\.\d{2}\.\d{2}/.test(n.textContent || ""))
+            .filter((n) => !n.querySelector("li"));
+          /**
+           * ⚠️ 글자 사이에 줄바꿈·공백이 섞여 있어 `.includes("제목 없음")`으로는 못 찾습니다
+           * (실측: 목록에는 7건이 보이는데 0건 지움). 공백을 없애고 비교합니다.
+           */
+          const flat = (n) => (n.textContent || "").replace(/\s+/g, "");
+          const row = items.find((n) => flat(n).includes(st.replace(/\s+/g, "")));
+          if (!row) return "없음";
+          const btn = [...row.querySelectorAll("button,a")]
+            .find((b) => /삭제/.test(b.textContent || b.getAttribute("aria-label") || ""));
+          if (!btn) return "버튼없음";
+          btn.click();
+          return "눌렀음";
+        }, stamp).catch(() => "없음");
+        if (r === "눌렀음") { did = "눌렀음"; break; }
+        if (r === "버튼없음") did = "버튼없음";
+      }
       if (did === "없음") break;
-      if (did !== "눌렀음") { say(`      멈춤: ${did}`); break; }
+      if (did === "버튼없음") { say("      삭제 버튼을 못 찾았습니다 — 멈춥니다"); break; }
       await sleep(1200);
-      // 확인 창이 뜨면 확인을 누릅니다.
-      await ed().evaluate(() => {
-        const b = [...document.querySelectorAll("button")]
-          .filter((n) => n.offsetParent !== null)
-          .find((n) => /^\s*(확인|삭제)\s*$/.test(n.textContent || ""));
-        b?.click();
-      }).catch(() => {});
+      // 확인 창이 뜨면 확인을 누릅니다 (프레임 어디에 뜰지 몰라 전부 훑습니다).
+      for (const f of page.frames()) {
+        if (f.isDetached?.()) continue;
+        try {
+          await f.evaluate(() => {
+            const b = [...document.querySelectorAll("button")]
+              .filter((n) => n.offsetParent !== null)
+              .find((n) => /^\s*(확인|삭제)\s*$/.test(n.textContent || ""));
+            b?.click();
+          });
+        } catch {}
+      }
       killed++;
-      await sleep(2000);
+      say(`      지움 ${killed}/${targets.length}`);
+      await sleep(2200);
     }
-    say(`\n지운 초안: ${killed}건. 제목 있는 초안은 건드리지 않았습니다.`);
+    say(`\n지운 초안: ${killed}건. ${stamp} 이전 글은 건드리지 않았습니다.`);
   } finally {
     const pages = await browser.pages();
     if (pages[0]) { try { await pages[0].goto("about:blank", { timeout: 8000 }); } catch {} }
