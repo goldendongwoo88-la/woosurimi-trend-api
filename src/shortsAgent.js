@@ -25,7 +25,8 @@ const YTF = require("./youtubeFinder");
 const WP = require("./winnerPattern");
 const PE = require("./productExtract");
 const SV = require("./stockVideo");
-const SIG = require("./shoppingSignals");                       // 구매력·보완재·시즌 (2026-09-01 라이브 실측)
+const SIG = require("./shoppingSignals");
+const SD = require("./scriptDraft");                            // 대본 초안 (2026-09-02)                       // 구매력·보완재·시즌 (2026-09-01 라이브 실측)
 
 /** 대본 검사기는 공용 자산입니다. 없어도 나머지는 돌게 둡니다. */
 let SC = null;
@@ -108,10 +109,8 @@ function makeTitles(product, pattern, { store = "다이소", price = "" } = {}) 
  * 링크를 누르라는 것보다 심리적 저항이 낮고, 댓글 수가 올라가 알고리즘에도 실립니다.
  * 키워드는 **짧을수록** 답니다. 제품명 전체를 시키면 아무도 안 씁니다.
  */
-function ctaKeyword(product) {
-  const w = String(product || "").trim().split(/\s+/).pop() || "정보";
-  return w.length <= 4 ? w : w.slice(-3);       // "스푼 스크러버" → "러버"보다 "청소"가 낫지만, 최소한 짧게
-}
+/** scriptDraft의 사전 기반 키워드를 씁니다 — 구성표와 대본이 다른 말을 하면 안 됩니다. */
+const ctaKeyword = (product) => SD.ctaKeyword(product, SD.inferProblem(product));
 
 /**
  * ── 릴스 구조: H-V-P-R-C ──
@@ -272,8 +271,20 @@ async function run(keywords, { days = 90, maxSubs = 100000, minEfficiency = 5, w
     p.ctaKeyword = ctaKeyword(p.product);                        // "댓글에 ○○ 남겨주세요"
     p.complements = SIG.complements(p.product);                  // 한 발자국 더 — 보완재
     p.season = SIG.시즌배율();                                    // 지금이 무슨 시기인가
+
+    /**
+     * 대본 초안 + 자가 채점.
+     * 어제 검사기를 붙여놓고 **검사할 대본을 안 만들어서** 아무 일도 안 일어나고 있었습니다.
+     * 초안을 만들고 그 자리에서 채점해, 70점을 못 넘으면 무엇을 고쳐야 하는지까지 같이 냅니다.
+     */
+    p.category = SIG.inferCategory(p.product);
+    p.script = SD.draft(p.product, { category: p.category, price: p.coupang?.best?.price || 0 });
+    p.scriptScore = SC ? SC.checkScript(p.script.text) : null;
   }
-  say(`      제품 ${picks.length}개 기획 완료`);
+  const 평균 = picks.filter((x) => x.scriptScore).reduce((a, x) => a + x.scriptScore.score, 0)
+             / Math.max(1, picks.filter((x) => x.scriptScore).length);
+  say(`      제품 ${picks.length}개 기획 완료 — 대본 초안 평균 ${Math.round(평균)}점`);
+  if (!SC) say("      ⚠ 대본 검사기(_shared/script-check.js)를 못 찾아 채점을 건너뛰었습니다.");
 
   const blocked = [];
   if (!configured) blocked.push("쿠팡 파트너스 키 (COUPANG_ACCESS_KEY / COUPANG_SECRET_KEY)");
@@ -285,9 +296,16 @@ async function run(keywords, { days = 90, maxSubs = 100000, minEfficiency = 5, w
    */
   const 미가입 = SIG.제휴처.filter((x) => x.상태 === "미가입").map((x) => `${x.이름}(${x.수수료})`);
   if (미가입.length) blocked.push(`제휴처 미가입 — ${미가입.join(", ")} · 사장님 결정 대기`);
+  if (!SIG.쿠팡수수료.확정) blocked.push(`쿠팡 실제 수수료 미확인 — ${SIG.쿠팡수수료.해야할것}`);
 
   return {
     ok: true,
+    /**
+     * 계정규칙을 결과에 얹습니다. 소재를 잘 골라도 **업로드 방식 하나로 계정이 죽습니다.**
+     * 특히 "같은 플랫폼 다중계정 중복"과 "다른 플랫폼 재사용"은 결과가 정반대인데
+     * 헷갈리기 쉬운 자리라, 기획서를 볼 때마다 같이 보이게 둡니다.
+     */
+    accountRules: SIG.계정규칙,
     keywords: kws,
     videos: all.length,
     quotaUsed: quota,
