@@ -97,7 +97,12 @@ function bestRoute(product, price = 0) {
     건당: p ? Math.round(p * y.low) : null, 상태: "미가입 — 구독자 500명 필요",
     비고: `쿠팡 대비 최소 ${(y.low / c.rate).toFixed(1)}배`,
   });
-  rows.sort((a, b) => (b.건당 || 0) - (a.건당 || 0));
+  /**
+   * 가격을 모를 때가 많습니다(쿠팡 키가 없으면 전부 0). 그때 건당 금액으로 정렬하면
+   * 전부 0이라 **입력 순서가 그대로 답이 되어버립니다.** 가격이 없으면 요율로 정렬합니다.
+   */
+  const 요율값 = (r) => Number(String(r.요율).match(/[\d.]+/)?.[0] || 0);
+  rows.sort((a, b) => (p ? (b.건당 || 0) - (a.건당 || 0) : 요율값(b) - 요율값(a)));
   return { 제품: product, 가격: p, 경로: rows, 추천: rows[0] };
 }
 

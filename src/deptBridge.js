@@ -25,12 +25,30 @@ const INBOX = path.join(DEPT, "data", "inbox");
  * 부서는 상품명·가격·특징 3~5개·제휴링크·사진, 그리고 장면별(오버레이 문구 + 내레이션)을 받습니다.
  * 우리 5단 대본이 그대로 장면이 됩니다 — **훅/공감/발견/근거/마무리가 곧 5장면**입니다.
  */
+/**
+ * 화면 자막용으로 줄입니다.
+ *
+ * ⚠️ 글자수로 그냥 자르면 "쓸 때마다 물건이 쏟"처럼 낱말 중간에서 끊깁니다.
+ * 화면에 그대로 박히는 문구라 이러면 못 씁니다. **어절 단위로** 자르고,
+ * 잘렸으면 말줄임을 붙여 "여기서 끝난 게 아니다"를 보이게 합니다.
+ */
+function overlay(text, max = 20) {
+  const t = String(text).replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  let out = "";
+  for (const w of t.split(" ")) {
+    if ((out + " " + w).trim().length > max) break;
+    out = (out + " " + w).trim();
+  }
+  return (out || t.slice(0, max)) + "…";
+}
+
 function toDeptJob(pick) {
   const g = pick.기획;
   const 장면 = g.대본.줄.map((줄, i) => ({
     n: i + 1,
     단: 줄.단,
-    오버레이: 줄.단.startsWith("① 훅") ? 줄.문장.slice(0, 22) : 줄.문장.slice(0, 18),
+    오버레이: overlay(줄.문장, 줄.단.startsWith("① 훅") ? 22 : 18),
     내레이션: 줄.문장,
     연출: 줄.메모,
   }));
