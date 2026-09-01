@@ -2,7 +2,7 @@
  * 네이버 임시저장 목록 보기 / 지우기 — 2026-09-02
  *
  *   node scripts/naver-drafts.js <블로그ID>                  목록만 봅니다 (아무것도 안 지웁니다)
- *   node scripts/naver-drafts.js <블로그ID> --지우기-최신빼고   맨 위 1건만 남기고 지웁니다
+ *   node scripts/naver-drafts.js <블로그ID> --제목없음만-지우기   제목 없는 초안만 지웁니다
  *
  * ⚠️ **지우면 되돌릴 수 없습니다.** 기본은 보기만 하고, 지울 때는 무엇을 지울지 먼저 다 찍습니다.
  */
@@ -12,8 +12,8 @@ const puppeteer = require(PUPPETEER);
 const EXTENSION = path.join(__dirname, "..", "extension");
 
 const blogId = process.argv[2];
-const doDelete = process.argv.includes("--지우기-최신빼고");
-if (!blogId) { console.log("사용: node scripts/naver-drafts.js <블로그ID> [--지우기-최신빼고]"); process.exit(1); }
+const doDelete = process.argv.includes("--제목없음만-지우기");
+if (!blogId) { console.log("사용: node scripts/naver-drafts.js <블로그ID> [--제목없음만-지우기]"); process.exit(1); }
 
 const say = (m) => console.log(m);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -37,7 +37,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const browser = await puppeteer.launch({
     timeout: 90000,
-    headless: false, userDataDir: `C:\dev\profiles\naver_${blogId}`, defaultViewport: null,
+    /**
+     * ⚠️ 역슬래시는 **두 번** 써야 합니다.
+     * `C:\dev\profiles\naver_...` 라고 쓰면 자바스크립트가 `\n`을 **줄바꿈**으로 읽어버려
+     * 엉뚱한 폴더에 새 프로필을 만듭니다. 그러면 로그인해 둔 것이 하나도 안 보입니다
+     * (실측 2026-09-02: 이 스크립트만 계속 "로그아웃 상태"라고 나온 진짜 원인이었습니다).
+     */
+    headless: false, userDataDir: `C:\\dev\\profiles\\naver_${blogId}`, defaultViewport: null,
     args: [`--load-extension=${EXTENSION}`, `--disable-extensions-except=${EXTENSION}`,
       "--disable-blink-features=AutomationControlled", "--hide-crash-restore-bubble",
       "--disable-session-crashed-bubble", "--window-size=900,700", "--window-position=1050,560", "--lang=ko-KR,ko"],
@@ -93,10 +99,50 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     if (!doDelete) {
       say("\n※ 보기만 했습니다. 아무것도 지우지 않았습니다.");
+      say("   제목 없는 초안만 지우려면: --제목없음만-지우기");
       return;
     }
-    say(`\n지울 대상: ${rows.length - 1}건 (맨 위 1건은 남깁니다)`);
-    say("이 스크립트는 아직 지우기를 실행하지 않습니다 — 목록 구조 확인 후 붙입니다.");
+
+    /**
+     * ── "제목 없음" 초안만 지웁니다 ──
+     *
+     * ⚠️ **되돌릴 수 없습니다.** 그래서 아무거나 지우지 않고 **제목이 비어 있는 것만** 지웁니다.
+     * 제목이 없는 초안은 자동화가 실패해서 남은 껍데기입니다 —
+     * 제목이 안 실리면 본문이 들어가도 목록에서 무슨 글인지 알 수가 없습니다.
+     * 제목이 붙어 있는 초안은 사장님 것일 수 있으므로 **손대지 않습니다.**
+     */
+    const targets = rows.filter((r) => /제목\s*없음/.test(r.title) || !r.title);
+    if (!targets.length) { say("\n지울 것이 없습니다 — 제목 없는 초안이 없습니다."); return; }
+    say(`\n지울 대상: 제목 없는 초안 ${targets.length}건 (제목 있는 ${rows.length - targets.length}건은 그대로 둡니다)`);
+
+    let killed = 0;
+    for (let round = 0; round < targets.length + 3; round++) {
+      const did = await ed().evaluate(() => {
+        const items = [...document.querySelectorAll("li")]
+          .filter((n) => /\d{4}\.\d{2}\.\d{2}/.test(n.textContent || ""))
+          .filter((n) => !n.querySelector("li"));
+        const row = items.find((n) => /제목\s*없음/.test((n.textContent || "").replace(/\s+/g, " ")));
+        if (!row) return "없음";
+        const btn = [...row.querySelectorAll("button,a")]
+          .find((b) => /삭제/.test(b.textContent || b.getAttribute("aria-label") || ""));
+        if (!btn) return "버튼없음";
+        btn.click();
+        return "눌렀음";
+      }).catch(() => "실패");
+      if (did === "없음") break;
+      if (did !== "눌렀음") { say(`      멈춤: ${did}`); break; }
+      await sleep(1200);
+      // 확인 창이 뜨면 확인을 누릅니다.
+      await ed().evaluate(() => {
+        const b = [...document.querySelectorAll("button")]
+          .filter((n) => n.offsetParent !== null)
+          .find((n) => /^\s*(확인|삭제)\s*$/.test(n.textContent || ""));
+        b?.click();
+      }).catch(() => {});
+      killed++;
+      await sleep(2000);
+    }
+    say(`\n지운 초안: ${killed}건. 제목 있는 초안은 건드리지 않았습니다.`);
   } finally {
     const pages = await browser.pages();
     if (pages[0]) { try { await pages[0].goto("about:blank", { timeout: 8000 }); } catch {} }

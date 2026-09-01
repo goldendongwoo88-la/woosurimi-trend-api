@@ -952,26 +952,46 @@ ${blogId} 로그인이 안 돼 있습니다.
       const edf = () => page.frames().find((f) => /PostWriteForm/.test(f.url())) || frameE;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          const box = await edf().$(".se-documentTitle .se-text-paragraph, .se-documentTitle");
+          /**
+           * 제목 칸을 누릅니다.
+           * ⚠️ 빈 제목 문단은 높이가 거의 없어서 누르는 곳이 빗나갑니다(실측: 절반쯤 실패).
+           * 그래서 **넓은 바깥 상자**를 누르고, 커서가 진짜 제목 칸에 들어갔는지 확인합니다.
+           */
+          const box = await edf().$(".se-documentTitle .se-section-documentTitle, .se-documentTitle");
           if (!box) break;
           await box.click();
           await sleep(700);
+          const inTitle = await edf().evaluate(() => {
+            const n = window.getSelection()?.anchorNode;
+            const el = n?.nodeType === 1 ? n : n?.parentElement;
+            return Boolean(el?.closest?.(".se-documentTitle"));
+          }).catch(() => false);
+          if (!inTitle) {
+            // 안 들어갔으면 상자 한가운데를 진짜 마우스로 한 번 더 누릅니다.
+            const bb = await box.boundingBox().catch(() => null);
+            if (bb) { await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2); await sleep(600); }
+          }
           /**
            * 이미 뭐가 들어 있으면 지우고 씁니다.
            * ⚠️ **Ctrl+A를 쓰면 안 됩니다** — 커서가 제목 칸에 있어도 문서 전체가 잡혀서
            * 이어지는 Delete가 **본문을 통째로 지울 수 있습니다.**
            * 제목 요소 안에서만 범위를 잡아 지웁니다.
            */
-          await edf().evaluate(() => {
-            const t = document.querySelector(".se-documentTitle");
-            if (!t) return;
-            const r = document.createRange();
-            r.selectNodeContents(t);
-            const sel = window.getSelection();
-            sel.removeAllRanges(); sel.addRange(r);
-          }).catch(() => {});
-          await page.keyboard.press("Delete");
-          await sleep(300);
+          const had = await edf().evaluate(() =>
+            (document.querySelector(".se-documentTitle")?.innerText || "").trim()).catch(() => "");
+          if (had && had !== "제목") {
+            // 이미 글자가 있으면 제목 칸 안에서만 범위를 잡아 지웁니다.
+            await edf().evaluate(() => {
+              const t = document.querySelector(".se-documentTitle");
+              if (!t) return;
+              const r = document.createRange();
+              r.selectNodeContents(t);
+              const sel = window.getSelection();
+              sel.removeAllRanges(); sel.addRange(r);
+            }).catch(() => {});
+            await page.keyboard.press("Delete");
+            await sleep(300);
+          }
           await page.keyboard.type(wantTitle, { delay: 12 });
           await sleep(1200);
           const now = await edf().evaluate(() =>

@@ -20,7 +20,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
   const browser = await puppeteer.launch({
-    headless: false, timeout: 90000, userDataDir: `C:\dev\profiles\naver_${blogId}`, defaultViewport: null,
+    // ⚠️ 역슬래시는 두 번 — `\n`이 줄바꿈으로 읽혀 엉뚱한 폴더에 프로필이 생깁니다(실측 2026-09-02).
+    headless: false, timeout: 90000, userDataDir: `C:\\dev\\profiles\\naver_${blogId}`, defaultViewport: null,
     args: ["--disable-blink-features=AutomationControlled", "--hide-crash-restore-bubble",
       "--disable-session-crashed-bubble", "--window-size=1000,760", "--window-position=200,80", "--lang=ko-KR,ko"],
   });
