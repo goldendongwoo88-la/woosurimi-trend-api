@@ -58,7 +58,7 @@ const won = (n) => (+n || 0).toLocaleString() + "원";
   console.log("3/4  후킹 채점 중…");
   const picked = [];
   for (const v of found.results) {
-    const score = hookEngine ? hookEngine.scoreTitle(v.title, "money") : { mult: null, devices: [] };
+    const score = hookEngine ? hookEngine.scoreTitle(v.title, "shop")   /* money는 부업 콘텐츠 축입니다 */ : { mult: null, devices: [] };
     picked.push({ ...v, hookMult: score.mult, devices: score.devices });
   }
   picked.sort((a, b) => (b.hookMult || 0) - (a.hookMult || 0));

@@ -19,6 +19,9 @@
  */
 
 const SIG = require("./shoppingSignals");
+/** 훅 채점 — 없으면 해시 선택만 씁니다. */
+let HOOK = null;
+try { HOOK = require(require("path").join(__dirname, "..", "..", "_shared", "hook-engine")); } catch {}
 
 /** 받침 여부로 조사를 고릅니다. "접시선반를"이 나오면 초안을 못 씁니다. */
 function josa(word, withJong, withoutJong) {
@@ -146,6 +149,18 @@ function draft(product, { category = "살림", problem = "", benefits = [], pric
   const b = benefits.length ? benefits : ["(근거 1 — 실제로 되는 점)", "(근거 2 — 숫자나 비교)"];
 
   const 줄 = [];
+  /**
+   * 훅 7유형을 **전부 만들어 채점**합니다.
+   *
+   * 고르는 건 여전히 해시입니다 — 점수 1등만 쓰면 모든 제품이 같은 훅으로 수렴해서,
+   * 8편 뽑으면 8편이 똑같아지던 문제로 되돌아갑니다. 다양성이 먼저입니다.
+   * 대신 **순위를 같이 내보내** A/B에 상위 두 개를 붙일 수 있게 합니다.
+   */
+  const 훅후보 = 훅틀.map((h) => {
+    const 문장 = h.f({ 문제, 가격: price, 권위, p });
+    return { type: h.type, 문장, 점수: HOOK ? HOOK.scoreTitle(문장, "shop", { ignoreLength: true }).mult : null };
+  }).sort((a, b) => (b.점수 ?? 0) - (a.점수 ?? 0));
+
   const 훅 = 훅고르기(p, hookType);
   줄.push({ 단: `① 훅 (${훅.type})`, 문장: 훅.f({ 문제, 가격: price, 권위, p }),
             메모: "0~3초. 정리된 화면 말고 엉망인 화면으로 여십시오. 훅 유형은 hookType으로 바꿀 수 있습니다" });
@@ -161,7 +176,7 @@ function draft(product, { category = "살림", problem = "", benefits = [], pric
             메모: `링크 유도보다 저항이 낮고 댓글이 알고리즘에 실립니다. 대가성 문구는 설명란 첫 줄` });
 
   const text = 줄.map((r) => r.문장).join(" ");
-  return { product: p, category, persona: per, ctaKeyword: key, hookType: 훅.type, 줄, text,
+  return { product: p, category, persona: per, ctaKeyword: key, hookType: 훅.type, 훅후보, 줄, text,
            needsInput: 기본근거 ? ["④ 근거 2개 — 제품 상세에서 가져와 채우십시오. 지어내면 허위광고입니다"] : [] };
 }
 
