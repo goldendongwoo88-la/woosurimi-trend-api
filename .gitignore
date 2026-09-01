@@ -12,3 +12,4 @@ scratch-*
 .claude/settings.local.json
 data/affiliate-links.json
 data/upload-ledger.json
+output/daily/
