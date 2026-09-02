@@ -79,7 +79,22 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       return;
     }
 
-    // 저장 목록 열기 — "저장 N" 옆의 목록 단추
+    /**
+     * 저장 목록 열기 — "저장 N" 옆의 목록 단추.
+     * ⚠️ 한 건 지우면 목록이 닫힙니다. 그래서 **지울 때마다 다시 엽니다.**
+     * 예전에는 한 번만 열고 반복했는데, 두 번째부터 "행을 못 찾음"으로 0건 지웠습니다.
+     */
+    const openList = async () => {
+      await ed().evaluate(() => {
+        const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+        const save = [...document.querySelectorAll("button,a")].filter(vis)
+          .find((b) => /^저장(\s*\d+)?$/.test((b.textContent || "").trim()));
+        const near = save?.parentElement?.querySelectorAll("button") || [];
+        for (const b of near) if (b !== save) { b.click(); return; }
+      }).catch(() => {});
+      await sleep(2500);
+    };
+
     await ed().evaluate(() => {
       const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
       const save = [...document.querySelectorAll("button,a")].filter(vis)
@@ -128,6 +143,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       dup.forEach((d) => say(`   지울 것: ${d.when}  ${d.title.slice(0, 36)}`));
       let gone = 0;
       for (const d of dup) {
+        await openList();        // 매번 다시 엽니다
         let hit = false;
         for (const f of page.frames()) {
           if (f.isDetached?.()) continue;
@@ -188,6 +204,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
        * ⚠️ 예전에는 오류까지 "없음"으로 삼켜서, **왜 0건인지 알 수가 없었습니다.**
        * 오류는 따로 적어 마지막에 보여줍니다.
        */
+      await openList();          // 매번 다시 엽니다 — 한 건 지우면 목록이 닫힙니다
       let did = "없음";
       let rowsSeen = 0;
       for (const f of page.frames()) {

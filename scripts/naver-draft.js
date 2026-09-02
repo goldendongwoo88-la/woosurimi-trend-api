@@ -197,6 +197,16 @@ async function downloadPhotos(photos, say) {
   let small = 0;
   for (const [i, ph] of photos.entries()) {
     try {
+      /**
+       * 카드뉴스처럼 **이미 이 컴퓨터에 있는 그림**은 내려받지 않고 그대로 씁니다.
+       * (photo.file 이 있으면 그게 파일 경로입니다)
+       */
+      if (ph.file && fs.existsSync(ph.file)) {
+        const f = path.join(dir, `p${String(i).padStart(2, "0")}${path.extname(ph.file) || ".png"}`);
+        fs.copyFileSync(ph.file, f);
+        files.push(f);
+        continue;
+      }
       const r = await fetch(ph.url, { headers: { "User-Agent": UA_IMG, Referer: "https://www.instagram.com/" } });
       if (!r.ok) { files.push(null); continue; }
       const buf = Buffer.from(await r.arrayBuffer());
@@ -929,8 +939,17 @@ ${blogId} 로그인이 안 돼 있습니다.
           await imgs[k].scrollIntoView().catch(() => {});
           await sleep(400);
           const bb = await imgs[k].boundingBox().catch(() => null);
-          if (bb) await page.mouse.click(bb.x + bb.width / 2, bb.y + Math.min(bb.height * 0.25, 120));
-          else await imgs[k].click();
+          /**
+           * ⚠️ 누를 자리가 **화면 밖으로 나가면 안 됩니다.**
+           * 카드뉴스는 세로 1350px이라 창(900px)보다 커서, 위쪽 1/4 지점이 화면 위로 벗어납니다.
+           * 그러면 클릭이 허공에 떨어지고 사진이 안 골라집니다(실측: "고른 사진 0개").
+           * 창 안으로 끌어당겨 누릅니다.
+           */
+          const vp = page.viewport() || { height: 900 };
+          if (bb) {
+            const y = Math.min(Math.max(bb.y + Math.min(bb.height * 0.25, 120), 40), (vp.height || 900) - 60);
+            await page.mouse.click(bb.x + bb.width / 2, y);
+          } else await imgs[k].click();
           await sleep(900);
           if (k === 0 && process.argv.includes("--옆트임조사")) {
             const d = await ed().evaluate(() => {
