@@ -189,6 +189,15 @@ function writeClipboard(text) {
  */
 const UA_IMG = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36";
 const PHOTO_MARK = (i) => `⟦사진${i}⟧`;
+/**
+ * ⚠️ **네이버가 ⟦⟧ 를 [] 로 바꿔버립니다** (2026-09-03 실측).
+ *    붙여넣으면 화면에는 `[사진3]` 으로 나옵니다. 그래서 ⟦⟧ 만 찾으면
+ *    자리를 하나도 못 찾고 사진이 **글 맨 끝에 몰립니다.**
+ *    찾을 때는 두 모양을 다 봅니다.
+ */
+const PHOTO_MARK_ALT = (i) => `[사진${i}]`;
+const PHOTO_MARK_RE = /[⟦\[]사진(\d+)[⟧\]]/;
+const PHOTO_MARK_RE_G = /[⟦\[]사진\d+[⟧\]]/g;
 
 /** 사진을 임시 폴더로 내려받습니다. 못 받은 자리는 null로 둡니다(자리는 유지). */
 async function downloadPhotos(photos, say) {
@@ -827,12 +836,16 @@ ${blogId} 로그인이 안 돼 있습니다.
       for (const [i, file] of files.entries()) {
         if (!file) { failed.add(i); continue; }
         const mark = PHOTO_MARK(i);
+        const markAlt = PHOTO_MARK_ALT(i);
         // ① 표식 자리에 커서를 세웁니다.
-        const put = await ed().evaluate((mk) => {
+        // 두 모양(⟦사진N⟧ · [사진N])을 다 찾습니다 — 네이버가 괄호를 바꿉니다.
+        const put = await ed().evaluate((mks) => {
           const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
           let n;
           while ((n = w.nextNode())) {
-            const at = (n.nodeValue || "").indexOf(mk);
+            const v = n.nodeValue || "";
+            let mk = null, at = -1;
+            for (const cand of mks) { const i2 = v.indexOf(cand); if (i2 >= 0) { mk = cand; at = i2; break; } }
             if (at < 0) continue;
             const host = n.parentElement?.closest("[contenteditable='true']");
             host?.focus?.();
@@ -844,8 +857,25 @@ ${blogId} 로그인이 안 돼 있습니다.
             return true;
           }
           return false;
-        }, mark).catch(() => false);
+        }, [mark, markAlt]).catch(() => false);
         if (!put) { failed.add(i); say(`      ⚠ ${mark} 자리를 못 찾았습니다 — 건너뜁니다`); continue; }
+        // 진단 — 커서가 실제로 어디에 섰는지, 사진이 그 자리에 들어가는지 봅니다.
+        if (i === 0) {
+          const 진단 = await ed().evaluate(() => {
+            const sel = window.getSelection();
+            const n = sel && sel.anchorNode;
+            const p = n && (n.nodeType === 3 ? n.parentElement : n);
+            return {
+              커서있나: !!(sel && sel.rangeCount),
+              커서주변: (n && n.nodeValue || "").slice(0, 40),
+              부모: p ? p.tagName + "." + (p.className || "").slice(0, 30) : "없음",
+              편집가능: !!(p && p.closest("[contenteditable='true']")),
+              소제목후보: document.querySelectorAll("span[style*='38px']").length,
+              문단수: document.querySelectorAll(".se-text-paragraph").length,
+            };
+          }).catch((e) => ({ 오류: String(e).slice(0, 60) }));
+          say("      [진단] " + JSON.stringify(진단, null, 0));
+        }
 
         // ② 사진 버튼을 눌러 파일 선택창을 띄우고 파일을 넘깁니다.
         const before = await imgCount();
@@ -882,7 +912,7 @@ ${blogId} 로그인이 안 돼 있습니다.
         const hits = [];
         let n;
         while ((n = w.nextNode())) {
-          const m = (n.nodeValue || "").match(/⟦사진(\d+)⟧/);
+          const m = (n.nodeValue || "").match(/[⟦\[]사진(\d+)[⟧\]]/);
           if (m) hits.push({ node: n, idx: Number(m[1]) });
         }
         let removed = 0;
@@ -895,7 +925,7 @@ ${blogId} 로그인이 안 돼 있습니다.
             para.remove();
             continue;
           }
-          h.node.nodeValue = (h.node.nodeValue || "").replace(/⟦사진\d+⟧/g, "");
+          h.node.nodeValue = (h.node.nodeValue || "").replace(/[⟦\[]사진\d+[⟧\]]/g, "");
         }
         return removed;
       }, [...failed]).catch(() => 0);
@@ -1003,8 +1033,15 @@ ${blogId} 로그인이 안 돼 있습니다.
       const subs = await ed().$$("p[data-wsu-subhead], .se-text-paragraph");
       for (const el of subs) {
         try {
+          /**
+           * ⚠️ **<b> 로 소제목을 가리면 안 됩니다.** 본문의 [강조] 도 <b> 로 나가서
+           *    강조 문단이 소제목으로 잡히고, 정작 소제목은 놓칩니다(2026-09-03 실측: 5개 중 2개).
+           *    소제목은 38px 로 나가므로 그걸 봅니다.
+           */
           const isSub = await el.evaluate((n) =>
-            n.hasAttribute('data-wsu-subhead') || Boolean(n.querySelector('b, strong')));
+            n.hasAttribute('data-wsu-subhead')
+            || Boolean(n.querySelector('span[style*="38px"], span[style*="38.0px"]'))
+            || /font-size:\s*38(\.0)?px/.test(n.getAttribute('style') || ''));
           if (!isSub) continue;
           await el.evaluate((n) => n.scrollIntoView({ block: 'center' }));
           await sleep(250);
@@ -1029,6 +1066,17 @@ ${blogId} 로그인이 안 돼 있습니다.
           });
           if (picked) subOk++;
           await sleep(500);
+          /**
+           * 사장님 지시(2026-09-03): **소제목 표시를 먼저 바꾸고, 그다음 38 굵게.**
+           * 네이버 소제목 스타일이 제 크기로 덮어쓰기 때문에 순서가 중요합니다.
+           */
+          if (picked) {
+            await el.evaluate((n) => {
+              n.querySelectorAll('span').forEach((sp) => { sp.style.fontSize = '38px'; sp.style.fontWeight = '700'; });
+              if (!n.querySelector('span')) { n.style.fontSize = '38px'; n.style.fontWeight = '700'; }
+            }).catch(() => {});
+            await sleep(200);
+          }
         } catch { /* 다음 문단 */ }
       }
       if (subOk) say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
