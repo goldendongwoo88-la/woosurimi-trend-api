@@ -33,8 +33,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log("   ② **로그인 버튼 위의 '로그인 상태 유지'를 켜신 다음**");
   console.log("   ③ 로그인하세요. 창은 제가 알아서 닫습니다.\n");
 
-  // 로그인될 때까지 기다립니다 (최대 5분).
-  for (let i = 0; i < 100; i++) {
+  /**
+   * 로그인될 때까지 기다립니다 (최대 30분).
+   * ⚠️ 5분이었는데 사장님이 다른 일 하시는 동안 창이 닫혀 헛수고가 됐습니다(2026-09-02).
+   *    사람을 기다리는 창이니 넉넉하게 둡니다.
+   */
+  for (let i = 0; i < 600; i++) {
     await sleep(3000);
     const done = await page.evaluate(() => !/nidlogin/.test(location.href)).catch(() => false);
     if (done) break;
