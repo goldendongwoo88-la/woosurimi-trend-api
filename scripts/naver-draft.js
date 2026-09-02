@@ -786,7 +786,7 @@ ${blogId} 로그인이 안 돼 있습니다.
       const el = pickBody([...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n)))
         || document.querySelector(".se-main-container, .se-content");
       if (!el) return false;
-      const editable = el.closest("[contenteditable='true']") || el;
+      const editable = el.closest('[contenteditable]') || el;
       editable.focus?.();
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -828,7 +828,26 @@ ${blogId} 로그인이 안 돼 있습니다.
       say(`[4.5/6] 사진 올리는 중 (${photosArr.length}장)`);
       const { dir, files } = await downloadPhotos(photosArr, say);
       const failed = new Set();
-      const ed = () => page.frames().find((f) => /PostWriteForm/.test(f.url())) || frameE;
+      /**
+       * ⚠️ **본문이 든 프레임을 씁니다.** (2026-09-03)
+       *    예전에는 PostWriteForm 을 먼저 잡았는데, 본문은 about:blank 프레임에
+       *    들어가는 경우가 있습니다(위 626행 주석에 이미 적혀 있던 사실입니다).
+       *    엉뚱한 프레임에서 ⟦사진N⟧ 을 찾으니 커서가 편집영역 밖에 서고,
+       *    네이버는 사진을 **문서 맨 끝에 몰아넣습니다.**
+       *    그래서 **표식이 실제로 있는 프레임**을 골라 씁니다.
+       */
+      const 표식있는프레임 = async () => {
+        for (const f of page.frames()) {
+          const 있나 = await f.evaluate(() =>
+            /[⟦\[]사진\d+[⟧\]]/.test(document.body?.innerText || "")).catch(() => false);
+          if (있나) return f;
+        }
+        return null;
+      };
+      let 본문프레임 = await 표식있는프레임();
+      if (본문프레임) say(`      본문 프레임: ${본문프레임.url().slice(0, 46) || "about:blank"}`);
+      const ed = () => 본문프레임
+        || page.frames().find((f) => /PostWriteForm/.test(f.url())) || frameE;
 
       const imgCount = async () => (await ed().evaluate(
         () => document.querySelectorAll(".se-component.se-image").length).catch(() => 0));
@@ -847,7 +866,7 @@ ${blogId} 로그인이 안 돼 있습니다.
             let mk = null, at = -1;
             for (const cand of mks) { const i2 = v.indexOf(cand); if (i2 >= 0) { mk = cand; at = i2; break; } }
             if (at < 0) continue;
-            const host = n.parentElement?.closest("[contenteditable='true']");
+            const host = n.parentElement?.closest('[contenteditable]');
             host?.focus?.();
             const r = document.createRange();
             r.setStart(n, at + mk.length);
@@ -869,7 +888,7 @@ ${blogId} 로그인이 안 돼 있습니다.
               커서있나: !!(sel && sel.rangeCount),
               커서주변: (n && n.nodeValue || "").slice(0, 40),
               부모: p ? p.tagName + "." + (p.className || "").slice(0, 30) : "없음",
-              편집가능: !!(p && p.closest("[contenteditable='true']")),
+              편집가능: !!(p && p.closest('[contenteditable]')),
               소제목후보: document.querySelectorAll("span[style*='38px']").length,
               문단수: document.querySelectorAll(".se-text-paragraph").length,
             };
@@ -1080,6 +1099,19 @@ ${blogId} 로그인이 안 돼 있습니다.
         } catch { /* 다음 문단 */ }
       }
       if (subOk) say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
+      /**
+       * 사진이 **자리에** 들어갔는지 실제로 셉니다.
+       * "올린 사진 N장"은 업로드 성공만 뜻하지 위치를 보장하지 않습니다.
+       * 이미지가 전부 문서 끝에 몰려 있으면 마지막 이미지의 위치가 문단 수에 가깝습니다.
+       */
+      const 배치 = await ed().evaluate(() => {
+        const all = [...document.querySelectorAll(".se-component")];
+        const img = all.map((n, i) => ({ i, 이미지: n.classList.contains("se-image") }))
+          .filter((x) => x.이미지).map((x) => x.i);
+        const 남은표식 = (document.body.innerText.match(/[⟦\[]사진\d+[⟧\]]/g) || []).length;
+        return { 전체부품: all.length, 이미지위치: img.slice(0, 4).concat(img.slice(-2)), 남은표식 };
+      }).catch(() => null);
+      if (배치) say(`      [배치] 부품 ${배치.전체부품}개 · 이미지 위치 ${JSON.stringify(배치.이미지위치)} · 남은 표식 ${배치.남은표식}개`);
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
 
       /**
