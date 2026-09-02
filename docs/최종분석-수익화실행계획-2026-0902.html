@@ -135,12 +135,15 @@
 </div>
 
 <div class="callout ok">
-  <span class="label">9/2 진행 현황 — 8개 항목 중 3개 완료</span>
+  <span class="label">9/2 진행 현황 — 9개 항목 중 5개 완료</span>
   <p><strong>완료</strong> ① 재해석 지시서(<code>reinterpret.js</code>) ·
   ④ 실시간 키워드 발굴기(<code>keywordMiner.js</code>) ·
-  ⑤ 자막 이원화(<code>dualSubtitle.js</code>) — 셋 다 실제 실행까지 확인했습니다.<br>
+  ⑤ 자막 이원화(<code>dualSubtitle.js</code>) ·
+  ⑥ 홈쇼핑 편성표 소재 큐(<code>homeShopping.js</code>) ·
+  ⑧ 블로그 90초 영상(<code>blogVideo.js</code>) — 다섯 다 실제 실행까지 확인했습니다.<br>
   <strong>대기</strong> ② 쿠팡 키 · ③ 크몽 등록 · ⑨ 네이버 검색 API 키 — <strong>전부 사장님 클릭</strong>입니다.
-  코드로 뚫을 수 있는 건 오늘 다 뚫었습니다.</p>
+  <strong>보류</strong> ⑦ MiniMax H3(가입·API 호출이라 승인 대기) · YPP 트래커(유튜브 OAuth 필요).
+  코드로 뚫을 수 있는 건 다 뚫었습니다.</p>
 </div>
 
 <div class="callout warn">
@@ -203,14 +206,14 @@
   <h3>① 쇼핑 쇼츠 <span class="pill p-fix">막혀 있음</span></h3>
   <div class="row"><span class="k">현재</span><span><code>golden-shop-shorts</code>(8489) + <code>scripts/shopping-shorts.js</code> + <code>make-coupang-contents</code> 스킬. 렌더러·후킹엔진·조사 완비</span></div>
   <div class="row"><span class="k">막힌 곳</span><span><strong><code>.env</code>의 <code>COUPANG_ACCESS_KEY</code> 두 줄이 비어 있어 라인 전체가 정지</strong></span></div>
-  <div class="row"><span class="k">붙일 것</span><span>홈쇼핑 편성표 → 소재 큐 (돈농부 공식 1). 검색량보다 빠른 선행지표</span></div>
+  <div class="row"><span class="k">오늘 추가</span><span><strong><code>homeShopping.js</code> 완성</strong> — G마켓 편성표에서 13개 채널을 긁어 카테고리별 신호로 정렬. 실행 확인(158건/12채널). 홈쇼핑모아는 응답을 암호화해 내려주므로 쓰지 않았다</span></div>
   <div class="row"><span class="k">돈 경로</span><span>유튜브 경유 6.7% · 클릭 후 24시간 내 산 <em>아무 물건</em>이 다 잡힘 · 조회수 수익 대비 10~20배</span></div>
   <div class="do">
     <div class="t">이번 주 실행</div>
     <ol>
       <li><strong>[사장님]</strong> 쿠팡 파트너스 가입(개인 가능·무료) → <code>.env</code>에 키 2줄</li>
       <li><strong>[클로드]</strong> 키 들어오면 <code>node scripts/shopping-shorts.js "키워드"</code> 로 주 3편 생산 개시</li>
-      <li><strong>[클로드]</strong> 홈쇼핑 편성표 수집기 — 주 1회 크롤 → 소재 큐 적재</li>
+      <li><span style="color:#14663F">✓ 홈쇼핑 편성표 수집기 완료</span> — <code>node src/homeShopping.js</code>, 주 1회 실행</li>
     </ol>
   </div>
   <div class="row"><span class="k">성공 기준</span><span>2주 안에 <strong>쿠팡 클릭 1건</strong>. 매출이 아니라 계측기가 켜지는 것이 목표</span></div>
@@ -260,7 +263,7 @@
     <ol>
       <li><strong>[사장님]</strong> <code>developers.naver.com/apps</code> → 검색 API 등록 → Client ID/Secret 발급 (5분·무료·하루 25,000회) → 편집국 설정에 입력</li>
       <li>발굴 → 원고 → <code>humanTouch</code> 검사 → 네이버 임시저장까지 <strong>야간 배치 1회</strong> 연결</li>
-      <li>모든 원고에 기존 쇼츠 소재를 90초 16:9로 재인코딩해 삽입</li>
+      <li><span style="color:#14663F">✓ 90초 변환기 완료</span> — <code>node src/blogVideo.js &lt;영상&gt;</code>. 원고마다 하나씩 넣는다</li>
     </ol>
   </div>
   <div class="row"><span class="k">성공 기준</span><span>아침에 <strong>임시저장 3건</strong>이 키워드 근거와 함께 들어와 있을 것</span></div>
@@ -322,9 +325,9 @@
     <tr><td class="num">4</td><td><strong>실시간 키워드 발굴기</strong></td><td><code>golden-blog-floor</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>뉴스 276건 → 키워드 순위. 검색 API 키가 붙으면 정확도가 배가된다</td></tr>
     <tr><td class="num">5</td><td><strong>자막 이원화</strong></td><td><code>woosurimi-trend-api/src</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>캡컷 프리셋 대신 ffmpeg 자동 굽기로 구현 — 편집기를 여는 공정 자체가 사라짐</td></tr>
     <tr><td class="num">9</td><td>네이버 검색 API 키</td><td><code>golden-blog-floor</code></td><td>0원</td><td><span class="pill p-fix">사장님</span></td><td>5분이면 황금비가 켜진다. 키워드 발굴기가 절반만 도는 상태</td></tr>
-    <tr><td class="num">6</td><td>홈쇼핑 편성표 소재 큐</td><td><code>golden-shop-shorts</code></td><td>0원</td><td>2주차</td><td>검색량보다 빠른 선행지표. 쿠팡 키가 먼저</td></tr>
-    <tr><td class="num">7</td><td>MiniMax H3 실측</td><td><code>ai-video-techniques.md</code></td><td>0원</td><td>2주차</td><td>유료 결론을 뒤집을 수 있으면 비용 구조가 바뀐다</td></tr>
-    <tr><td class="num">8</td><td>블로그 본문 90초 영상 삽입</td><td>블로그 파이프라인</td><td>0원</td><td>2주차</td><td>쇼츠 소재를 재활용해 순위를 올린다. 공짜 이득</td></tr>
+    <tr><td class="num">6</td><td><strong>홈쇼핑 편성표 소재 큐</strong></td><td><code>golden-shop-shorts</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>13개 채널 158건 수집 확인. 쿠팡 키가 들어오면 상위 카테고리를 그대로 검색어로 넘긴다</td></tr>
+    <tr><td class="num">7</td><td>MiniMax H3 실측</td><td><code>ai-video-techniques.md</code></td><td>0원</td><td><span class="pill p-fix">승인 대기</span></td><td>가입·API 호출이 필요해 사장님 승인 전까지 보류(MAX 20X 우선 원칙)</td></tr>
+    <tr><td class="num">8</td><td><strong>블로그 90초 영상</strong></td><td><code>golden-blog-floor</code></td><td>0원</td><td><span class="pill p-new">완료</span></td><td>137초 롱폼 → 90초 16:9 3.5MB 확인. 세로 영상은 흐린 배경으로 가로 변환</td></tr>
   </tbody>
 </table>
 
@@ -405,7 +408,7 @@
 <footer>
   우수리미 통합 분석 · 2026-09-02 · 근거 자료는 <code>woosurimi-trend-api/docs/</code>와
   <code>data/yt-analysis-0902/</code>에 원문 그대로 보관.
-  숫자는 영상 화자의 주장이며 우리 실측치가 아닙니다 — 첫 정산서가 나오면 이 문서를 갱신합니다.<br>2026-09-02 갱신: 우선순위 ①④⑤ 완료 반영, ⑨ 네이버 검색 API 키 추가.
+  숫자는 영상 화자의 주장이며 우리 실측치가 아닙니다 — 첫 정산서가 나오면 이 문서를 갱신합니다.<br>2026-09-02 갱신: 우선순위 ①④⑤⑥⑧ 완료 반영. ⑦은 승인 대기, YPP 트래커는 유튜브 OAuth 필요로 보류.
 </footer>
 
 </body>
