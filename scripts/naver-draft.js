@@ -938,18 +938,17 @@ ${blogId} 로그인이 안 돼 있습니다.
           if (!imgs[k]) { why = "사진 손잡이 없음"; continue; }
           await imgs[k].scrollIntoView().catch(() => {});
           await sleep(400);
-          const bb = await imgs[k].boundingBox().catch(() => null);
           /**
-           * ⚠️ 누를 자리가 **화면 밖으로 나가면 안 됩니다.**
-           * 카드뉴스는 세로 1350px이라 창(900px)보다 커서, 위쪽 1/4 지점이 화면 위로 벗어납니다.
-           * 그러면 클릭이 허공에 떨어지고 사진이 안 골라집니다(실측: "고른 사진 0개").
-           * 창 안으로 끌어당겨 누릅니다.
+           * ⚠️ **좌표로 누르면 안 됩니다.**
+           * page.mouse.click(x, y)는 iframe 안쪽 좌표를 못 맞춥니다. 편집기가 iframe 안에 있어서
+           * 좌표가 그만큼 어긋나고, 클릭이 허공에 떨어져 사진이 안 골라집니다
+           * (실측: irlaehddni에서 "고른 사진 0개"가 계속 나왔습니다).
+           * elementHandle.click()은 퍼페티어가 프레임 오프셋을 알아서 계산합니다.
+           * (man_is_best 담당 세션이 10/10 성공한 방식 — 그쪽에서 알려줬습니다)
            */
-          const vp = page.viewport() || { height: 900 };
-          if (bb) {
-            const y = Math.min(Math.max(bb.y + Math.min(bb.height * 0.25, 120), 40), (vp.height || 900) - 60);
-            await page.mouse.click(bb.x + bb.width / 2, y);
-          } else await imgs[k].click();
+          await imgs[k].evaluate((el) => el.scrollIntoView({ block: 'center' })).catch(() => {});
+          await sleep(350);
+          await imgs[k].click({ delay: 50 });
           await sleep(900);
           if (k === 0 && process.argv.includes("--옆트임조사")) {
             const d = await ed().evaluate(() => {
@@ -986,6 +985,53 @@ ${blogId} 로그인이 안 돼 있습니다.
       }
       if (!wide && shotCount) say(`      ⚠ 옆트임 못 함 — ${why || "이유 불명"}`);
       say(`      올린 사진 ${uploaded}장 · 옆트임 ${wide}장`);
+
+      /**
+       * ── 소제목을 네이버 공식 스타일로 바꿉니다 ──
+       *
+       * 붙여넣기로는 19px 굵게까지밖에 안 됩니다. 네이버가 인정하는 "소제목"은
+       * 서식 드롭다운에서 골라야 들어갑니다.
+       *
+       * ⚠️ **`span.se-toolbar-label`이 두 곳에 있습니다.**
+       * 위쪽 도구막대의 '인용구' 삽입 단추(y≈80)와, 아래 서식줄의 스타일 드롭다운(y≈114)입니다.
+       * 클래스만 보고 첫 번째를 잡으면 드롭다운이 열리는 게 아니라 **인용구가 삽입됩니다.**
+       * 그래서 **화면 위에서 100px 아래**에 있는 것만 고릅니다.
+       * `span.se-toolbar-tooltip`은 설명 풍선이라 누르면 안 됩니다.
+       * (man_is_best 담당 세션이 17번 헛돌고 찾아낸 것 — 그쪽에서 알려줬습니다. 19/19 성공)
+       */
+      let subOk = 0;
+      const subs = await ed().$$("p[data-wsu-subhead], .se-text-paragraph");
+      for (const el of subs) {
+        try {
+          const isSub = await el.evaluate((n) =>
+            n.hasAttribute('data-wsu-subhead') || Boolean(n.querySelector('b, strong')));
+          if (!isSub) continue;
+          await el.evaluate((n) => n.scrollIntoView({ block: 'center' }));
+          await sleep(250);
+          await el.click({ clickCount: 3, delay: 40 });     // 세 번 눌러 문단을 통째로 고릅니다
+          await sleep(500);
+          const opened = await ed().evaluate(() => {
+            const labels = [...document.querySelectorAll('span.se-toolbar-label')]
+              .filter((n) => n.getBoundingClientRect().top >= 100);
+            const btn = labels[0]?.closest('button');
+            if (!btn) return false;
+            btn.click();
+            return true;
+          });
+          if (!opened) continue;
+          await sleep(1600);
+          const picked = await ed().evaluate(() => {
+            const o = [...document.querySelectorAll('span.se-toolbar-option-label')]
+              .find((n) => /소제목/.test(n.textContent || ''));
+            if (!o) return false;
+            (o.closest('button') || o).click();
+            return true;
+          });
+          if (picked) subOk++;
+          await sleep(500);
+        } catch { /* 다음 문단 */ }
+      }
+      if (subOk) say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
 
       /**
