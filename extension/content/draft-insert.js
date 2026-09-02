@@ -453,6 +453,7 @@
     const subs = draft.blocks.filter((b) => b.kind === "subhead");
     let done = 0;
     const failed = [];
+    const 크기실패 = [];
     for (const b of subs) {
       say(`소제목 스타일: ${b.text.slice(0, 14)}…`);
       const p = bodyParagraphs({ includeGuide: true })
@@ -487,9 +488,66 @@
         continue;
       }
       await settle(350);
+
+      /**
+       * 4) 🔴 크기를 38 로 되돌립니다 (2026-09-02 사장님 지시).
+       *
+       * ⚠️ **소제목 서식을 적용하면 네이버가 크기를 30 으로 되돌립니다.**
+       * 사장님: "내가 소제목으로 바꾸게 되면 다시 글자 크기가 30으로 줄어들어서
+       *          내가 다시 38로 크기를 변경해야돼. 굉장히 번거로워."
+       *
+       * 그래서 순서가 중요합니다 — **소제목 서식 먼저, 그다음 크기.**
+       * 반대로 하면 소제목 서식이 크기를 도로 30 으로 만듭니다.
+       *
+       * 이 단계가 없어서 사장님이 소제목마다 손으로 38 을 누르고 계셨습니다.
+       */
+      const 커짐 = await setSubheadSize(p, 38);
+      if (!커짐) 크기실패.push(b.text.slice(0, 14));
+
       done++;
     }
-    return { done, total: subs.length, failed };
+    return { done, total: subs.length, failed, 크기실패 };
+  }
+
+  /**
+   * 소제목 문단의 글자 크기를 바꿉니다.
+   *
+   * 도구줄의 크기 드롭다운을 눌러 원하는 숫자를 고릅니다.
+   * 문단 스타일 드롭다운과 같은 방식이라 findStyleDropdown 의 형제를 찾습니다.
+   *
+   * ⚠️ 못 바꿔도 **글은 그대로 둡니다.** 크기가 30 이어도 소제목이긴 하니
+   *    글을 망가뜨리는 것보다 낫습니다. 실패는 세어서 알립니다.
+   */
+  async function setSubheadSize(paragraph, px) {
+    try {
+      const F = window.__wsFormat;
+      if (!F || !F.realClick) return false;
+
+      // 문단 전체를 선택합니다. 선택 없이 크기를 바꾸면 커서 위치에만 걸립니다.
+      const r = document.createRange();
+      r.selectNodeContents(paragraph);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      await settle(150);
+
+      // 크기 드롭다운은 숫자(예: 30)가 적힌 단추입니다.
+      const 숫자단추 = [...document.querySelectorAll("button, [role='button']")]
+        .filter((n) => {
+          const t = (n.innerText || "").trim();
+          return /^\d{2}$/.test(t) && n.offsetParent !== null;
+        })[0];
+      if (!숫자단추) return false;
+      F.realClick(숫자단추);
+      await settle(200);
+
+      const 항목 = [...document.querySelectorAll("button, li, [role='option']")]
+        .find((n) => (n.innerText || "").trim() === String(px) && n.offsetParent !== null);
+      if (!항목) { F.realClick(숫자단추); return false; }
+      F.realClick(항목);
+      await settle(200);
+      return true;
+    } catch { return false; }
   }
 
   /**
@@ -858,6 +916,17 @@
     const os = await applyOfficialSubheads(draft, say);
     if (os.done) done.push(`공식 소제목 ${os.done}/${os.total}곳`);
     if (os.failed.length) failed.push(...os.failed.map((t) => ({ what: `소제목 "${t}"`, why: "드롭다운을 못 눌렀습니다 — 문단 클릭 후 왼쪽 위에서 직접 바꿔주세요" })));
+    /**
+     * ⚠️ 크기 실패는 **조용히 넘어가면 안 됩니다.**
+     * 소제목 서식은 걸렸는데 크기가 30 으로 남아 있으면 겉보기엔 소제목이라
+     * 다 된 것처럼 보입니다. 그러면 사장님이 또 손으로 38 을 누르시게 됩니다.
+     */
+    if (os.크기실패 && os.크기실패.length) {
+      failed.push(...os.크기실패.map((t) => ({
+        what: `소제목 크기 "${t}"`,
+        why: "소제목은 됐는데 크기가 30 그대로입니다 — 그 줄만 38 로 바꿔주세요",
+      })));
+    }
 
     return { ok: true, done, failed, photoSlots: draft.blocks.filter((b) => b.kind === "photo").length };
   }
