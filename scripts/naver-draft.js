@@ -932,6 +932,22 @@ ${blogId} 로그인이 안 돼 있습니다.
           if (bb) await page.mouse.click(bb.x + bb.width / 2, bb.y + Math.min(bb.height * 0.25, 120));
           else await imgs[k].click();
           await sleep(900);
+          if (k === 0 && process.argv.includes("--옆트임조사")) {
+            const d = await ed().evaluate(() => {
+              const c = document.querySelector(".se-component.se-image");
+              const r = c?.getBoundingClientRect();
+              return {
+                cls: c?.className || "(없음)",
+                box: r ? `${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}` : "-",
+                sel: document.querySelectorAll(".se-is-selected").length,
+                selCls: [...document.querySelectorAll(".se-is-selected")].map((n) => String(n.className).slice(0, 40)).slice(0, 3),
+                toolbars: [...document.querySelectorAll("[class*='toolbar']")]
+                  .filter((n) => n.offsetParent !== null).map((n) => String(n.className).slice(0, 46)).slice(0, 6),
+                imgSrc: (c?.querySelector("img")?.src || "").slice(0, 60),
+              };
+            }).catch((e) => ({ err: e.message.slice(0, 60) }));
+            say("PROBE " + JSON.stringify(d));
+          }
           const hit = await ed().evaluate(() => {
             const btns = [...document.querySelectorAll("button")];
             const b = btns.find((n) => /옆트임/.test(n.textContent || "") && n.offsetParent !== null);
@@ -977,14 +993,17 @@ ${blogId} 로그인이 안 돼 있습니다.
      * ⚠️ 클립보드는 안 건드립니다 — 원고를 클립보드에 쓰면 사장님이 다른 창에서
      * Ctrl+V 할 때 그게 튀어나옵니다(실제로 났던 사고).
      */
-    try {
-      await fetch(`${FLOOR}/api/last-copied`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: postId }),
-      });
-      say("      확장에 마무리 요청(소제목) — 기다리는 중");
-      await sleep(6000);
-    } catch {}
+    /**
+     * ⚠️ **확장에 마무리를 맡기지 않습니다.** (2026-09-02에 떼어냄)
+     *
+     * 예전에는 여기서 편집국에 알려 확장이 제목·소제목을 처리하게 했습니다. 그런데
+     * 사진이 많은 원고(12장)에서 **이 요청 뒤에 편집기 내용이 통째로 사라졌습니다** —
+     * 본문 928자와 사진 11장이 들어간 것을 확인한 직후 `content=0 para=0`이 됐습니다.
+     * 윤세아·카리나 원고가 계속 실패하던 원인이 이것이었습니다.
+     *
+     * 제목은 이제 위에서 직접 쳐 넣으므로 확장이 할 일이 없습니다.
+     * 소제목은 네이버 공식 스타일 대신 19px 굵게로 나가지만, 원고가 통째로 날아가는 것보다 낫습니다.
+     */
 
     /**
      * ── 제목은 **직접 쳐 넣습니다** ──
