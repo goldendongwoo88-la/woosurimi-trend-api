@@ -16,6 +16,18 @@
         "C:/Users/김동우/OneDrive/Desktop/my-project/_shared/card-news/studio.js"
       ],
       "port": 8787
+    },
+    {
+      "name": "comfyui",
+      "runtimeExecutable": "D:/AI/ComfyUI/venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "D:/AI/ComfyUI/main.py",
+        "--listen",
+        "127.0.0.1",
+        "--port",
+        "8188"
+      ],
+      "port": 8188
     }
   ]
 }
