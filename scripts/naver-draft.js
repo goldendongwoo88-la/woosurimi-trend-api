@@ -1296,14 +1296,100 @@ ${blogId} 로그인이 안 돼 있습니다.
            * 동영상 단추도 **진짜 마우스로** 누릅니다 — evaluate 안의 click() 은 합성이라
            * 파일 선택창이 안 뜹니다(2026-09-03 실측). 위에서 만든 좌표 찾기를 그대로 씁니다.
            */
-          if (!await 눌러(["동영상"])) say("      ⚠ 동영상 단추를 못 찾았습니다");
-          await wait;
-          if (!ch) say("      ⚠ 동영상 선택창이 안 떴습니다");
-          else {
-            await ch.accept([copied.video]);
-            say(`      영상 올리는 중… ${path.basename(copied.video)}`);
-            await sleep(20000);   // 업로드·인코딩이 사진보다 오래 걸립니다
-            say("      영상 넣었습니다");
+          /**
+           * ⚠️ **네이버 동영상은 새 창(팝업)으로 엽니다.**
+           *    사진은 같은 창에서 파일 선택창이 뜨는데, 동영상은 `se-video-toolbar-button` 을
+           *    눌러도 선택창이 안 뜹니다 — 별도 업로더 창이 뜨기 때문입니다
+           *    (2026-09-03 실측 4회: 단추는 눌리는데 waitForFileChooser 가 안 걸림).
+           *    그래서 새 창을 잡아 그 안의 파일칸에 직접 넣습니다.
+           */
+          const 팝업대기 = new Promise((resolve) => {
+            const 한번 = async (t) => {
+              if (t.type() !== "page") return;
+              try { resolve(await t.page()); } catch { resolve(null); }
+            };
+            browser.once("targetcreated", 한번);
+            setTimeout(() => resolve(null), 12000);
+          });
+
+          /**
+           * ⚠️ **evaluate 안의 click() 으로는 창이 안 열립니다.**
+           *    브라우저는 합성 클릭으로 window.open 을 막습니다(팝업 차단). 단추는 켜져 있는데
+           *    (꺼짐:false, 보임:true) 눌러도 아무 일이 없던 이유입니다 — 2026-09-03 실측 5회.
+           *    사진 단추가 되는 건 그쪽은 창을 안 열고 내부 input 을 건드리기 때문입니다.
+           *    ElementHandle.click() 은 CDP 마우스라 진짜 제스처로 취급됩니다.
+           */
+          /**
+           * ── 동영상 넣기는 **두 단계**입니다 (2026-09-03 확정) ──
+           *
+           * ⚠️ 예전에는 1단계만 누르고 파일 선택창을 기다렸습니다. 영원히 안 옵니다.
+           *    그때 뜨는 `DIV.se-popup-dim` 을 "방해물" 로 오해해 Escape 로 닫기까지 했는데,
+           *    그건 **1단계가 성공해서 뜬 업로더 레이어**였습니다. 닫으면 원점입니다.
+           *
+           *   1단계  button.se-video-toolbar-button   → 업로더 레이어(nvu_wrap)가 열립니다
+           *          이 시점 input[type=file] 은 문서 전체에 0개입니다.
+           *   2단계  button.nvu_btn_append.nvu_local  → 여기서 파일 선택창이 뜹니다
+           *   3단계  제목이 **필수**입니다. 안 채우면 [완료]가 안 눌립니다.
+           *   4단계  [완료] → 본문에 삽입
+           */
+          const 손잡이 = await ed().$("button.se-video-toolbar-button").catch(() => null);
+          if (손잡이) await 손잡이.click({ delay: 60 }).catch(() => {});
+          say(`      ① 동영상 단추 ${손잡이 ? "누름" : "못 찾음"}`);
+          await sleep(3000);
+
+          // ② 레이어 안의 "동영상 추가" 를 눌러야 파일 선택창이 뜹니다.
+          let ch2 = null;
+          const wait2 = page.waitForFileChooser({ timeout: 20000 }).then((c) => { ch2 = c; }).catch(() => {});
+          let 두번째 = null;
+          for (const f of page.frames()) {
+            두번째 = await f.$("button.nvu_btn_append.nvu_local").catch(() => null)
+              || await f.$("button.nvu_btn_append").catch(() => null);
+            if (두번째) { await 두번째.click({ delay: 60 }).catch(() => {}); break; }
+          }
+          say(`      ② 레이어 안 "동영상 추가" ${두번째 ? "누름" : "못 찾음"}`);
+          await wait2;
+
+          if (!ch2) {
+            say("      ⚠ 동영상 선택창이 안 떴습니다");
+          } else {
+            await ch2.accept([copied.video]).catch(() => {});
+            say(`      ③ 파일 넘김 — ${path.basename(copied.video)}`);
+            await sleep(25000);   // 업로드·대표이미지 추출
+
+            // ④ 제목은 **필수**입니다. 안 채우면 [완료]가 안 눌립니다.
+            const 영상제목 = (copied.title || "영상").slice(0, 40);
+            for (const f of page.frames()) {
+              const inp = await f.$("input[type=text]").catch(() => null);
+              if (!inp) continue;
+              const 안에 = await f.evaluate(() =>
+                Boolean(document.querySelector(".nvu_wrap, .nvu_mode_layer"))).catch(() => false);
+              if (!안에) continue;
+              await inp.click({ clickCount: 3 }).catch(() => {});
+              await page.keyboard.type(영상제목, { delay: 15 });
+              say(`      ④ 영상 제목 넣음: ${영상제목.slice(0, 20)}`);
+              break;
+            }
+            await sleep(1500);
+
+            // ⑤ 완료
+            let 완료 = false;
+            for (const f of page.frames()) {
+              const btns = await f.$$("button, a").catch(() => []);
+              for (const btn of btns) {
+                const t = await btn.evaluate((n) => (n.innerText || "").trim()).catch(() => "");
+                if (t !== "완료" && t !== "확인") continue;
+                await btn.click({ delay: 60 }).catch(() => {});
+                완료 = true;
+                break;
+              }
+              if (완료) break;
+            }
+            say(`      ⑤ 완료 단추 ${완료 ? "누름" : "못 찾음"}`);
+            await sleep(15000);
+
+            const 붙었나 = await ed().evaluate(() =>
+              document.querySelectorAll(".se-component.se-video, .se-video").length).catch(() => 0);
+            say(`      영상 ${붙었나 ? "넣었습니다 (" + 붙었나 + "개)" : "올렸는데 본문에 안 붙었습니다"}`);
           }
         }
       }
