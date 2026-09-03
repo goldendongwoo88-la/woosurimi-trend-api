@@ -40,25 +40,52 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
     await page.goto(`https://blog.naver.com/${blogId}/postwrite`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await new Promise((r) => setTimeout(r, 4000));
 
-    // "작성 중인 글이 있습니다" 팝업이 뜨면 취소를 눌러야 편집기가 열립니다.
-    for (let i = 0; i < 4; i++) {
-      const closed = await page.evaluate(() => {
-        const b = [...document.querySelectorAll("button,a")]
-          .find((x) => /취소|닫기/.test(x.innerText || ""));
-        if (b) { b.click(); return true; }
-        return false;
-      }).catch(() => false);
-      if (!closed) break;
-      await new Promise((r) => setTimeout(r, 900));
-    }
+    /**
+     * ⚠️ **"작성 중인 글이 있습니다" 팝업은 한 번만 처리하면 안 됩니다.**
+     *    목록을 연 **뒤에** 다시 뜹니다. 그러면 목록 위를 덮어 클릭이 전부 먹히지 않고,
+     *    에디터는 빈 채로 남습니다 — "사진 0장" 으로 잘못 읽던 원인이 이것이었습니다
+     *    (2026-09-03 스크린샷으로 확인).
+     *    "취소" 를 눌러야 이어쓰기를 버리고 원하는 초안을 열 수 있습니다.
+     */
+    const 팝업닫기 = async () => {
+      for (let i = 0; i < 5; i++) {
+        const hit = await page.evaluate(() => {
+          const t = [...document.querySelectorAll("div,section")]
+            .find((d) => /작성 중인 글이 있습니다/.test(d.innerText || "") && (d.innerText || "").length < 300);
+          const scope = t || document;
+          const b = [...scope.querySelectorAll("button,a")]
+            .find((x) => /^취소$/.test((x.innerText || "").trim()));
+          if (!b) return null;
+          const r = b.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }).catch(() => null);
+        if (!hit) return i;                       // 더 없으면 끝
+        await page.mouse.click(hit.x, hit.y, { delay: 60 });   // 진짜 마우스로
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      return 5;
+    };
+    console.log(`  팝업 닫기(처음): ${await 팝업닫기()}회`);
 
-    // 헤더의 "저장 | 숫자" 에서 숫자 쪽이 임시저장 목록 버튼입니다.
-    await page.evaluate(() => {
-      const el = [...document.querySelectorAll("button,a,span")]
-        .find((x) => /^\d+$/.test((x.innerText || "").trim()) && x.closest("[class*=header],[class*=Header]"));
-      if (el) el.click();
+    /**
+     * 임시저장 목록 열기 — naver-draft.js 가 쓰는 **검증된 방식**을 그대로 씁니다.
+     * "저장" 단추를 찾고 그 **형제 단추**를 누릅니다.
+     * (제 방식은 헤더 class 로 숫자를 찾았는데, 목록이 아예 안 열려서
+     *  엉뚱한 li 를 초안으로 착각했습니다 — 2026-09-03 실측)
+     */
+    const 열림 = await page.evaluate(() => {
+      const vis = (n) => n.offsetParent !== null || (n.getClientRects && n.getClientRects().length);
+      const open = [...document.querySelectorAll("button, a")].filter(vis)
+        .find((b) => /^저장(\s*\d+)?$/.test((b.textContent || "").trim()));
+      if (!open) return "저장 단추 못 찾음";
+      const near = open.parentElement ? open.parentElement.querySelectorAll("button") : [];
+      for (const b of near) if (b !== open) { b.click(); return "목록 단추 누름"; }
+      return "형제 단추 없음";
     });
-    await new Promise((r) => setTimeout(r, 2500));
+    console.log(`  목록 열기: ${열림}`);
+    await new Promise((r) => setTimeout(r, 3500));
+    console.log(`  팝업 닫기(목록 뒤): ${await 팝업닫기()}회`);   // ← 여기서 또 뜹니다
+    await page.screenshot({ path: require("path").join(process.env.TEMP || ".", `verify-${blogId}-목록.png`) }).catch(() => {});
 
     /**
      * n 번째 초안을 엽니다.
@@ -66,30 +93,47 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
      *    실제로 눌러야 하는 것은 줄 안의 **제목 링크/버튼**입니다.
      *    빈 에디터를 보고 "본문이 0자"라고 보고하면 안 됩니다 — 불러오기가 실패한 것뿐입니다.
      */
-    const opened = await page.evaluate((n) => {
+    /**
+     * ⚠️⚠️ **DOM 의 el.click() 은 안 먹습니다.** 스마트에디터가 합성 이벤트(isTrusted:false)를
+     *      무시하기 때문입니다. 그래서 좌표를 재서 **진짜 마우스**로 누릅니다.
+     *      (naver-draft.js 가 서식·사진·툴바에서 겪은 것과 같은 뿌리입니다)
+     */
+    const target = await page.evaluate((n) => {
       const rows = [...document.querySelectorAll("li")]
         .filter((x) => /\d{4}\.\d{2}\.\d{2}/.test(x.innerText || ""));
       const t = rows[n - 1];
       if (!t) return null;
-      const title = (t.innerText || "").split("\n")[0];
       const hit = t.querySelector("a,button,[class*=title],[class*=Title]") || t;
-      hit.click();
-      return title;
+      const r = hit.getBoundingClientRect();
+      if (!r.width || !r.height) return null;
+      return { title: (t.innerText || "").split("\n")[0], x: r.left + r.width / 2, y: r.top + r.height / 2 };
     }, nth);
-    await new Promise((r) => setTimeout(r, 12000));
+    if (target) await page.mouse.click(target.x, target.y, { delay: 60 });
+    const opened = target && target.title;
+    await new Promise((r) => setTimeout(r, 6000));
+    await 팝업닫기();
+    await new Promise((r) => setTimeout(r, 6000));
+    await page.screenshot({ path: require("path").join(process.env.TEMP || ".", `verify-${blogId}-초안.png`) }).catch(() => {});
 
     /**
      * 본문은 `about:blank` 자식 프레임의 contenteditable BODY 입니다.
      * URL 로 고르면 프레임이 여러 개라 틀립니다 — **글자가 가장 많은 곳**을 본문으로 봅니다.
      */
+    /**
+     * ⚠️ contenteditable 로 프레임을 고르면 틀립니다 — 접근이 막히거나 빈 값이 나와
+     *    **초안이 멀쩡히 열렸는데 "불러오기 실패"** 로 보고했습니다(2026-09-03 스크린샷으로 확인).
+     *    스마트에디터 본문은 항상 `.se-text-paragraph` 로 이뤄집니다.
+     *    그래서 **문단 조각이 가장 많은 프레임**을 본문으로 고릅니다.
+     */
     let body = page.mainFrame(), best = -1;
+    const 진단 = [];
     for (const f of page.frames()) {
-      const len = await f.evaluate(() => {
-        const e = document.querySelector("[contenteditable]");
-        return e ? (e.innerText || "").length : -1;
-      }).catch(() => -1);
-      if (len > best) { best = len; body = f; }
+      const n = await f.evaluate(() => document.querySelectorAll(".se-text-paragraph").length)
+        .catch(() => -1);
+      진단.push(`${(f.url() || "about:blank").slice(0, 40)}=${n}`);
+      if (n > best) { best = n; body = f; }
     }
+    console.log(`  프레임 훑기: ${진단.join(" · ")}`);
     if (best <= 0) {
       console.log(`\n■ ${blogId} · ${nth}번째 초안 — **불러오기 실패**`);
       console.log(`  목록에서 고른 것 : ${opened || "(못 고름)"}`);
@@ -98,18 +142,19 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
     }
 
     const r = await body.evaluate(() => {
-      const root = document.querySelector("[contenteditable]") || document.body;
-      const txt = root.innerText || "";
-      const paras = txt.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+      const all = [...document.querySelectorAll(".se-component")];
+      const 본문 = all.filter((c) => !c.closest(".se-documentTitle"));
+      const txt = 본문.map((c) => c.innerText || "").join("\n");
+      const paras = txt.split(/\n+/).map((x) => x.trim()).filter(Boolean);
       return {
         글자수: txt.replace(/\s/g, "").length,
         문단수: paras.length,
-        사진: root.querySelectorAll("img").length,
-        영상: root.querySelectorAll("video,[class*=video],[class*=Video]").length,
-        소제목38: root.querySelectorAll(".se-fs38,[class*=se-fs38]").length,
-        인용구: root.querySelectorAll("[class*=quotation],[class*=Quotation]").length,
-        표식잔존: (txt.match(/⟦사진\d+⟧/g) || []).length,
-        긴문단: paras.filter((p) => p.replace(/\s/g, "").length > 30).length,
+        사진: document.querySelectorAll(".se-component.se-image img, .se-image-resource").length,
+        영상: document.querySelectorAll(".se-component.se-video, .se-video, video").length,
+        소제목38: document.querySelectorAll("[class*='se-fs38']").length,
+        인용구: document.querySelectorAll(".se-component.se-quotation").length,
+        표식잔존: (txt.match(/[⟦\[]사진\s*\d*[⟧\]]|[⟦\[]영상/g) || []).length,
+        긴문단: paras.filter((x) => x.replace(/\s/g, "").length > 30).length,
       };
     }).catch((e) => ({ 오류: String(e).slice(0, 120) }));
 
