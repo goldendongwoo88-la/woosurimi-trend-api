@@ -47,6 +47,7 @@
  */
 
 const path = require("path");
+const NL_ = String.fromCharCode(10);   // 셸·스크립트를 지나며 개행이 깨지는 걸 막습니다
 const fs = require("fs");
 
 const REPO = path.join(__dirname, "..");
@@ -1113,6 +1114,42 @@ ${blogId} 로그인이 안 돼 있습니다.
         return true;
       };
 
+      /**
+       * ── 사진 AI 활용 표시 (사장님 지시 2026-09-03) ──
+       *
+       * 우리 사진은 전부 AI 로 만든 것이라 네이버에 그렇게 표시합니다.
+       * 사장님 방법: **사진 하나를 클릭하고 위쪽 "전체 AI 활용" 을 누른다.**
+       * 사진마다 우측 아래에 "AI 활용 설정" 토글이 붙어 있는데, 한 장씩 켜면 13번입니다.
+       */
+      try {
+        const 첫사진 = await ed().$(".se-component.se-image").catch(() => null);
+        if (첫사진) {
+          await 첫사진.click({ delay: 60 }).catch(() => {});
+          await sleep(1200);
+          // ① 먼저 "전체" 가 붙은 단추를 찾습니다 — 한 번에 다 켜집니다.
+          const 전체 = await 눌러(["전체 AI 활용", "전체AI활용", "전체 AI활용", "모든 사진 AI 활용"]);
+          if (전체) {
+            await sleep(1500);
+            say("      사진 AI 활용 — 전체로 켰습니다");
+          } else {
+            // ② 전체 단추가 없으면 사진마다 토글을 켭니다.
+            const 켠수 = await ed().evaluate(() => {
+              let n = 0;
+              for (const el of document.querySelectorAll("button, [role='switch'], input[type=checkbox]")) {
+                const 근처 = (el.closest("div, li") || {}).innerText || "";
+                if (!/AI 활용|AI활용/.test(근처)) continue;
+                const 켜짐 = el.getAttribute("aria-checked") === "true" || el.checked === true;
+                if (켜짐) continue;
+                el.click();
+                n++;
+              }
+              return n;
+            }).catch(() => -1);
+            say(`      사진 AI 활용 — 토글 ${켠수}개 켰습니다`);
+          }
+        }
+      } catch (e) { say(`      ⚠ 사진 AI 활용 실패: ${String(e.message || e).slice(0, 50)}`); }
+
       let subOk = 0;
       const subs = await ed().$$("p[data-wsu-subhead], .se-text-paragraph");
       /**
@@ -1270,7 +1307,7 @@ ${blogId} 로그인이 안 돼 있습니다.
             r.setStart(n, at); r.setEnd(n, 끝);
             const box = r.getBoundingClientRect();
             if (!box || !box.width) continue;
-            return { x: box.right, y: box.top + box.height / 2 };
+            return { x: box.right, y: box.top + box.height / 2, 길이: 끝 - at };
           }
           return null;
         }, 표식들).catch(() => null);
@@ -1285,6 +1322,13 @@ ${blogId} 로그인이 안 돼 있습니다.
           } catch {}
           await page.mouse.click(ox + 자리V.x, oy + 자리V.y).catch(() => {});
           await sleep(350);
+          /**
+           * 표식 글자 `[영상: …]` 를 **키보드로** 지웁니다 (사장님 지시 2026-09-03).
+           * ⚠️ DOM 에서 지우면 화면에서만 사라지고 저장하면 되돌아옵니다.
+           *    커서가 표식 끝에 서 있으니 길이만큼 지웁니다 — 사진 표식과 같은 방식입니다.
+           */
+          for (let k = 0; k < (자리V.길이 || 0); k++) await page.keyboard.press("Backspace");
+          await sleep(200);
           섰나 = true;
         }
         if (!섰나) {
@@ -1356,19 +1400,74 @@ ${blogId} 로그인이 안 돼 있습니다.
             say(`      ③ 파일 넘김 — ${path.basename(copied.video)}`);
             await sleep(25000);   // 업로드·대표이미지 추출
 
-            // ④ 제목은 **필수**입니다. 안 채우면 [완료]가 안 눌립니다.
+            /**
+             * ④ 동영상 정보 칸 — 사장님 확정 2026-09-03.
+             *    · 제목 = 원고 제목 (**필수**, 안 채우면 [완료]가 안 눌립니다)
+             *    · 정보 = 제목과 **같게**
+             *    · 태그 편집 = 포스팅 해시태그를 **하나씩 전부**
+             *    · AI 활용 = **켬** (우리 영상은 전부 AI 라서)
+             */
             const 영상제목 = (copied.title || "영상").slice(0, 40);
+            // 원고 맨 아래 해시태그 줄에서 태그를 뽑습니다.
+            const 태그들 = ((copied.body || "").split(NL_)
+              .filter((l) => l.trim().startsWith("#")).pop() || "")
+              .split("#").map((t) => t.trim()).filter(Boolean).slice(0, 10);
+
+            let 레이어 = null;
             for (const f of page.frames()) {
-              const inp = await f.$("input[type=text]").catch(() => null);
-              if (!inp) continue;
               const 안에 = await f.evaluate(() =>
                 Boolean(document.querySelector(".nvu_wrap, .nvu_mode_layer"))).catch(() => false);
-              if (!안에) continue;
-              await inp.click({ clickCount: 3 }).catch(() => {});
-              await page.keyboard.type(영상제목, { delay: 15 });
-              say(`      ④ 영상 제목 넣음: ${영상제목.slice(0, 20)}`);
-              break;
+              if (안에) { 레이어 = f; break; }
             }
+
+            if (레이어) {
+              // 제목 · 정보 — 레이어 안의 글자칸을 순서대로 채웁니다.
+              const 칸들 = await 레이어.$$("input[type=text], textarea").catch(() => []);
+              for (let k = 0; k < Math.min(2, 칸들.length); k++) {
+                await 칸들[k].click({ clickCount: 3 }).catch(() => {});
+                await page.keyboard.type(영상제목, { delay: 12 });
+                await sleep(300);
+              }
+              say(`      ④ 제목·정보 넣음 (칸 ${Math.min(2, 칸들.length)}개)`);
+
+              // 태그 — "태그추가" 를 누르고 하나씩 칩니다.
+              let 넣은태그 = 0;
+              for (const t of 태그들) {
+                const 추가 = await 레이어.$$("button, a").catch(() => []);
+                let 눌렀 = false;
+                for (const b of 추가) {
+                  const txt = await b.evaluate((n) => (n.innerText || "").trim()).catch(() => "");
+                  if (txt !== "태그추가" && txt !== "태그 추가") continue;
+                  await b.click({ delay: 40 }).catch(() => {});
+                  눌렀 = true;
+                  break;
+                }
+                if (!눌렀) break;
+                await sleep(400);
+                await page.keyboard.type(t, { delay: 12 });
+                await page.keyboard.press("Enter");
+                await sleep(400);
+                넣은태그++;
+              }
+              say(`      ④ 태그 ${넣은태그}/${태그들.length}개 넣음`);
+
+              /**
+               * AI 활용 — 기본이 꺼짐이라 **매번 켜야 합니다.**
+               * 우리 영상은 전부 AI 로 만든 것이라 켜는 게 맞습니다(사장님 확정).
+               */
+              const 켰나 = await 레이어.evaluate(() => {
+                const 켜짐 = (el) => el.getAttribute("aria-checked") === "true" || el.checked === true;
+                for (const el of document.querySelectorAll("input[type=checkbox], [role='switch'], button")) {
+                  const 근처 = (el.closest("div, li, tr") || {}).innerText || "";
+                  if (!/AI 활용|AI활용/.test(근처)) continue;
+                  if (켜짐(el)) return "이미 켜짐";
+                  el.click();
+                  return "켰습니다";
+                }
+                return "칸을 못 찾음";
+              }).catch(() => "확인실패");
+              say(`      ④ AI 활용 표시 ${켰나}`);
+            } else say("      ④ 동영상 정보 레이어를 못 찾았습니다");
             await sleep(1500);
 
             // ⑤ 완료
@@ -1389,12 +1488,84 @@ ${blogId} 로그인이 안 돼 있습니다.
 
             const 붙었나 = await ed().evaluate(() =>
               document.querySelectorAll(".se-component.se-video, .se-video").length).catch(() => 0);
+            /**
+             * 사장님 지시(2026-09-03): **영상은 가운데 정렬.**
+             * 넣은 직후에는 영상이 골라진 상태라, 정렬 단추를 그대로 누르면 됩니다.
+             */
+            if (붙었나) {
+              const 영상칸 = await ed().$(".se-component.se-video, .se-video").catch(() => null);
+              if (영상칸) { await 영상칸.click({ delay: 60 }).catch(() => {}); await sleep(800); }
+              const 가운데 = await 눌러(["가운데 정렬", "가운데정렬", "가운데"]);
+              say(`      영상 가운데 정렬 ${가운데 ? "했습니다" : "단추를 못 찾았습니다"}`);
+              await sleep(600);
+            }
             say(`      영상 ${붙었나 ? "넣었습니다 (" + 붙었나 + "개)" : "올렸는데 본문에 안 붙었습니다"}`);
           }
         }
       }
 
       say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
+
+      /**
+       * ── 링크를 카드형으로 (사장님 확정 2026-09-03) ──
+       *
+       * 주소가 **글자 그대로** 남아 있으면 안 됩니다. 썸네일+제목이 붙은 카드여야 합니다.
+       * 네이버는 주소 줄 끝에서 엔터를 치면 그 줄을 카드로 바꿔 줍니다.
+       * 그래서 주소 줄마다 끝을 **진짜 마우스로** 찍고 엔터를 칩니다.
+       * (커서를 코드로 세우면 편집기가 안 봅니다 — 오늘 내내 겪은 그 병입니다.)
+       */
+      try {
+        let 카드 = 0;
+        for (let 회 = 0; 회 < 8; 회++) {
+          const 자리L = await ed().evaluate(() => {
+            const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+            let n;
+            while ((n = w.nextNode())) {
+              const v = (n.nodeValue || "").trim();
+              if (!v.startsWith("http")) continue;
+              if (v.length < 20) continue;
+              const p2 = n.parentElement;
+              if (!p2 || p2.closest("a")) continue;   // 이미 링크면 건너뜁니다
+              p2.scrollIntoView({ block: "center" });
+              const r = document.createRange();
+              r.selectNodeContents(n);
+              const b = r.getBoundingClientRect();
+              if (!b || !b.width) continue;
+              return { x: b.right, y: b.top + b.height / 2 };
+            }
+            return null;
+          }).catch(() => null);
+          if (!자리L) break;
+
+          let ox = 0, oy = 0;
+          try {
+            const fe = await ed().frameElement();
+            const fb = fe && await fe.boundingBox();
+            if (fb) { ox = fb.x; oy = fb.y; }
+          } catch {}
+          await page.mouse.click(ox + 자리L.x, oy + 자리L.y).catch(() => {});
+          await sleep(400);
+          await page.keyboard.press("End");
+          await page.keyboard.press("Enter");
+          await sleep(2500);   // 네이버가 미리보기를 받아 카드로 바꿀 짬
+          카드++;
+        }
+        // 카드가 된 개수를 실제로 셉니다.
+        const 카드수 = await ed().evaluate(() =>
+          document.querySelectorAll(".se-component.se-oglink, .se-oglink").length).catch(() => 0);
+        say(`      링크 ${카드}줄 처리 · 카드 ${카드수}개`);
+
+        // 카드는 가운데 정렬합니다.
+        if (카드수) {
+          const 첫카드 = await ed().$(".se-component.se-oglink, .se-oglink").catch(() => null);
+          if (첫카드) {
+            await 첫카드.click({ delay: 60 }).catch(() => {});
+            await sleep(700);
+            const 가운데 = await 눌러(["가운데 정렬", "가운데정렬", "가운데"]);
+            say(`      링크 카드 가운데 정렬 ${가운데 ? "했습니다" : "단추를 못 찾았습니다"}`);
+          }
+        }
+      } catch (e) { say(`      ⚠ 링크 카드 실패: ${String(e.message || e).slice(0, 50)}`); }
       /**
        * 사진이 **자리에** 들어갔는지 실제로 셉니다.
        * "올린 사진 N장"은 업로드 성공만 뜻하지 위치를 보장하지 않습니다.
