@@ -1237,6 +1237,12 @@ ${blogId} 로그인이 안 돼 있습니다.
           }
           await 칸.click({ delay: 60 }).catch(() => {});
           await sleep(500);
+          /**
+           * ⚠️ 캡션을 눌러도 커서가 안 들어갑니다(네 번 확인). 마지막 한 가지 —
+           *    **사진이 선택된 상태에서 그냥 타자를 치면** 캡션으로 들어가는지 봅니다.
+           *    (동영상 때도 답은 "한 단계 더 안쪽에 다른 진입점" 이었습니다 — 동료 세션 43)
+           *    커서 확인은 그대로 둡니다. 아니면 아무것도 안 칩니다.
+           */
           const 커서캡션 = await ed().evaluate(() => {
             let e = document.activeElement;
             const s = window.getSelection();
