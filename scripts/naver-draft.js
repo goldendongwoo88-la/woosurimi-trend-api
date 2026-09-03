@@ -1509,76 +1509,98 @@ ${blogId} 로그인이 안 돼 있습니다.
       /**
        * ── 링크를 카드형으로 (사장님 확정 2026-09-03) ──
        *
-       * 주소가 **글자 그대로** 남아 있으면 안 됩니다. 썸네일+제목이 붙은 카드여야 합니다.
-       * 네이버는 주소 줄 끝에서 엔터를 치면 그 줄을 카드로 바꿔 줍니다.
-       * 그래서 주소 줄마다 끝을 **진짜 마우스로** 찍고 엔터를 칩니다.
-       * (커서를 코드로 세우면 편집기가 안 봅니다 — 오늘 내내 겪은 그 병입니다.)
+       * 대표 지시: "링크 말고 **링크넣기** 해서 저런 박스 형태로."
+       *
+       * ⚠️ **엔터로는 안 됩니다.** 주소 줄 끝에서 띄어쓰기+엔터를 12번 쳐도
+       *    저장본 실측 결과 **주소줄 4개 · 링크카드 0개** 였습니다.
+       *    도구막대에 전용 단추가 따로 있습니다 (2026-09-03 탐침 probe-link.js):
+       *      button.se-oglink-toolbar-button   "링크 추가"  ← 카드(og-link)를 만든다
+       *      input.se-popup-oglink-input       "URL을 입력하세요."
+       *      button.se-popup-oglink-button     "검색"       ← 미리보기를 받아온다
+       *      button.se-popup-button-confirm    "확인"       ← 카드로 넣는다
+       *    (button.se-link-toolbar-button 은 **글자에 링크 거는 것**이라 다릅니다)
+       *
+       * 순서: 주소 줄을 지우고 → 그 자리에서 「링크 추가」 → 주소 넣고 검색 → 확인
        */
       try {
-        let 카드 = 0;
-        for (let 회 = 0; 회 < 12; 회++) {
-          const 자리L = await ed().evaluate(() => {
-            const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-            let n;
-            while ((n = w.nextNode())) {
-              const v = (n.nodeValue || "").trim();
-              if (!v.startsWith("http")) continue;
-              if (v.length < 20) continue;
-              const p2 = n.parentElement;
-              /**
-               * ⚠️ **`<a>` 인지로 거르면 안 됩니다.** 네이버가 붙여넣기 때 주소를 자동으로
-               *    `<a>` 로 만듭니다. 그걸 "이미 처리됨" 으로 보고 전부 건너뛰어서
-               *    카드가 **0개**가 됐습니다(2026-09-03 실측). `<a>` 는 그냥 파란 글씨일 뿐,
-               *    우리가 원하는 **썸네일+제목 카드**(.se-oglink)가 아닙니다.
-               */
-              if (!p2 || p2.closest(".se-oglink, .se-component.se-oglink")) continue;
-              p2.scrollIntoView({ block: "center" });
-              const r = document.createRange();
-              r.selectNodeContents(n);
-              const b = r.getBoundingClientRect();
+        let 카드 = 0, 넣은주소 = 0;
+        for (let 회 = 0; 회 < 10; 회++) {
+          // ① 주소만 있는 문단을 하나 찾습니다
+          const 찾음 = await ed().evaluate(() => {
+            for (const p of document.querySelectorAll(".se-text-paragraph")) {
+              const t = (p.textContent || "").trim();
+              if (!/^https?:\/\/\S+$/.test(t)) continue;
+              if (p.closest(".se-oglink")) continue;
+              p.scrollIntoView({ block: "center" });
+              const b = p.getBoundingClientRect();
               if (!b || !b.width) continue;
-              return { x: b.right, y: b.top + b.height / 2 };
+              return { 주소: t, x: b.left + Math.min(b.width / 2, 120), y: b.top + b.height / 2 };
             }
             return null;
           }).catch(() => null);
-          if (!자리L) {
-            if (회 === 0) say("      주소 줄을 하나도 못 찾았습니다");
-            break;
-          }
+          if (!찾음) { if (회 === 0) say("      주소만 있는 줄이 없습니다"); break; }
 
+          // ② 그 줄을 진짜 마우스로 찍고 통째로 지웁니다 (코드로 세운 커서는 편집기가 안 봅니다)
           let ox = 0, oy = 0;
           try {
             const fe = await ed().frameElement();
             const fb = fe && await fe.boundingBox();
             if (fb) { ox = fb.x; oy = fb.y; }
           } catch {}
-          await page.mouse.click(ox + 자리L.x, oy + 자리L.y).catch(() => {});
-          await sleep(400);
+          await page.mouse.click(ox + 찾음.x, oy + 찾음.y).catch(() => {});
+          await sleep(350);
+          await page.keyboard.press("Home");
+          await page.keyboard.down("Shift");
           await page.keyboard.press("End");
-          /**
-           * ⚠️ **엔터 한 번으로는 한 줄만 바뀝니다** (실측: 8줄 중 1개).
-           *    네이버는 주소 뒤에 **띄어쓰기나 엔터가 들어와야** 그 줄을 링크로 인식합니다.
-           *    그런데 이미 줄 끝이라 엔터만으로는 신호가 안 갈 때가 있습니다.
-           *    그래서 **띄어쓰기 → 엔터** 순으로 보내고, 그래도 안 되면 한 번 더 칩니다.
-           */
-          await page.keyboard.press("Space");
-          await sleep(300);
-          await page.keyboard.press("Enter");
-          await sleep(3000);   // 네이버가 미리보기를 받아 카드로 바꿀 짬
-          const 지금카드 = await ed().evaluate(() =>
-            document.querySelectorAll(".se-component.se-oglink, .se-oglink").length).catch(() => 0);
-          if (지금카드 <= 카드) {   // 안 바뀌었으면 한 번 더
-            await page.keyboard.press("Enter");
-            await sleep(2500);
+          await page.keyboard.up("Shift");
+          await page.keyboard.press("Delete");
+          await sleep(350);
+
+          // ③ 「링크 추가」 — 도구막대는 본문과 다른 프레임일 수 있어 전부 뒤집니다
+          let 열림 = false;
+          for (const f of page.frames()) {
+            열림 = await f.evaluate(() => {
+              const b = document.querySelector("button.se-oglink-toolbar-button");
+              if (!b) return false;
+              b.click(); return true;
+            }).catch(() => false);
+            if (열림) break;
           }
-          카드 = Math.max(카드, 지금카드);
+          if (!열림) { say("      ⚠ 「링크 추가」 단추를 못 찾았습니다"); break; }
+          await sleep(1200);
+
+          // ④ 주소를 넣고 검색 → 확인
+          const 넣음 = await (async () => {
+            for (const f of page.frames()) {
+              const el = await f.$("input.se-popup-oglink-input").catch(() => null);
+              if (!el) continue;
+              await el.click({ clickCount: 3 }).catch(() => {});
+              await el.type(찾음.주소, { delay: 12 }).catch(() => {});
+              await sleep(300);
+              await f.evaluate(() => {
+                const b = document.querySelector("button.se-popup-oglink-button");
+                if (b) b.click();
+              }).catch(() => {});
+              await sleep(2600);          // 네이버가 미리보기를 받아옵니다
+              await f.evaluate(() => {
+                for (const b of document.querySelectorAll("button.se-popup-button-confirm")) {
+                  if (b.offsetParent !== null) { b.click(); return; }
+                }
+              }).catch(() => {});
+              return true;
+            }
+            return false;
+          })();
+          if (!넣음) { say("      ⚠ 주소 입력칸을 못 찾았습니다"); break; }
+          넣은주소++;
+          await sleep(1800);
+          카드 = await ed().evaluate(() =>
+            document.querySelectorAll(".se-component.se-oglink, .se-oglink").length).catch(() => 카드);
         }
-        // 카드가 된 개수를 실제로 셉니다.
         const 카드수 = await ed().evaluate(() =>
           document.querySelectorAll(".se-component.se-oglink, .se-oglink").length).catch(() => 0);
-        say(`      링크 카드 ${카드수}개`);
+        say(`      링크 카드 ${카드수}개 (주소 ${넣은주소}개 넣음)`);
 
-        // 카드는 가운데 정렬합니다.
         if (카드수) {
           const 첫카드 = await ed().$(".se-component.se-oglink, .se-oglink").catch(() => null);
           if (첫카드) {
@@ -1588,7 +1610,7 @@ ${blogId} 로그인이 안 돼 있습니다.
             say(`      링크 카드 가운데 정렬 ${가운데 ? "했습니다" : "단추를 못 찾았습니다"}`);
           }
         }
-      } catch (e) { say(`      ⚠ 링크 카드 실패: ${String(e.message || e).slice(0, 50)}`); }
+      } catch (e) { say(`      ⚠ 링크 카드 실패: ${String(e.message || e).slice(0, 60)}`); }
       /**
        * 사진이 **자리에** 들어갔는지 실제로 셉니다.
        * "올린 사진 N장"은 업로드 성공만 뜻하지 위치를 보장하지 않습니다.

@@ -152,6 +152,23 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
         사진: document.querySelectorAll(".se-component.se-image img, .se-image-resource").length,
         영상: document.querySelectorAll(".se-component.se-video, .se-video, video").length,
         소제목38: document.querySelectorAll("[class*='se-fs38']").length,
+        /**
+         * ⚠️ **se-fs38 만 세면 못 봅니다** (2026-09-03 실측).
+         *    만들 때는 "소제목 6개 바꿨습니다" 로 나오는데 저장본에서는 0 이었습니다.
+         *    네이버가 저장할 때 클래스가 아니라 인라인 style 로 바꿔 넣는지,
+         *    아니면 서식이 정말 안 남는지 **글자 크기를 직접 세서** 가립니다.
+         */
+        링크카드: document.querySelectorAll(".se-component.se-oglink, .se-oglink").length,
+        주소줄: [...document.querySelectorAll(".se-text-paragraph")]
+                  .filter((n) => /^https?:\/\//.test((n.textContent || "").trim())).length,
+        큰글자: (() => {
+          const 셈 = {};
+          for (const el of document.querySelectorAll(".se-text-paragraph span")) {
+            const px = Math.round(parseFloat(getComputedStyle(el).fontSize) || 0);
+            if (px >= 20) 셈[px] = (셈[px] || 0) + 1;
+          }
+          return JSON.stringify(셈);
+        })(),
         인용구: document.querySelectorAll(".se-component.se-quotation").length,
         표식잔존: (txt.match(/[⟦\[]사진\s*\d*[⟧\]]|[⟦\[]영상/g) || []).length,
         긴문단: paras.filter((x) => x.replace(/\s/g, "").length > 30).length,
