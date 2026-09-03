@@ -186,6 +186,23 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
       };
     }).catch((e) => ({ 오류: String(e).slice(0, 120) }));
 
+    /**
+     * ⚠️ **못 읽은 것을 0 으로 보고하면 안 됩니다** (2026-09-04 실측).
+     *    목록에서 9번째 초안을 골랐는데 편집기가 안 열려 제목칸이 "제목"(빈 상태),
+     *    글자수 17 이었습니다. 그런데 표에는 사진 0 · 영상 0 · 링크카드 0 으로 찍혀
+     *    **내용이 없는 글처럼 보였습니다.** 만들 때 로그에는 사진 7장이 분명히 있었습니다.
+     *    "없다" 와 "못 봤다" 는 다릅니다. 여기서 갈라 놓습니다.
+     */
+    if ((r.글자수 || 0) < 50) {
+      console.log(`
+■ ${blogId} · ${nth}번째 초안 — **불러오기 실패**`);
+      console.log(`  목록에서 고른 것 : ${opened || "(못 고름)"}`);
+      console.log(`  글자수 ${r.글자수} · 편집기가 비어 있습니다. 초안이 안 열린 것이지`);
+      console.log("  내용이 없는 게 아닙니다. 목록을 스크롤해야 닿는 자리일 수 있습니다.");
+      await browser.close();
+      return;
+    }
+
     const title = await page.evaluate(() => {
       const t = document.querySelector(".se-documentTitle");
       return t ? (t.innerText || "").trim().slice(0, 60) : "(못 읽음)";
