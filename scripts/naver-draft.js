@@ -369,12 +369,12 @@ ${blogId} 로그인이 안 돼 있습니다.
        * 지금은 HTML을 직접 넘겨 붙이므로 클립보드가 필요 없습니다. 그래서 안 씁니다.
        */
       if (htmlOut) {
-        return { ok: true, how: "HTML 직접", title: r.post.title, photos: photosArr.length, photosArr, html: htmlOut, body: r.post.body };
+        return { ok: true, how: "HTML 직접", title: r.post.title, photos: photosArr.length, photosArr, html: htmlOut, body: r.post.body, video: r.post.video || "" };
       }
       if (typeof copyCombined !== "function") return { ok: false, why: "본문 HTML을 못 만들었습니다" };
       try {
         await copyCombined();
-        return { ok: true, how: "clipboard API", title: r.post.title, photos: photosArr.length, photosArr, html: htmlOut, body: r.post.body };
+        return { ok: true, how: "clipboard API", title: r.post.title, photos: photosArr.length, photosArr, html: htmlOut, body: r.post.body, video: r.post.video || "" };
       } catch (e) {
         /**
          * ⚠️ 최신 클립보드 API가 막히는 환경이 있습니다(권한·포커스).
@@ -407,7 +407,7 @@ ${blogId} 로그인이 안 돼 있습니다.
         sel.removeAllRanges(); tmp.remove();
         document.removeEventListener("copy", onCopy);
         if (!okOld) return { ok: false, why: "클립보드에 담지 못했습니다: " + e.message };
-        return { ok: true, how: "execCommand(옛 방식)", title: r.post.title, photos: photos.length, photosArr: photos, html: htmlOut, body: r.post.body };
+        return { ok: true, how: "execCommand(옛 방식)", title: r.post.title, photos: photos.length, photosArr: photos, html: htmlOut, body: r.post.body, video: r.post.video || "" };
       }
     }, postId);
 
@@ -679,41 +679,38 @@ ${blogId} 로그인이 안 돼 있습니다.
         say(`      커서 다시 세움 → ${where}`);
       } catch {}
 
-      for (const f of page.frames()) {
-        const ok = await f.evaluate((html, plain) => {
-          /**
-       * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
-       * 실측: 제목 문단이 .se-documentTitle의 자손이 아니라서 필터를 그냥 통과했고,
-       * 그 결과 **제목 칸에 본문이 통째로 붙었습니다.**
-       * 이 편집기는 문단이 2개(제목·본문)뿐이고 **본문이 항상 마지막**입니다. 그걸로 고릅니다.
+      /**
+       * ── 진짜 붙여넣기 ──
+       * ⚠️ **합성 ClipboardEvent 는 쓰지 않습니다.** isTrusted:false 라 스마트에디터가
+       *    HTML 을 버리고 글자만 받습니다. 2026-09-03 진단으로 확정 —
+       *    글자는 1,433자 들어갔는데 **색 0개 · 38px 0개**였습니다.
+       *    게다가 "들어갔다"는 성공 판정을 만들어 아래 진짜 경로를 통째로 건너뛰게 했습니다.
+       *
+       * 커서는 바로 위에서 **진짜 마우스 클릭**으로 세워뒀습니다.
+       * focus() 로 세운 커서는 편집기가 자기 커서를 따로 굴려서 무시합니다.
+       *
+       * 위쪽 osPaste 와 다릅니다 — 그건 **OS 키보드**라 사장님이 보시던 다른 창이 키를 받아
+       * 이메일 창에 원고가 붙는 사고가 났습니다. page.keyboard 는 CDP 라 **이 탭 안으로만**
+       * 갑니다. 남의 창을 가로챌 수 없습니다.
        */
-          /**
-           * ⚠️ **커서가 있는 자리에 넣습니다. 선택을 새로 만들지 않습니다.**
-           *
-           * 이 편집기는 contenteditable이 **제목 하나뿐**입니다(실측 editable=1).
-           * 그래서 "편집 가능한 요소를 찾아서 넣는" 방식은 **언제나 제목**으로 갑니다.
-           * 본문은 우리가 이미 클릭해서 커서를 세워둔 자리이므로, 그 커서를 건드리지 않고
-           * **커서가 들어 있는 요소**에 paste 이벤트를 던집니다.
-           * (한때 OS 키보드로만 됐던 이유가 이것입니다 — 키보드는 늘 커서 자리에 넣으니까요.)
-           */
-          const sel = window.getSelection();
-          if (!sel || sel.rangeCount === 0) return false;
-          let node = sel.getRangeAt(0).startContainer;
-          if (node.nodeType === 3) node = node.parentElement;
-          if (!node) return false;
-          if (node.closest && node.closest(".se-documentTitle")) return false;   // 제목이면 안 넣습니다
+      await page.bringToFront().catch(() => {});
+      const 담김 = await evalIn(async (html, plain) => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          })]);
+          return "ok";
+        } catch (e) { return String((e && e.message) || e).slice(0, 80); }
+      }, copied.html || "", copied.body || "");
+      say(`      클립보드 ${담김 === "ok" ? "담김(서식째)" : "실패: " + 담김}`);
 
-          const dt = new DataTransfer();
-          dt.setData("text/html", html);
-          dt.setData("text/plain", plain);
-          node.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-          return true;
-        }, copied.html || "", copied.body || "").catch(() => false);
-        if (!ok) continue;
-        await sleep(3500);
-        const n2 = await measure();
-        say(`      ${f.url().slice(0, 40)} 에 시도 → 본문 ${n2}자`);
-        if (n2 >= 200) break;
+      if (담김 === "ok") {
+        await page.keyboard.down("Control");
+        await page.keyboard.press("KeyV");
+        await page.keyboard.up("Control");
+        await sleep(4500);
+        say(`      진짜 Ctrl+V → 본문 ${(await measure()).toLocaleString()}자`);
       }
     }
 
@@ -774,30 +771,24 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 실측: 사진 13장을 골랐는데 26장이 들어갔습니다.
      */
     const nowIn = await measure();
-    const pasted = (nowIn >= 200 || already >= 200 || alreadyIn >= 200) ? true : await frameE.evaluate((html, plain) => {
-      /**
-       * ⚠️ 본문 문단 고르기 — `.se-documentTitle` 안에 있는지로 거르면 **안 됩니다.**
-       * 실측: 제목 문단이 .se-documentTitle의 자손이 아니라서 필터를 그냥 통과했고,
-       * 그 결과 **제목 칸에 본문이 통째로 붙었습니다.**
-       * 이 편집기는 문단이 2개(제목·본문)뿐이고 **본문이 항상 마지막**입니다. 그걸로 고릅니다.
-       */
-      const inTitle = (n) => Boolean(n.closest(".se-documentTitle"));
-      const pickBody = (list) => (list.length ? list[list.length - 1] : null);
-      const el = pickBody([...document.querySelectorAll(".se-text-paragraph")].filter((n) => !inTitle(n)))
-        || document.querySelector(".se-main-container, .se-content");
-      if (!el) return false;
-      const editable = el.closest('[contenteditable]') || el;
-      editable.focus?.();
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(range);
-      const dt = new DataTransfer();
-      dt.setData("text/html", html);
-      dt.setData("text/plain", plain);
-      el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-      return true;
-    }, copied.html || "", (copied.body || "")).catch(() => false);
+    // 위에서 이미 진짜 Ctrl+V 로 넣었습니다. 여기서는 들어갔는지만 봅니다.
+    const pasted = nowIn >= 200 || already >= 200 || alreadyIn >= 200;
+
+    // 서식이 살아서 들어갔는지 봅니다. 색·38px 이 0 이면 붙여넣기 경로가 또 서식을 벗긴 것입니다.
+    const 세기 = (s, k) => s.split(k).length - 1;
+    const 서식진단 = await evalIn(() => {
+      const root = document.querySelector(".se-main-container, .se-content") || document.body;
+      return root.innerHTML || "";
+    }).catch(() => "");
+    if (서식진단) {
+      say("      [서식진단] " + JSON.stringify({
+        색: 세기(서식진단, "color: #") + 세기(서식진단, "color:#") + 세기(서식진단, "color: rgb") + 세기(서식진단, "color:rgb") - 세기(서식진단, "background-color"),
+        형광: 세기(서식진단, "background-color"),
+        굵게: 세기(서식진단, "<b>") + 세기(서식진단, "<strong>"),
+        큰글씨38: 세기(서식진단, "38px") + 세기(서식진단, "se-fs38"),
+        HTML길이: 서식진단.length,
+      }));
+    }
     say(`      합성 붙여넣기 ${pasted ? "보냄" : "실패"}`);
     await sleep(4000);
 
@@ -856,9 +847,18 @@ ${blogId} 로그인이 안 돼 있습니다.
         if (!file) { failed.add(i); continue; }
         const mark = PHOTO_MARK(i);
         const markAlt = PHOTO_MARK_ALT(i);
-        // ① 표식 자리에 커서를 세웁니다.
-        // 두 모양(⟦사진N⟧ · [사진N])을 다 찾습니다 — 네이버가 괄호를 바꿉니다.
-        const put = await ed().evaluate((mks) => {
+        /**
+         * ① 표식 자리에 커서를 세웁니다 — **진짜 마우스 클릭**으로.
+         *
+         * ⚠️ 예전에는 selection API(removeAllRanges/addRange)로 세웠습니다. 그러면 사진이
+         *    문서 **맨 끝**에 몰립니다. 서식이 안 들어가던 것과 **같은 병**입니다 —
+         *    편집기가 자기 커서를 따로 굴려서, 코드로 세운 커서를 안 봅니다(2026-09-03 확정).
+         *    본문은 contenteditable 도 아니라서(진단 편집가능:false) focus() 도 소용없습니다.
+         *    마우스가 실제로 그 자리를 눌러야 편집기 커서가 섭니다.
+         *
+         * 두 모양(⟦사진N⟧ · [사진N])을 다 찾습니다 — 네이버가 괄호를 바꿉니다.
+         */
+        const 자리 = await ed().evaluate((mks) => {
           const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
           let n;
           while ((n = w.nextNode())) {
@@ -866,17 +866,30 @@ ${blogId} 로그인이 안 돼 있습니다.
             let mk = null, at = -1;
             for (const cand of mks) { const i2 = v.indexOf(cand); if (i2 >= 0) { mk = cand; at = i2; break; } }
             if (at < 0) continue;
-            const host = n.parentElement?.closest('[contenteditable]');
-            host?.focus?.();
+            // 화면 밖이면 클릭 좌표가 어긋납니다. 가운데로 끌어온 뒤 다시 잽니다.
+            n.parentElement?.scrollIntoView({ block: "center" });
             const r = document.createRange();
-            r.setStart(n, at + mk.length);
-            r.collapse(true);
-            const sel = window.getSelection();
-            sel.removeAllRanges(); sel.addRange(r);
-            return true;
+            r.setStart(n, at); r.setEnd(n, at + mk.length);
+            const box = r.getBoundingClientRect();
+            if (!box || !box.width) continue;
+            return { x: box.right, y: box.top + box.height / 2 };
           }
-          return false;
-        }, [mark, markAlt]).catch(() => false);
+          return null;
+        }, [mark, markAlt]).catch(() => null);
+
+        // 프레임 안 좌표를 페이지 좌표로 옮깁니다 — 편집기는 iframe 안에 있습니다.
+        let put = false;
+        if (자리) {
+          let ox = 0, oy = 0;
+          try {
+            const fe = await ed().frameElement();
+            const fb = fe && await fe.boundingBox();
+            if (fb) { ox = fb.x; oy = fb.y; }
+          } catch {}
+          await page.mouse.click(ox + 자리.x, oy + 자리.y).catch(() => {});
+          await sleep(350);   // 편집기가 커서를 세울 짬
+          put = true;
+        }
         if (!put) { failed.add(i); say(`      ⚠ ${mark} 자리를 못 찾았습니다 — 건너뜁니다`); continue; }
         // 진단 — 커서가 실제로 어디에 섰는지, 사진이 그 자리에 들어가는지 봅니다.
         if (i === 0) {
@@ -1108,7 +1121,7 @@ ${blogId} 로그인이 안 돼 있습니다.
        * 사진과 같은 방식입니다 — 자리에 커서를 세우고 동영상 단추를 눌러 파일을 넘깁니다.
        * ⚠️ 네이버가 ⟦⟧ 를 [] 로 바꾸므로 두 모양을 다 찾습니다.
        */
-      if (post.video && fs.existsSync(post.video)) {
+      if (copied.video && fs.existsSync(copied.video)) {
         const 표식들 = ["⟦영상⟧", "[영상]"];
         const 섰나 = await ed().evaluate((mks) => {
           const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -1138,8 +1151,8 @@ ${blogId} 로그인이 안 돼 있습니다.
           await wait;
           if (!ch) say("      ⚠ 동영상 선택창이 안 떴습니다");
           else {
-            await ch.accept([post.video]);
-            say(`      영상 올리는 중… ${path.basename(post.video)}`);
+            await ch.accept([copied.video]);
+            say(`      영상 올리는 중… ${path.basename(copied.video)}`);
             await sleep(20000);   // 업로드·인코딩이 사진보다 오래 걸립니다
             say("      영상 넣었습니다");
           }
@@ -1157,9 +1170,9 @@ ${blogId} 로그인이 안 돼 있습니다.
         const img = all.map((n, i) => ({ i, 이미지: n.classList.contains("se-image") }))
           .filter((x) => x.이미지).map((x) => x.i);
         const 남은표식 = (document.body.innerText.match(/[⟦\[]사진\d+[⟧\]]/g) || []).length;
-        return { 전체부품: all.length, 이미지위치: img.slice(0, 4).concat(img.slice(-2)), 남은표식 };
+        return { 전체부품: all.length, 이미지위치: img, 부품순서: all.map((n) => (n.classList.contains("se-image") ? "사" : n.classList.contains("se-video") ? "영" : "글")).join(""), 남은표식 };
       }).catch(() => null);
-      if (배치) say(`      [배치] 부품 ${배치.전체부품}개 · 이미지 위치 ${JSON.stringify(배치.이미지위치)} · 남은 표식 ${배치.남은표식}개`);
+      if (배치) say(`      [배치] 부품 ${배치.전체부품}개 · 순서 ${배치.부품순서} · 이미지 ${JSON.stringify(배치.이미지위치)} · 남은 표식 ${배치.남은표식}개`);
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
 
       /**
@@ -1444,6 +1457,63 @@ ${blogId} 로그인이 안 돼 있습니다.
       }
     }
     restoreClip();   // 사장님 클립보드를 원래대로 돌려놓습니다
+    /**
+     * ── 저장된 결과를 **다시 읽어** 확인합니다 ──
+     * ⚠️ 로그가 "사진 13/13장 옮김"이라고 해도 저장하면 사라지는 일이 있었습니다.
+     *    2026-09-03 하루에 네 번, 로그만 보고 성공했다고 보고했다가 전부 틀렸습니다.
+     *    그래서 저장 뒤에 **새로 읽어서** 부품 순서를 눈으로 봅니다.
+     */
+    try {
+      /**
+       * ⚠️ **시간 상한 90초.** 확인 단계가 안 끝나서 실행이 10분을 넘고 크롬이 좀비로 남았습니다
+       *    (2026-09-03 실측). 저장은 이미 끝난 뒤라, 확인이 늦으면 확인을 포기하는 게 맞습니다.
+       */
+      const 상한 = (p2) => Promise.race([p2, sleep(90000).then(() => { throw new Error("확인 90초 초과"); })]);
+      await 상한((async () => {
+      await page.evaluate(() => { window.onbeforeunload = null; location.reload(); }).catch(() => {});
+      await sleep(12000);
+      for (const f of page.frames()) {
+        await f.evaluate(() => {
+          const b = [...document.querySelectorAll("button, a")]
+            .find((n) => /확인|이어쓰기/.test(n.innerText || ""));
+          if (b) b.click();
+        }).catch(() => {});
+      }
+      await sleep(6000);
+      let 구조 = null;
+      for (const f of page.frames()) {
+        const r = await f.evaluate(() => {
+          const root = document.querySelector(".se-main-container, .se-content");
+          if (!root) return null;
+          const 부품 = [...root.querySelectorAll(".se-component")];
+          if (부품.length < 3) return null;
+          return 부품.map((c, i) => {
+            const 종류 = c.classList.contains("se-image") ? "사진"
+              : c.classList.contains("se-video") ? "영상" : "글";
+            const st = c.querySelector("span[style*='font-size']");
+            const 크기 = st ? (st.getAttribute("style").split("font-size:")[1] || "").trim().split("p")[0] : "";
+            const 표시 = [
+              c.querySelector("span[style*='color']") ? "색" : "",
+              c.querySelector("span[style*='background']") ? "형광" : "",
+              c.querySelector("b, strong") ? "굵게" : "",
+            ].filter(Boolean).join("·");
+            const t = (c.innerText || "").trim().split(/s+/).join(" ").slice(0, 22);
+            return String(i).padStart(2) + " " + 종류 + (크기 ? "(" + 크기 + ")" : "") + " " + 표시 + " " + t;
+          });
+        }).catch(() => null);
+        if (r) { 구조 = r; break; }
+      }
+      say("");
+      if (구조) {
+        const 사진 = 구조.map((l, i) => (l.includes(" 사진") ? i : -1)).filter((i) => i >= 0);
+        const 서식 = 구조.filter((l) => l.includes("색") || l.includes("형광") || l.includes("굵게")).length;
+        say(`── 저장 후 실제 확인 (부품 ${구조.length}개) ──`);
+        say(`   사진 위치: [${사진.join(", ")}]  ·  서식 있는 부품 ${서식}개`);
+        for (const l of 구조) say("   " + l);
+      } else say("   ⚠ 저장 후 확인 실패 — 본문을 못 읽었습니다");
+      })());
+    } catch (e) { say(`   ⚠ 저장 후 확인 실패: ${e.message.slice(0, 60)}`); }
+
     say("\n✔ 임시저장까지 끝났습니다. 발행은 사장님이 직접 하십시오.");
     say(`   확인: https://blog.naver.com/${blogId}/postwrite`);
 
