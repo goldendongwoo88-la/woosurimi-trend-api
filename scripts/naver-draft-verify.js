@@ -104,8 +104,15 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
       const t = rows[n - 1];
       if (!t) return null;
       const hit = t.querySelector("a,button,[class*=title],[class*=Title]") || t;
+      /**
+       * ⚠️ **줄이 화면 밖에 있으면 클릭이 빗나갑니다** (2026-09-04 실측 — 7번째부터
+       *    좌표가 화면 아래로 나가 클릭이 허공에 떨어졌고, 편집기가 안 열려
+       *    "사진 0장"으로 보고됐습니다). 재기 전에 화면 안으로 끌어옵니다.
+       */
+      hit.scrollIntoView({ block: "center" });
       const r = hit.getBoundingClientRect();
       if (!r.width || !r.height) return null;
+      if (r.top < 0 || r.bottom > innerHeight) return null;   // 그래도 밖이면 솔직히 못 잡았다고 한다
       return { title: (t.innerText || "").split("\n")[0], x: r.left + r.width / 2, y: r.top + r.height / 2 };
     }, nth);
     if (target) await page.mouse.click(target.x, target.y, { delay: 60 });
