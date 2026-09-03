@@ -170,6 +170,52 @@ const say = (s) => { console.log(s); log.push(s); };
         }).catch(() => "(못 읽음)");
         say(`  ▶ 레이어 상태: ${상태}`);
       }
+      /**
+       * ── AI 활용 토글 ──
+       * 앞선 시도에서 `span.nvu_ai_placeholder` 만 잡혔습니다. 글자를 가진 **가장 안쪽** 요소라
+       * 자식이 없었고, 정작 토글은 **형제**에 있습니다. 그래서 **부모를 타고 올라가며** 덤프합니다.
+       */
+      const ai = await page.evaluate(() => {
+        const ph = document.querySelector(".nvu_ai_placeholder")
+          || [...document.querySelectorAll(".nvu_wrap *")].find((n) => /AI 활용 표시를 설정/.test(n.innerText || ""));
+        if (!ph) return { 없음: true };
+        const 층 = [];
+        let cur = ph;
+        for (let i = 0; i < 5 && cur; i++) {
+          cur = cur.parentElement;
+          if (!cur) break;
+          층.push({
+            깊이: i + 1,
+            tag: cur.tagName,
+            cls: (cur.className && cur.className.toString ? cur.className.toString() : "").slice(0, 70),
+            html: cur.outerHTML.replace(/\s+/g, " ").slice(0, 1100),
+          });
+        }
+        // 그 안의 누를 만한 것 전부
+        const scope = cur || ph.parentElement;
+        const 후보 = scope ? [...scope.querySelectorAll("input,button,label,a,[role],[class*=toggle],[class*=switch],[class*=check],[class*=btn]")]
+          .map((n) => ({
+            tag: n.tagName,
+            id: n.id || "",
+            cls: (n.className && n.className.toString ? n.className.toString() : "").slice(0, 58),
+            type: n.getAttribute("type") || "",
+            role: n.getAttribute("role") || "",
+            aria: n.getAttribute("aria-checked") || n.getAttribute("aria-pressed") || "",
+            checked: n.checked === true,
+            forId: n.getAttribute("for") || "",
+            보임: n.getClientRects().length > 0,
+            txt: (n.innerText || "").trim().slice(0, 20),
+          })) : [];
+        return { 층, 후보 };
+      }).catch((e) => ({ 오류: String(e).slice(0, 120) }));
+
+      if (ai && ai.층) {
+        say("  ▶ AI 활용 — 부모 타고 올라가기");
+        ai.층.forEach((L) => say(`      [${L.깊이}] ${L.tag}.${L.cls}\n          ${L.html}`));
+        say("  ▶ 그 안에서 누를 만한 것");
+        (ai.후보 || []).forEach((o) => say(`      ${o.tag}${o.id ? "#" + o.id : ""}.${o.cls} type=${o.type} role=${o.role} aria=${o.aria} checked=${o.checked} for=${o.forId} 보임=${o.보임} "${o.txt}"`));
+      } else { say("  ▶ AI 활용: " + JSON.stringify(ai)); }
+
       // 파일창이 안 떴으면 input 이 생겼는지 본다 (숨은 input 에 직접 넣는 길)
       for (const f of page.frames()) {
         const n = await f.evaluate(() => document.querySelectorAll("input[type=file]").length).catch(() => 0);
