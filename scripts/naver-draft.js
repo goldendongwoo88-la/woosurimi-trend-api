@@ -1516,7 +1516,7 @@ ${blogId} 로그인이 안 돼 있습니다.
        */
       try {
         let 카드 = 0;
-        for (let 회 = 0; 회 < 8; 회++) {
+        for (let 회 = 0; 회 < 12; 회++) {
           const 자리L = await ed().evaluate(() => {
             const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
             let n;
@@ -1546,14 +1546,28 @@ ${blogId} 로그인이 안 돼 있습니다.
           await page.mouse.click(ox + 자리L.x, oy + 자리L.y).catch(() => {});
           await sleep(400);
           await page.keyboard.press("End");
+          /**
+           * ⚠️ **엔터 한 번으로는 한 줄만 바뀝니다** (실측: 8줄 중 1개).
+           *    네이버는 주소 뒤에 **띄어쓰기나 엔터가 들어와야** 그 줄을 링크로 인식합니다.
+           *    그런데 이미 줄 끝이라 엔터만으로는 신호가 안 갈 때가 있습니다.
+           *    그래서 **띄어쓰기 → 엔터** 순으로 보내고, 그래도 안 되면 한 번 더 칩니다.
+           */
+          await page.keyboard.press("Space");
+          await sleep(300);
           await page.keyboard.press("Enter");
-          await sleep(2500);   // 네이버가 미리보기를 받아 카드로 바꿀 짬
-          카드++;
+          await sleep(3000);   // 네이버가 미리보기를 받아 카드로 바꿀 짬
+          const 지금카드 = await ed().evaluate(() =>
+            document.querySelectorAll(".se-component.se-oglink, .se-oglink").length).catch(() => 0);
+          if (지금카드 <= 카드) {   // 안 바뀌었으면 한 번 더
+            await page.keyboard.press("Enter");
+            await sleep(2500);
+          }
+          카드 = Math.max(카드, 지금카드);
         }
         // 카드가 된 개수를 실제로 셉니다.
         const 카드수 = await ed().evaluate(() =>
           document.querySelectorAll(".se-component.se-oglink, .se-oglink").length).catch(() => 0);
-        say(`      링크 ${카드}줄 처리 · 카드 ${카드수}개`);
+        say(`      링크 카드 ${카드수}개`);
 
         // 카드는 가운데 정렬합니다.
         if (카드수) {
