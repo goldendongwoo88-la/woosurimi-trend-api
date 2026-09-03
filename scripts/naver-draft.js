@@ -1069,6 +1069,50 @@ ${blogId} 로그인이 안 돼 있습니다.
        * `span.se-toolbar-tooltip`은 설명 풍선이라 누르면 안 됩니다.
        * (man_is_best 담당 세션이 17번 헛돌고 찾아낸 것 — 그쪽에서 알려줬습니다. 19/19 성공)
        */
+      /**
+       * 도구막대 단추 찾기 — 확장(extension/content/format-tools.js:104)과 같은 방식입니다.
+       * ⚠️ **aria-label 도 봅니다.** textContent 만 보면 "본문" 칸을 못 찾습니다(2026-09-03 실측).
+       * ⚠️ `span.se-toolbar-label` 은 **삽입 도구막대**(사진·동영상·인용구…)라 문단 서식 칸이
+       *    거기 없습니다. 그래서 클래스가 아니라 **글자**로 찾습니다.
+       */
+      const 단추찾기 = (이름들) => `(${JSON.stringify(이름들)}).map(String)`;
+      const 좌표찾기 = async (이름들) => {
+        for (const f of page.frames()) {
+          const r = await f.evaluate((want) => {
+            for (const name of want) {
+              for (const el of document.querySelectorAll("button, [role='button'], a, span, li, [aria-label]")) {
+                const t = (el.innerText || el.textContent || "").trim();
+                const aria = ((el.getAttribute && el.getAttribute("aria-label")) || "").trim();
+                if (t !== name && aria !== name) continue;
+                const b = el.getBoundingClientRect();
+                if (!b.width || !b.height) continue;
+                if (b.width >= 260 || b.height >= 70) continue;   // 큰 덩어리는 단추가 아닙니다
+                const c = el.closest("button, [role='button'], a") || el;
+                const r2 = c.getBoundingClientRect();
+                return { x: r2.x + r2.width / 2, y: r2.y + r2.height / 2, 이름: name };
+              }
+            }
+            return null;
+          }, 이름들).catch(() => null);
+          if (r) {
+            let ox = 0, oy = 0;
+            try {
+              const fe = await f.frameElement();
+              const fb = fe && await fe.boundingBox();
+              if (fb) { ox = fb.x; oy = fb.y; }
+            } catch {}
+            return { x: ox + r.x, y: oy + r.y, 이름: r.이름 };
+          }
+        }
+        return null;
+      };
+      const 눌러 = async (이름들) => {
+        const c = await 좌표찾기(이름들);
+        if (!c) return false;
+        await page.mouse.click(c.x, c.y).catch(() => {});
+        return true;
+      };
+
       let subOk = 0;
       const subs = await ed().$$("p[data-wsu-subhead], .se-text-paragraph");
       /**
@@ -1149,91 +1193,36 @@ ${blogId} 로그인이 안 돼 있습니다.
            *    편집기가 무시합니다. 화면에는 눌린 것처럼 보이는데 서식은 안 바뀝니다
            *    (2026-09-03 사장님 확인: 소제목 표시가 하나도 안 들어감).
            */
-          const 프레임오프셋 = async () => {
-            try {
-              const fe = await tb().frameElement();
-              const fb = fe && await fe.boundingBox();
-              return fb ? { x: fb.x, y: fb.y } : { x: 0, y: 0 };
-            } catch { return { x: 0, y: 0 }; }
-          };
-          const 진짜클릭 = async (좌표) => {
-            if (!좌표) return false;
-            const o = await 프레임오프셋();
-            await page.mouse.click(o.x + 좌표.x, o.y + 좌표.y).catch(() => {});
-            return true;
-          };
-
-          // ① 문단 서식 드롭다운을 엽니다.
-          /**
-           * ⚠️ **위치(top >= 100)로 고르지 않습니다.** 초안을 이어 열면 도구막대가 화면
-           *    맨 위(y≈15)에 붙어서 그 필터가 **아무것도 못 잡습니다**
-           *    (2026-09-03 사장님 스크린샷으로 확인 — 크기 38·굵게는 됐는데 문단 서식만 "본문").
-           *    라벨에 적힌 글자로 고릅니다. 문단 서식 칸은 늘 본문·소제목·인용구 중 하나입니다.
-           */
-          const 드롭 = await tb().evaluate(() => {
-            const labels = [...document.querySelectorAll("span.se-toolbar-label")];
-            const 서식 = labels.find((n) => ["본문", "소제목", "인용구"].includes((n.textContent || "").trim()));
-            const btn = 서식 && 서식.closest("button");
-            if (!btn) return null;
-            const r = btn.getBoundingClientRect();
-            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          }).catch(() => null);
-          if (!await 진짜클릭(드롭)) continue;
+          // ① 문단 서식 칸을 엽니다 — 지금 상태가 글자로 적혀 있습니다(보통 "본문").
+          if (!await 눌러(["본문", "소제목", "인용구"])) {
+            say("      ⚠ 문단 서식 칸을 못 찾았습니다");
+            continue;
+          }
           await sleep(1200);
 
           // ② 목록에서 "소제목" 을 고릅니다.
-          const 옵션 = await tb().evaluate(() => {
-            const o = [...document.querySelectorAll("span.se-toolbar-option-label")]
-              .find((n) => /소제목/.test(n.textContent || ""));
-            if (!o) return null;
-            const t = o.closest("button") || o;
-            const r = t.getBoundingClientRect();
-            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          }).catch(() => null);
-          const 눌렀나 = await 진짜클릭(옵션);
+          const 눌렀나 = await 눌러(["소제목"]);
           await sleep(900);
+
           /**
-           * ⚠️ **눌렀다는 것만으로 믿지 않습니다.** 도구막대 라벨을 다시 읽어
-           *    실제로 "소제목" 으로 바뀌었는지 봅니다. 눌렸는데 안 바뀐 적이 있습니다.
+           * ⚠️ **눌렀다는 것만으로 믿지 않습니다.** 서식 칸 글자를 다시 읽어 확인합니다.
            */
-          const 바뀜 = await tb().evaluate(() => {
-            const labels = [...document.querySelectorAll("span.se-toolbar-label")];
-            const 서식 = labels.find((n) => ["본문", "소제목", "인용구"].includes((n.textContent || "").trim()));
-            return 서식 ? (서식.textContent || "").trim() : "없음";
-          }).catch(() => "확인실패");
-          const picked = 눌렀나 && 바뀜 === "소제목";
+          const 지금 = await 좌표찾기(["소제목", "본문", "인용구"]);
+          const picked = 눌렀나 && 지금 && 지금.이름 === "소제목";
           if (picked) subOk++;
-          else say(`      ⚠ 소제목 전환 실패 — 도구막대는 "${바뀜}" 입니다`);
+          else say(`      ⚠ 소제목 전환 실패 — 서식 칸은 "${지금 ? 지금.이름 : "못 읽음"}" 입니다`);
 
           /**
            * 사장님 지시(2026-09-03): **소제목 표시를 먼저, 그다음 38 굵게.**
-           * ⚠️ 크기·굵게를 DOM 스타일로 주입하면 저장할 때 되돌아옵니다. 툴바와 키보드로 합니다.
+           * ⚠️ 크기·굵게를 DOM 스타일로 주입하면 저장할 때 되돌아옵니다. 도구막대와 키보드로 합니다.
            */
           if (picked) {
-            await el.click({ clickCount: 3, delay: 40 }).catch(() => {});   // 문단을 다시 고릅니다
+            await el.click({ clickCount: 3, delay: 40 }).catch(() => {});
             await sleep(400);
-            // 글씨 크기 드롭다운 — 서식줄의 두 번째 라벨입니다.
-            // 크기 칸도 글자로 고릅니다 — 숫자만 적혀 있는 라벨입니다.
-            const 크기드롭 = await tb().evaluate(() => {
-              const labels = [...document.querySelectorAll("span.se-toolbar-label")];
-              const 크기 = labels.find((n) => /^[0-9]{1,2}$/.test((n.textContent || "").trim()));
-              const btn = 크기 && 크기.closest("button");
-              if (!btn) return null;
-              const r = btn.getBoundingClientRect();
-              return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-            }).catch(() => null);
-            if (await 진짜클릭(크기드롭)) {
+            if (await 눌러(["16", "19", "24", "28", "30", "32", "34", "38"])) {
               await sleep(1000);
-              const 삼팔 = await tb().evaluate(() => {
-                const o = [...document.querySelectorAll("span.se-toolbar-option-label")]
-                  .find((n) => (n.textContent || "").trim() === "38");
-                if (!o) return null;
-                const t = o.closest("button") || o;
-                const r = t.getBoundingClientRect();
-                return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-              }).catch(() => null);
-              await 진짜클릭(삼팔);
-              await sleep(500);
+              await 눌러(["38"]);
+              await sleep(600);
             }
             // 굵게 — Ctrl+B 는 진짜 키라 편집기가 받습니다.
             await el.click({ clickCount: 3, delay: 40 }).catch(() => {});
@@ -1304,30 +1293,10 @@ ${blogId} 로그인이 안 돼 있습니다.
           let ch = null;
           const wait = page.waitForFileChooser({ timeout: 15000 }).then((c) => { ch = c; }).catch(() => {});
           /**
-           * ⚠️ 동영상 단추도 **진짜 마우스로** 눌러야 합니다.
-           *    b.click() 은 DOM click(합성)이라 파일 선택창이 안 뜹니다
-           *    (2026-09-03 실측: "동영상 선택창이 안 떴습니다").
+           * 동영상 단추도 **진짜 마우스로** 누릅니다 — evaluate 안의 click() 은 합성이라
+           * 파일 선택창이 안 뜹니다(2026-09-03 실측). 위에서 만든 좌표 찾기를 그대로 씁니다.
            */
-          // 도구막대 라벨에 "동영상" 이 있습니다(실측). 그 라벨의 단추를 씁니다.
-          const 단추 = await ed().evaluate(() => {
-            const lab = [...document.querySelectorAll("span.se-toolbar-label")]
-              .find((n) => (n.textContent || "").trim() === "동영상");
-            const b = (lab && lab.closest("button"))
-              || [...document.querySelectorAll("button")]
-                .find((n) => /동영상|비디오/.test(n.textContent || "") || /video/i.test(n.className || ""));
-            if (!b) return null;
-            const r = b.getBoundingClientRect();
-            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          }).catch(() => null);
-          if (단추) {
-            let ox = 0, oy = 0;
-            try {
-              const fe = await ed().frameElement();
-              const fb = fe && await fe.boundingBox();
-              if (fb) { ox = fb.x; oy = fb.y; }
-            } catch {}
-            await page.mouse.click(ox + 단추.x, oy + 단추.y).catch(() => {});
-          } else say("      ⚠ 동영상 단추를 못 찾았습니다");
+          if (!await 눌러(["동영상"])) say("      ⚠ 동영상 단추를 못 찾았습니다");
           await wait;
           if (!ch) say("      ⚠ 동영상 선택창이 안 떴습니다");
           else {
