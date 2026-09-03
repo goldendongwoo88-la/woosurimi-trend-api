@@ -1098,6 +1098,54 @@ ${blogId} 로그인이 안 돼 있습니다.
           }
         } catch { /* 다음 문단 */ }
       }
+      /**
+       * ── 영상 올리기 (2026-09-03 신설) ──
+       *
+       * 사장님 지시: "영상도 제작해서 같이 넣어놔."
+       * 예전에는 `[영상: …]` 자리표시를 **글자로 두고 지나갔습니다.** 도구가 영상을
+       * 아예 안 다뤘습니다. 원고 규격에는 AI 영상 1개가 필수인데 도구에 길이 없었습니다.
+       *
+       * 사진과 같은 방식입니다 — 자리에 커서를 세우고 동영상 단추를 눌러 파일을 넘깁니다.
+       * ⚠️ 네이버가 ⟦⟧ 를 [] 로 바꾸므로 두 모양을 다 찾습니다.
+       */
+      if (post.video && fs.existsSync(post.video)) {
+        const 표식들 = ["⟦영상⟧", "[영상]"];
+        const 섰나 = await ed().evaluate((mks) => {
+          const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let n;
+          while ((n = w.nextNode())) {
+            const v = n.nodeValue || "";
+            let at = -1, mk = null;
+            for (const c of mks) { const i2 = v.indexOf(c); if (i2 >= 0) { at = i2; mk = c; break; } }
+            if (at < 0) continue;
+            const r = document.createRange();
+            r.setStart(n, at + mk.length); r.collapse(true);
+            const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+            return true;
+          }
+          return false;
+        }, 표식들).catch(() => false);
+        if (!섰나) {
+          say("      ⚠ 영상 자리를 못 찾았습니다 — 건너뜁니다");
+        } else {
+          let ch = null;
+          const wait = page.waitForFileChooser({ timeout: 15000 }).then((c) => { ch = c; }).catch(() => {});
+          await ed().evaluate(() => {
+            const b = [...document.querySelectorAll("button")]
+              .find((n) => /동영상|비디오/.test(n.textContent || "") || /video/i.test(n.className || ""));
+            b?.click();
+          }).catch(() => {});
+          await wait;
+          if (!ch) say("      ⚠ 동영상 선택창이 안 떴습니다");
+          else {
+            await ch.accept([post.video]);
+            say(`      영상 올리는 중… ${path.basename(post.video)}`);
+            await sleep(20000);   // 업로드·인코딩이 사진보다 오래 걸립니다
+            say("      영상 넣었습니다");
+          }
+        }
+      }
+
       if (subOk) say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
       /**
        * 사진이 **자리에** 들어갔는지 실제로 셉니다.
