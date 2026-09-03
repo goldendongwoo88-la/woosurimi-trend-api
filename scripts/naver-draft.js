@@ -1525,7 +1525,13 @@ ${blogId} 로그인이 안 돼 있습니다.
               if (!v.startsWith("http")) continue;
               if (v.length < 20) continue;
               const p2 = n.parentElement;
-              if (!p2 || p2.closest("a")) continue;   // 이미 링크면 건너뜁니다
+              /**
+               * ⚠️ **`<a>` 인지로 거르면 안 됩니다.** 네이버가 붙여넣기 때 주소를 자동으로
+               *    `<a>` 로 만듭니다. 그걸 "이미 처리됨" 으로 보고 전부 건너뛰어서
+               *    카드가 **0개**가 됐습니다(2026-09-03 실측). `<a>` 는 그냥 파란 글씨일 뿐,
+               *    우리가 원하는 **썸네일+제목 카드**(.se-oglink)가 아닙니다.
+               */
+              if (!p2 || p2.closest(".se-oglink, .se-component.se-oglink")) continue;
               p2.scrollIntoView({ block: "center" });
               const r = document.createRange();
               r.selectNodeContents(n);
@@ -1535,7 +1541,10 @@ ${blogId} 로그인이 안 돼 있습니다.
             }
             return null;
           }).catch(() => null);
-          if (!자리L) break;
+          if (!자리L) {
+            if (회 === 0) say("      주소 줄을 하나도 못 찾았습니다");
+            break;
+          }
 
           let ox = 0, oy = 0;
           try {
