@@ -25,7 +25,10 @@
  *   --hi                강조할 낱말 (top1/top2 안에 있으면 그 낱말만 색이 바뀝니다)
  *   --sub               하단 자막
  *   --react             영상 위 형광 리액션 자막 (없으면 안 나옵니다)
+ *   --big               영상 위 대형 자막 (한 낱말짜리 되물음)
+ *   --brand             최상단 채널 바 (화이트형 전용, 이모지는 자동으로 지워집니다)
  *   --credit            출처 표기 ("출처 | 편스토랑" 형태)
+ *   --ratio             영상 크롭 비율. 기본 1.2. 작을수록 크게 나오고 좌우가 더 잘립니다
  *   --start --dur       잘라낼 구간 (초)
  */
 
@@ -164,19 +167,6 @@ function buildFilter(dir, tpl, o) {
   const font = ensureFont(dir);
   const chain = [];
 
-  // 배경 — 블러 + 어둡게. 원본 자막이 번져 보이는 것을 막습니다(실측: sigma 28로는 비칩니다).
-  //
-  // ⚠️ 영상은 **세로 중앙**에 놓습니다. 예전에는 y를 숫자로 박아뒀는데,
-  //    16:9 소스가 608px 높이로 들어오면 위쪽에 400·아래쪽에 900이 남아
-  //    화면이 위로 쏠려 보였습니다(사장님 지적, 2026-09-03).
-  //    (H-h)/2 는 소스 비율이 무엇이든 알아서 가운데를 잡습니다.
-  chain.push(
-    `[0:v]split=2[bg][fg]`,
-    `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=60,eq=brightness=-0.38:saturation=0.5[b]`,
-    `[fg]scale=${W}:-2[f]`,
-    `[b][f]overlay=(W-w)/2:(H-h)/2[v0]`,
-  );
-
   /**
    * 상단 밴드 — 템플릿에 따라 검정 또는 흰색.
    *
@@ -192,8 +182,43 @@ function buildFilter(dir, tpl, o) {
   const need = topPad + 28 + _n1 * (t.top1.size + 16) + (_n2 ? 22 + _n2 * (t.top2.size + 16) : 0) + 30;
   const bandH = Math.max(t.band, need);
 
-  const bandColor = t.bandColor === "white" ? "white@0.96" : C.band;
+  /**
+   * 영상 배치 — 가운데를 잘라 정사각형에 가깝게 넣습니다.
+   *
+   * 블러 배경은 없앴습니다(사장님: "뒤에 뿌옇게 나오게 하지 말고 꽉 차게", 2026-09-03).
+   * 남는 자리는 검게 둡니다.
+   *
+   * ⚠️ 비율이 전부입니다. 다섯 개를 실제로 뽑아 원본 자막이 언제 잘리는지 봤습니다.
+   *    남는 가로 = 0.5625 × ratio (1080p 16:9 기준)
+   *
+   *      1.78  100%  원본 그대로. 화면의 3분의 1만 차지해 너무 작습니다.
+   *      1.20   67%  ← 기본값. 원본 자막이 마침표까지 온전합니다.
+   *      1.00   56%  더 크지만 자막 좌우 끝이 걸치기 시작합니다.
+   *      0.90   51%  자막 앞뒤가 잘립니다.
+   *      0.71   40%  인물까지 반쯤 날아갑니다. 못 씁니다.
+   *
+   * 판단 기준은 **원본에 자막이 박혀 있느냐**입니다.
+   *   박혀 있으면 1.2 아래로 내리지 마십시오.
+   *   자막 없는 원본(브이로그 생영상 등)이면 1.0 이나 0.9 로 더 키워도 됩니다.
+   */
+  const ratio = Math.max(0.6, Math.min(2.2, Number(o.ratio) || 1.2));
+  const vh = Math.round(W / ratio);                  // 화면에 들어갈 영상 높이
+  const contentH = H - bandH;
+  /**
+   * 남는 자리를 위 1 : 아래 3 으로 나눠 씁니다.
+   * 정가운데에 두면 아래에 자막 놓을 자리가 없어 **원본에 박힌 자막 위에 우리 자막이
+   * 겹쳐 찍힙니다**(실측: 세 비율에서 전부 겹쳤습니다). 아래를 넉넉히 비워둡니다.
+   */
+  const slack = Math.max(0, contentH - vh);
+  const vy = bandH + Math.round(slack * 0.25);
+  const vBottom = vy + vh;                           // 영상이 끝나는 자리 — 자막은 이 아래로
   let last = "v0";
+  chain.push(
+    `[0:v]crop=w='min(iw,ih*${ratio})':h='min(ih,iw/${ratio})',` +
+    `scale=${W}:${vh},pad=${W}:${H}:0:${vy}:color=black[v0]`,
+  );
+
+  const bandColor = t.bandColor === "white" ? "white@0.96" : C.band;
   chain.push(`[${last}]drawbox=x=0:y=0:w=${W}:h=${bandH}:color=${bandColor}:t=fill[v1]`);
   last = "v1";
 
@@ -247,11 +272,21 @@ function buildFilter(dir, tpl, o) {
   // 영상 위 리액션 자막 — 원본 자막(대개 영상 하단)과 겹치지 않게 위쪽에 얹습니다.
   if (o.react) push(dt(dir, { text: wrap(o.react, 58), font, size: 58, color: t.accent, y: Math.round(H * 0.36) }));
 
-  // 하단 자막 — 흰 글씨 + 두꺼운 테두리. 배경이 뭐든 읽힙니다.
-  if (o.sub) push(dt(dir, { text: wrap(o.sub, 54), font, size: 54, color: C.white, y: Math.round(H * 0.74), border: 9 }));
+  /**
+   * 하단 자막 — 영상이 끝나는 자리 **아래**에 놓습니다.
+   * 화면 높이의 몇 % 로 박아두면 원본에 박힌 자막과 겹칩니다(실측).
+   * 아래 공간이 모자라면 그때만 영상 안쪽으로 밀어 넣습니다.
+   */
+  if (o.sub) {
+    const sw = wrap(o.sub, 54);
+    const sh = sw.split(String.fromCharCode(10)).length * 70;
+    const below = vBottom + 44;
+    const sy = (below + sh < H - 40) ? below : Math.max(vBottom - sh - 40, H - sh - 90);
+    push(dt(dir, { text: sw, font, size: 54, color: C.white, y: sy, border: 9 }));
+  }
 
   // 출처 — 작게, 흐리게. 저작권 방어는 안 되지만 예의입니다.
-  if (o.credit) push(dt(dir, { text: o.credit, font, size: 36, color: "white@0.75", y: Math.round(H * 0.80), border: 5 }));
+  if (o.credit) push(dt(dir, { text: o.credit, font, size: 36, color: "white@0.75", y: Math.min(H - 70, vBottom + 150), border: 5 }));
 
   return { filter: chain.join(";").replace(new RegExp(`\\[${last}\\]$`), "") + `[out]`, outLabel: "out", lastLabel: last };
 }
