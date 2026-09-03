@@ -872,7 +872,7 @@ ${blogId} 로그인이 안 돼 있습니다.
             r.setStart(n, at); r.setEnd(n, at + mk.length);
             const box = r.getBoundingClientRect();
             if (!box || !box.width) continue;
-            return { x: box.right, y: box.top + box.height / 2 };
+            return { x: box.right, y: box.top + box.height / 2, 길이: mk.length };
           }
           return null;
         }, [mark, markAlt]).catch(() => null);
@@ -888,6 +888,14 @@ ${blogId} 로그인이 안 돼 있습니다.
           } catch {}
           await page.mouse.click(ox + 자리.x, oy + 자리.y).catch(() => {});
           await sleep(350);   // 편집기가 커서를 세울 짬
+          /**
+           * 표식 글자를 **키보드로** 지웁니다.
+           * ⚠️ DOM 에서 지우면(node.remove) 화면에서만 사라지고 **저장하면 되돌아옵니다.**
+           *    로그는 "남은 표식 0개" 라고 했는데 사장님 화면에 ⟦사진0⟧ 이 그대로 남아
+           *    있었습니다(2026-09-03). 커서가 표식 끝에 서 있으니 길이만큼 지웁니다.
+           */
+          for (let k = 0; k < (자리.길이 || 0); k++) await page.keyboard.press("Backspace");
+          await sleep(200);
           put = true;
         }
         if (!put) { failed.add(i); say(`      ⚠ ${mark} 자리를 못 찾았습니다 — 건너뜁니다`); continue; }
@@ -902,7 +910,7 @@ ${blogId} 로그인이 안 돼 있습니다.
               커서주변: (n && n.nodeValue || "").slice(0, 40),
               부모: p ? p.tagName + "." + (p.className || "").slice(0, 30) : "없음",
               편집가능: !!(p && p.closest('[contenteditable]')),
-              소제목후보: document.querySelectorAll("span[style*='38px']").length,
+              소제목후보: document.querySelectorAll("span[style*='38px'], span.se-fs38").length,
               문단수: document.querySelectorAll(".se-text-paragraph").length,
             };
           }).catch((e) => ({ 오류: String(e).slice(0, 60) }));
@@ -1063,53 +1071,179 @@ ${blogId} 로그인이 안 돼 있습니다.
        */
       let subOk = 0;
       const subs = await ed().$$("p[data-wsu-subhead], .se-text-paragraph");
+      /**
+       * ⚠️ 잡힌 개수를 **먼저** 찍습니다. 예전에는 루프가 전부 continue 로 빠져도
+       *    로그가 하나도 안 남아서, 판정이 틀린 건지 클릭이 틀린 건지 알 수 없었습니다.
+       */
+      const 후보수 = await ed().evaluate(() => {
+        const ps = [...document.querySelectorAll("p[data-wsu-subhead], .se-text-paragraph")];
+        return ps.filter((n) =>
+          n.hasAttribute("data-wsu-subhead")
+          || Boolean(n.querySelector("span[style*='38px'], span.se-fs38"))
+          || (typeof n.className === "string" && n.className.includes("se-fs38"))).length;
+      }).catch(() => -1);
+      say(`      소제목 찾는 중 — 문단 ${subs.length}개 · 소제목으로 잡힌 것 ${후보수}개`);
+
+      /**
+       * ⚠️ **도구막대는 본문과 다른 프레임에 있을 수 있습니다.**
+       *    본문 프레임에서만 찾으면 라벨이 0개라 드롭다운을 영영 못 엽니다
+       *    (2026-09-03: 소제목 4개를 잡았는데 0개 성공, 끊김 로그도 없었습니다).
+       *    프레임을 다 뒤져 라벨이 있는 곳을 도구막대 프레임으로 씁니다.
+       */
+      let 툴바프레임 = null;
+      for (const f of page.frames()) {
+        const 라벨 = await f.evaluate(() =>
+          [...document.querySelectorAll("span.se-toolbar-label")].map((n) => (n.textContent || "").trim())
+        ).catch(() => []);
+        if (라벨.length) {
+          툴바프레임 = f;
+          say(`      도구막대 프레임: ${(f.url() || "about:blank").slice(0, 40)} · 라벨 [${라벨.join(", ")}]`);
+          break;
+        }
+      }
+      if (!툴바프레임) say("      ⚠ 도구막대를 어느 프레임에서도 못 찾았습니다");
+
+      /**
+       * ⚠️ `span.se-toolbar-label` 은 **삽입 도구막대**(사진·동영상·인용구…) 입니다.
+       *    문단 서식 칸("본문 / 나눔고딕 / 38")은 클래스가 다릅니다. 실제 클래스를 찍어 둡니다.
+       */
+      for (const f of page.frames()) {
+        const 후보 = await f.evaluate(() => {
+          const out = [];
+          for (const n of document.querySelectorAll("button, span, div, a")) {
+            const t = (n.textContent || "").trim();
+            if (t !== "본문" && t !== "소제목" && !/^[0-9]{2}$/.test(t)) continue;
+            if (n.children.length > 1) continue;
+            const r = n.getBoundingClientRect();
+            if (!r.width) continue;
+            out.push(t + " → " + n.tagName + "." + String(n.className || "").slice(0, 40));
+            if (out.length >= 8) break;
+          }
+          return out;
+        }).catch(() => []);
+        if (후보.length) { say("      [서식칸 후보] " + 후보.join(" | ")); break; }
+      }
+      const tb = () => 툴바프레임 || ed();
       for (const el of subs) {
         try {
           /**
            * ⚠️ **<b> 로 소제목을 가리면 안 됩니다.** 본문의 [강조] 도 <b> 로 나가서
            *    강조 문단이 소제목으로 잡히고, 정작 소제목은 놓칩니다(2026-09-03 실측: 5개 중 2개).
            *    소제목은 38px 로 나가므로 그걸 봅니다.
+           *    ⚠️ 네이버가 style="font-size:38px" 를 class="se-fs38" 로 바꿉니다.
+           *    style 만 보면 후보가 0개가 되어 루프가 통째로 헛돕니다(2026-09-03 실측).
            */
           const isSub = await el.evaluate((n) =>
             n.hasAttribute('data-wsu-subhead')
-            || Boolean(n.querySelector('span[style*="38px"], span[style*="38.0px"]'))
-            || /font-size:\s*38(\.0)?px/.test(n.getAttribute('style') || ''));
+            || Boolean(n.querySelector('span[style*="38px"], span[style*="38.0px"], span.se-fs38'))
+            || /font-size:\s*38(\.0)?px/.test(n.getAttribute('style') || '')
+            || (typeof n.className === 'string' && n.className.includes('se-fs38')));
           if (!isSub) continue;
           await el.evaluate((n) => n.scrollIntoView({ block: 'center' }));
           await sleep(250);
           await el.click({ clickCount: 3, delay: 40 });     // 세 번 눌러 문단을 통째로 고릅니다
           await sleep(500);
-          const opened = await ed().evaluate(() => {
-            const labels = [...document.querySelectorAll('span.se-toolbar-label')]
-              .filter((n) => n.getBoundingClientRect().top >= 100);
-            const btn = labels[0]?.closest('button');
-            if (!btn) return false;
-            btn.click();
-            return true;
-          });
-          if (!opened) continue;
-          await sleep(1600);
-          const picked = await ed().evaluate(() => {
-            const o = [...document.querySelectorAll('span.se-toolbar-option-label')]
-              .find((n) => /소제목/.test(n.textContent || ''));
-            if (!o) return false;
-            (o.closest('button') || o).click();
-            return true;
-          });
-          if (picked) subOk++;
-          await sleep(500);
           /**
-           * 사장님 지시(2026-09-03): **소제목 표시를 먼저 바꾸고, 그다음 38 굵게.**
-           * 네이버 소제목 스타일이 제 크기로 덮어쓰기 때문에 순서가 중요합니다.
+           * ⚠️ 툴바도 **진짜 마우스로** 눌러야 합니다.
+           *    예전에는 evaluate 안에서 btn.click() 을 불렀는데, 그건 DOM click(합성)이라
+           *    편집기가 무시합니다. 화면에는 눌린 것처럼 보이는데 서식은 안 바뀝니다
+           *    (2026-09-03 사장님 확인: 소제목 표시가 하나도 안 들어감).
+           */
+          const 프레임오프셋 = async () => {
+            try {
+              const fe = await tb().frameElement();
+              const fb = fe && await fe.boundingBox();
+              return fb ? { x: fb.x, y: fb.y } : { x: 0, y: 0 };
+            } catch { return { x: 0, y: 0 }; }
+          };
+          const 진짜클릭 = async (좌표) => {
+            if (!좌표) return false;
+            const o = await 프레임오프셋();
+            await page.mouse.click(o.x + 좌표.x, o.y + 좌표.y).catch(() => {});
+            return true;
+          };
+
+          // ① 문단 서식 드롭다운을 엽니다.
+          /**
+           * ⚠️ **위치(top >= 100)로 고르지 않습니다.** 초안을 이어 열면 도구막대가 화면
+           *    맨 위(y≈15)에 붙어서 그 필터가 **아무것도 못 잡습니다**
+           *    (2026-09-03 사장님 스크린샷으로 확인 — 크기 38·굵게는 됐는데 문단 서식만 "본문").
+           *    라벨에 적힌 글자로 고릅니다. 문단 서식 칸은 늘 본문·소제목·인용구 중 하나입니다.
+           */
+          const 드롭 = await tb().evaluate(() => {
+            const labels = [...document.querySelectorAll("span.se-toolbar-label")];
+            const 서식 = labels.find((n) => ["본문", "소제목", "인용구"].includes((n.textContent || "").trim()));
+            const btn = 서식 && 서식.closest("button");
+            if (!btn) return null;
+            const r = btn.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+          }).catch(() => null);
+          if (!await 진짜클릭(드롭)) continue;
+          await sleep(1200);
+
+          // ② 목록에서 "소제목" 을 고릅니다.
+          const 옵션 = await tb().evaluate(() => {
+            const o = [...document.querySelectorAll("span.se-toolbar-option-label")]
+              .find((n) => /소제목/.test(n.textContent || ""));
+            if (!o) return null;
+            const t = o.closest("button") || o;
+            const r = t.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+          }).catch(() => null);
+          const 눌렀나 = await 진짜클릭(옵션);
+          await sleep(900);
+          /**
+           * ⚠️ **눌렀다는 것만으로 믿지 않습니다.** 도구막대 라벨을 다시 읽어
+           *    실제로 "소제목" 으로 바뀌었는지 봅니다. 눌렸는데 안 바뀐 적이 있습니다.
+           */
+          const 바뀜 = await tb().evaluate(() => {
+            const labels = [...document.querySelectorAll("span.se-toolbar-label")];
+            const 서식 = labels.find((n) => ["본문", "소제목", "인용구"].includes((n.textContent || "").trim()));
+            return 서식 ? (서식.textContent || "").trim() : "없음";
+          }).catch(() => "확인실패");
+          const picked = 눌렀나 && 바뀜 === "소제목";
+          if (picked) subOk++;
+          else say(`      ⚠ 소제목 전환 실패 — 도구막대는 "${바뀜}" 입니다`);
+
+          /**
+           * 사장님 지시(2026-09-03): **소제목 표시를 먼저, 그다음 38 굵게.**
+           * ⚠️ 크기·굵게를 DOM 스타일로 주입하면 저장할 때 되돌아옵니다. 툴바와 키보드로 합니다.
            */
           if (picked) {
-            await el.evaluate((n) => {
-              n.querySelectorAll('span').forEach((sp) => { sp.style.fontSize = '38px'; sp.style.fontWeight = '700'; });
-              if (!n.querySelector('span')) { n.style.fontSize = '38px'; n.style.fontWeight = '700'; }
-            }).catch(() => {});
-            await sleep(200);
+            await el.click({ clickCount: 3, delay: 40 }).catch(() => {});   // 문단을 다시 고릅니다
+            await sleep(400);
+            // 글씨 크기 드롭다운 — 서식줄의 두 번째 라벨입니다.
+            // 크기 칸도 글자로 고릅니다 — 숫자만 적혀 있는 라벨입니다.
+            const 크기드롭 = await tb().evaluate(() => {
+              const labels = [...document.querySelectorAll("span.se-toolbar-label")];
+              const 크기 = labels.find((n) => /^[0-9]{1,2}$/.test((n.textContent || "").trim()));
+              const btn = 크기 && 크기.closest("button");
+              if (!btn) return null;
+              const r = btn.getBoundingClientRect();
+              return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+            }).catch(() => null);
+            if (await 진짜클릭(크기드롭)) {
+              await sleep(1000);
+              const 삼팔 = await tb().evaluate(() => {
+                const o = [...document.querySelectorAll("span.se-toolbar-option-label")]
+                  .find((n) => (n.textContent || "").trim() === "38");
+                if (!o) return null;
+                const t = o.closest("button") || o;
+                const r = t.getBoundingClientRect();
+                return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+              }).catch(() => null);
+              await 진짜클릭(삼팔);
+              await sleep(500);
+            }
+            // 굵게 — Ctrl+B 는 진짜 키라 편집기가 받습니다.
+            await el.click({ clickCount: 3, delay: 40 }).catch(() => {});
+            await sleep(300);
+            await page.keyboard.down("Control");
+            await page.keyboard.press("KeyB");
+            await page.keyboard.up("Control");
+            await sleep(300);
           }
-        } catch { /* 다음 문단 */ }
+        } catch (e) { say(`      ⚠ 소제목 한 개 처리 중 끊김: ${String(e.message || e).slice(0, 50)}`); }
       }
       /**
        * ── 영상 올리기 (2026-09-03 신설) ──
@@ -1122,8 +1256,14 @@ ${blogId} 로그인이 안 돼 있습니다.
        * ⚠️ 네이버가 ⟦⟧ 를 [] 로 바꾸므로 두 모양을 다 찾습니다.
        */
       if (copied.video && fs.existsSync(copied.video)) {
-        const 표식들 = ["⟦영상⟧", "[영상]"];
-        const 섰나 = await ed().evaluate((mks) => {
+        /**
+         * ⚠️ 표식은 **접두로** 찾습니다. 원고가 `[영상: 리본 묶는 5초]` 처럼 설명을 답니다.
+         *    예전에는 `[영상]` 만 찾아서 **매번 "자리를 못 찾았습니다"** 였습니다(2026-09-03).
+         * ⚠️ 커서는 **진짜 마우스 클릭**으로 세웁니다. selection.addRange 로 세우면
+         *    영상이 문서 끝으로 갑니다 — 사진이 끝에 몰리던 것과 같은 병입니다.
+         */
+        const 표식들 = ["⟦영상", "[영상"];
+        const 자리V = await ed().evaluate((mks) => {
           const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
           let n;
           while ((n = w.nextNode())) {
@@ -1131,23 +1271,63 @@ ${blogId} 로그인이 안 돼 있습니다.
             let at = -1, mk = null;
             for (const c of mks) { const i2 = v.indexOf(c); if (i2 >= 0) { at = i2; mk = c; break; } }
             if (at < 0) continue;
+            // 닫는 괄호까지가 표식입니다. 없으면 표식 글자만큼만 잡습니다.
+            let 끝 = at + mk.length;
+            for (let k = 끝; k < v.length && k < 끝 + 40; k++) {
+              if (v[k] === "]" || v[k] === "⟧") { 끝 = k + 1; break; }
+            }
+            n.parentElement?.scrollIntoView({ block: "center" });
             const r = document.createRange();
-            r.setStart(n, at + mk.length); r.collapse(true);
-            const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
-            return true;
+            r.setStart(n, at); r.setEnd(n, 끝);
+            const box = r.getBoundingClientRect();
+            if (!box || !box.width) continue;
+            return { x: box.right, y: box.top + box.height / 2 };
           }
-          return false;
-        }, 표식들).catch(() => false);
+          return null;
+        }, 표식들).catch(() => null);
+
+        let 섰나 = false;
+        if (자리V) {
+          let ox = 0, oy = 0;
+          try {
+            const fe = await ed().frameElement();
+            const fb = fe && await fe.boundingBox();
+            if (fb) { ox = fb.x; oy = fb.y; }
+          } catch {}
+          await page.mouse.click(ox + 자리V.x, oy + 자리V.y).catch(() => {});
+          await sleep(350);
+          섰나 = true;
+        }
         if (!섰나) {
           say("      ⚠ 영상 자리를 못 찾았습니다 — 건너뜁니다");
         } else {
           let ch = null;
           const wait = page.waitForFileChooser({ timeout: 15000 }).then((c) => { ch = c; }).catch(() => {});
-          await ed().evaluate(() => {
-            const b = [...document.querySelectorAll("button")]
-              .find((n) => /동영상|비디오/.test(n.textContent || "") || /video/i.test(n.className || ""));
-            b?.click();
-          }).catch(() => {});
+          /**
+           * ⚠️ 동영상 단추도 **진짜 마우스로** 눌러야 합니다.
+           *    b.click() 은 DOM click(합성)이라 파일 선택창이 안 뜹니다
+           *    (2026-09-03 실측: "동영상 선택창이 안 떴습니다").
+           */
+          // 도구막대 라벨에 "동영상" 이 있습니다(실측). 그 라벨의 단추를 씁니다.
+          const 단추 = await ed().evaluate(() => {
+            const lab = [...document.querySelectorAll("span.se-toolbar-label")]
+              .find((n) => (n.textContent || "").trim() === "동영상");
+            const b = (lab && lab.closest("button"))
+              || [...document.querySelectorAll("button")]
+                .find((n) => /동영상|비디오/.test(n.textContent || "") || /video/i.test(n.className || ""));
+            if (!b) return null;
+            const r = b.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+          }).catch(() => null);
+          if (단추) {
+            let ox = 0, oy = 0;
+            try {
+              const fe = await ed().frameElement();
+              const fb = fe && await fe.boundingBox();
+              if (fb) { ox = fb.x; oy = fb.y; }
+            } catch {}
+            await page.mouse.click(ox + 단추.x, oy + 단추.y).catch(() => {});
+          } else say("      ⚠ 동영상 단추를 못 찾았습니다");
           await wait;
           if (!ch) say("      ⚠ 동영상 선택창이 안 떴습니다");
           else {
@@ -1159,7 +1339,7 @@ ${blogId} 로그인이 안 돼 있습니다.
         }
       }
 
-      if (subOk) say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
+      say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
       /**
        * 사진이 **자리에** 들어갔는지 실제로 셉니다.
        * "올린 사진 N장"은 업로드 성공만 뜻하지 위치를 보장하지 않습니다.
