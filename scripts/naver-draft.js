@@ -1150,6 +1150,130 @@ ${blogId} 로그인이 안 돼 있습니다.
         }
       } catch (e) { say(`      ⚠ 사진 AI 활용 실패: ${String(e.message || e).slice(0, 50)}`); }
 
+      /**
+       * ── 사진 출처를 **사진 밑 회색칸(사진 설명)** 으로 옮깁니다 ──
+       * 대표 지시(2026-09-03): "사진 출처 넣을 때는 사진 밑에 회색칸에 넣어. 본문에 넣지 말고."
+       *
+       * 실측한 구조 (검사기로 저장본을 열어 확인):
+       *   .se-component.se-image
+       *     └ .se-module.se-module-text.se-caption   ← 이게 회색칸
+       *         └ p.se-text-paragraph                 안내문구 "사진 설명을 입력하세요."
+       *
+       * ⚠️ **캡션은 처음엔 안 보입니다** (`보이나: false`). 사진을 먼저 눌러야 나타납니다.
+       *    그래서 사진 클릭 → 캡션 클릭 → 타자 순서로 갑니다.
+       * ⚠️ 커서를 코드로 세우면 편집기가 안 봅니다. 둘 다 **진짜 마우스**로 찍습니다.
+       */
+      try {
+        let 옮김 = 0, 대상 = 0;
+        for (let i = 0; i < 12; i++) {
+          const 감 = await ed().evaluate((n) => {
+            const 사진들 = [...document.querySelectorAll(".se-component.se-image")];
+            const img = 사진들[n];
+            if (!img) return null;
+            // 이 사진 바로 다음 부품이 출처 줄인가
+            let 다음 = img.nextElementSibling;
+            while (다음 && !(다음.textContent || "").trim()) 다음 = 다음.nextElementSibling;
+            const 글 = 다음 ? (다음.textContent || "").trim() : "";
+            if (!/^▲\s*(사진\s*)?출처/.test(글)) return { 없음: true };
+            const cap = img.querySelector(".se-caption");
+            if (!cap) return { 없음: true };
+            img.scrollIntoView({ block: "center" });
+            const ib = img.querySelector("img.se-image-resource");
+            const b = (ib || img).getBoundingClientRect();
+            return { 글, x: b.left + b.width / 2, y: b.top + b.height / 2 };
+          }, i).catch(() => null);
+          if (!감) break;                 // 사진이 더 없다
+          if (감.없음) continue;          // 이 사진엔 출처 줄이 없다
+          대상++;
+
+          let ox = 0, oy = 0;
+          try {
+            const fe = await ed().frameElement();
+            const fb = fe && await fe.boundingBox();
+            if (fb) { ox = fb.x; oy = fb.y; }
+          } catch {}
+          /**
+           * ⚠️ **0.5초만 기다리고 포기해서 4개 다 놓쳤습니다** (2026-09-03 실측 0/4).
+           *    저장본을 열어 재 보니 캡션은 **클릭 없이도 높이 24로 보이고 있었습니다.**
+           *    막 붙여넣은 직후에는 아직 안 그려졌을 뿐입니다.
+           *    그래서 ① 먼저 그냥 찾아보고 ② 없으면 사진을 눌러 깨운 뒤 ③ 넉넉히 기다립니다.
+           */
+          /**
+           * ⚠️ **좌표로 클릭했더니 본문 문단에 글자가 들어갔습니다** (2026-09-03 실측 —
+           *    캡션에 "▲ 출처 : 서강준 인스타그램익숙해진 연인이 낯선 감정" 처럼
+           *    출처 뒤에 본문 문장이 붙어 나왔습니다. 초안이 망가집니다).
+           *    좌표 대신 **요소 자체를 잡아** 누릅니다. 그리고 넣기 전후로 확인합니다:
+           *      · 넣기 전 → 그 칸이 비어 있어야 한다(`se-is-empty`)
+           *      · 넣은 뒤 → 칸의 글이 **출처 줄과 똑같아야** 한다
+           *    하나라도 어긋나면 되돌리고(Ctrl+Z) 본문 줄은 그대로 둡니다.
+           */
+          /**
+           * ⚠️ **모듈(`.se-caption`)을 누르면 커서가 안 들어갑니다** (2026-09-03 실측 — 4개 중
+           *    3개는 안내문구 "사진 설명을 입력하세요." 그대로였고, 1개는 본문에 섞였습니다).
+           *    글이 들어가는 곳은 그 **안쪽 문단**(`.se-caption .se-text-paragraph`) 입니다.
+           *    그리고 타자 전에 **커서가 정말 캡션 안에 있는지** 확인합니다 —
+           *    이걸 안 보면 본문에 출처가 박히고 원고가 망가집니다.
+           */
+          const 칸들 = await ed().$$(".se-component.se-image .se-caption .se-text-paragraph").catch(() => []);
+          const 칸 = 칸들[i];
+          if (!칸) { say(`      ⚠ ${i + 1}번째 사진에 설명칸이 없습니다 — 본문 줄은 그대로 둡니다`); continue; }
+
+          /**
+           * 캡션은 **사진이 선택된 뒤에야** 커서를 받습니다. 그래서 사진을 먼저 누릅니다.
+           * 사진 위에는 대표·AI활용·삭제 단추가 겹쳐 있어 **한가운데가 아니라 아래 78% 지점**을
+           * 찍습니다(동료 세션 2a 가 알려준 자리 — 단추는 위아래 모서리에 몰려 있습니다).
+           */
+          const 사진자리 = await ed().evaluate((k) => {
+            const img = [...document.querySelectorAll(".se-component.se-image")][k];
+            if (!img) return null;
+            img.scrollIntoView({ block: "center" });
+            const el = img.querySelector("img.se-image-resource") || img;
+            const b = el.getBoundingClientRect();
+            return { x: b.left + b.width / 2, y: b.top + b.height * 0.78 };
+          }, i).catch(() => null);
+          if (사진자리) {
+            await page.mouse.click(ox + 사진자리.x, oy + 사진자리.y).catch(() => {});
+            await sleep(600);
+          }
+          await 칸.click({ delay: 60 }).catch(() => {});
+          await sleep(500);
+          const 커서캡션 = await ed().evaluate(() => {
+            let e = document.activeElement;
+            const s = window.getSelection();
+            if (s && s.anchorNode) e = s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement;
+            return !!(e && e.closest && e.closest(".se-caption"));
+          }).catch(() => false);
+          if (!커서캡션) { say(`      ⚠ ${i + 1}번째 — 커서가 설명칸에 안 들어갑니다. 본문 줄은 그대로 둡니다`); continue; }
+
+          await page.keyboard.type(감.글, { delay: 8 });
+          await sleep(600);
+
+          const 캡션글 = await 칸.evaluate((e) => (e.textContent || "").trim()).catch(() => "");
+          if (캡션글 !== 감.글) {
+            say(`      ⚠ ${i + 1}번째 설명칸에 딴 게 들어갔습니다("${캡션글.slice(0, 26)}") — 되돌립니다`);
+            for (let z = 0; z < 40; z++) await page.keyboard.down("Control").then(async () => {
+              await page.keyboard.press("KeyZ"); await page.keyboard.up("Control");
+            }).catch(() => {});
+            await sleep(600);
+            continue;
+          }
+
+          // 캡션에 제대로 들어간 것을 확인한 뒤에만 본문 줄을 지웁니다
+          const 지움 = await ed().evaluate((글) => {
+            for (const p of document.querySelectorAll(".se-text-paragraph")) {
+              if (p.closest(".se-caption")) continue;          // 캡션 안은 건드리지 않는다
+              if ((p.textContent || "").trim() !== 글) continue;
+              const 부품 = p.closest(".se-component") || p;
+              부품.remove();
+              return true;
+            }
+            return false;
+          }, 감.글).catch(() => false);
+          if (지움) 옮김++;
+        }
+        if (대상) say(`      사진 출처 → 사진 설명칸 ${옮김}/${대상}개 옮겼습니다`);
+      } catch (e) { say(`      ⚠ 사진 설명칸 옮기기 실패: ${String(e.message || e).slice(0, 60)}`); }
+
       let subOk = 0;
       const subs = await ed().$$("p[data-wsu-subhead], .se-text-paragraph");
       /**
@@ -1556,15 +1680,22 @@ ${blogId} 로그인이 안 돼 있습니다.
           await page.keyboard.press("Delete");
           await sleep(350);
 
-          // ③ 「링크 추가」 — 도구막대는 본문과 다른 프레임일 수 있어 전부 뒤집니다
+          /**
+           * ③ 「링크 추가」 — **진짜 마우스로** 누릅니다.
+           *    evaluate 안의 b.click() 은 합성이라 창이 안 뜹니다(2026-09-03 실측: 카드 0개).
+           *    동영상 단추에서 겪은 것과 같은 병입니다.
+           */
           let 열림 = false;
           for (const f of page.frames()) {
-            열림 = await f.evaluate(() => {
-              const b = document.querySelector("button.se-oglink-toolbar-button");
-              if (!b) return false;
-              b.click(); return true;
-            }).catch(() => false);
-            if (열림) break;
+            const btn = await f.$("button.se-oglink-toolbar-button").catch(() => null);
+            if (!btn) continue;
+            await btn.click({ delay: 60 }).catch(() => {});
+            열림 = true;
+            break;
+          }
+          if (!열림) {
+            // 클래스가 바뀌었을 수 있어 라벨 글자로 한 번 더 찾습니다.
+            열림 = await 눌러(["링크"]);
           }
           if (!열림) { say("      ⚠ 「링크 추가」 단추를 못 찾았습니다"); break; }
           await sleep(1200);
