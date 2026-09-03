@@ -54,6 +54,13 @@ const C = {
  * 색 조합은 템플릿마다 **하나의 강조색**만 갖습니다(규칙 2).
  */
 const T = {
+  화이트형: {
+    설명: "흰 밴드 + 최상단 채널 바 + 영상 위 대형 자막. 밴드가 밝아 제목이 가장 멀리서 읽힙니다.",
+    band: 430, vy: 430, accent: C.neon,
+    bandColor: "white", brandBar: 150,
+    top1: { size: 82, color: "#E02020" }, top2: { size: 82, color: C.black },
+    bigSize: 108,
+  },
   비교형: {
     설명: "Before/After. 좌우 2분할 영상에 씁니다. 강조색 형광 연두.",
     band: 470, vy: 470, accent: C.neon,
@@ -158,25 +165,84 @@ function buildFilter(dir, tpl, o) {
   const chain = [];
 
   // 배경 — 블러 + 어둡게. 원본 자막이 번져 보이는 것을 막습니다(실측: sigma 28로는 비칩니다).
+  //
+  // ⚠️ 영상은 **세로 중앙**에 놓습니다. 예전에는 y를 숫자로 박아뒀는데,
+  //    16:9 소스가 608px 높이로 들어오면 위쪽에 400·아래쪽에 900이 남아
+  //    화면이 위로 쏠려 보였습니다(사장님 지적, 2026-09-03).
+  //    (H-h)/2 는 소스 비율이 무엇이든 알아서 가운데를 잡습니다.
   chain.push(
     `[0:v]split=2[bg][fg]`,
     `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=60,eq=brightness=-0.38:saturation=0.5[b]`,
     `[fg]scale=${W}:-2[f]`,
-    `[b][f]overlay=(W-w)/2:${t.vy}[v0]`,
+    `[b][f]overlay=(W-w)/2:(H-h)/2[v0]`,
   );
 
-  // 상단 검은 밴드
+  /**
+   * 상단 밴드 — 템플릿에 따라 검정 또는 흰색.
+   *
+   * ⚠️ 높이를 **글자를 먼저 접어보고** 정합니다. 템플릿에 적힌 값은 최소치일 뿐입니다.
+   *    고정 높이로 두면 제목이 길어 두 줄이 될 때 둘째 줄이 밴드 밖으로 넘쳐
+   *    영상 위에 걸칩니다 — 흰 밴드에 검은 글씨면 그 부분이 아예 안 보입니다(실측).
+   */
+  const topPad = t.brandBar || 0;
+  const _w1 = o.top1 ? wrap(o.top1, t.top1.size) : "";
+  const _w2 = o.top2 ? wrap(o.top2, t.top2.size) : "";
+  const _n1 = _w1 ? _w1.split("\n").length : 0;
+  const _n2 = _w2 ? _w2.split("\n").length : 0;
+  const need = topPad + 28 + _n1 * (t.top1.size + 16) + (_n2 ? 22 + _n2 * (t.top2.size + 16) : 0) + 30;
+  const bandH = Math.max(t.band, need);
+
+  const bandColor = t.bandColor === "white" ? "white@0.96" : C.band;
   let last = "v0";
-  chain.push(`[${last}]drawbox=x=0:y=0:w=${W}:h=${t.band}:color=${C.band}:t=fill[v1]`);
+  chain.push(`[${last}]drawbox=x=0:y=0:w=${W}:h=${bandH}:color=${bandColor}:t=fill[v1]`);
   last = "v1";
 
   let i = 2;
   const push = (f) => { chain.push(`[${last}]${f}[v${i}]`); last = `v${i}`; i++; };
 
-  const y1 = Math.round(t.band * 0.22);
-  const y2 = Math.round(t.band * 0.56);
-  if (o.top1) push(dt(dir, { text: wrap(o.top1, t.top1.size), font, size: t.top1.size, color: t.top1.color, y: y1, box: t.top1.box }));
-  if (o.top2) push(dt(dir, { text: wrap(o.top2, t.top2.size), font, size: t.top2.size, color: t.top2.color, y: y2, box: t.top2.box }));
+  /**
+   * 최상단 채널 바 — 흰 밴드 위에 채널 이름을 얹습니다(「스타등용문」 형식).
+   *
+   * ⚠️ 이모지는 지웁니다. 맑은 고딕에는 이모지 글자가 없어서 **네모(□)로 찍힙니다**
+   *    (실측: "⭐ 우수리미 부부" → "□ 우수리미 부부"). drawtext는 한 번에 폰트 하나만
+   *    쓰므로 한글과 이모지를 같이 낼 방법이 없습니다. 별을 넣으시려면 로고 이미지로
+   *    합성하셔야 합니다.
+   */
+  if (t.brandBar && o.brand) {
+    const brand = String(o.brand).replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{20E3}]/gu, "").trim();
+    if (brand) push(dt(dir, { text: brand, font, size: 46, color: C.black, y: Math.round(t.brandBar * 0.30), border: 0 }));
+  }
+
+  /**
+   * 제목 두 줄.
+   * 밴드가 흰색이면 글자가 이미 어두우므로 검은 테두리를 거의 안 씁니다 —
+   * 흰 바탕에 검은 테두리를 두르면 글자가 뭉개져 보입니다.
+   */
+  const top = topPad;                                // 채널 바가 있으면 그만큼 내려서 시작
+  const bd = t.bandColor === "white" ? 0 : 8;
+  const w1 = _w1, w2 = _w2;                          // 밴드 높이 계산 때 접어둔 것을 그대로 씁니다
+
+  /**
+   * ⚠️ 둘째 줄 위치는 **첫 줄이 몇 줄이 됐는지 보고** 정합니다.
+   *    비율로 박아두면, 첫 줄이 길어 두 줄로 접힐 때 둘째 줄이 그 위에 겹쳐 찍힙니다
+   *    (실측: 화이트형에서 제목 두 개가 포개져 나왔습니다).
+   */
+  const lh1 = t.top1.size + 16;                      // line_spacing=16 과 맞춥니다
+  const n1 = w1 ? w1.split("\n").length : 0;
+  const y1 = top + 28;
+  const y2 = y1 + n1 * lh1 + 22;
+
+  if (w1) push(dt(dir, { text: w1, font, size: t.top1.size, color: t.top1.color, y: y1, box: t.top1.box, border: bd }));
+  if (w2) push(dt(dir, { text: w2, font, size: t.top2.size, color: t.top2.color, y: y2, box: t.top2.box, border: bd }));
+
+  /**
+   * 영상 위 대형 자막 — 「스타등용문」의 "여자친구?" 자리.
+   * 한 낱말짜리 되물음이 들어갑니다. 길게 쓰면 효과가 죽습니다.
+   */
+  if (o.big) {
+    const bs = t.bigSize || 100;
+    push(dt(dir, { text: wrap(o.big, bs), font, size: bs, color: C.white, y: Math.round(H * 0.55), border: 14 }));
+  }
 
   // 영상 위 리액션 자막 — 원본 자막(대개 영상 하단)과 겹치지 않게 위쪽에 얹습니다.
   if (o.react) push(dt(dir, { text: wrap(o.react, 58), font, size: 58, color: t.accent, y: Math.round(H * 0.36) }));
