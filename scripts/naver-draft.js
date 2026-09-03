@@ -1601,15 +1601,35 @@ ${blogId} 로그인이 안 돼 있습니다.
           document.querySelectorAll(".se-component.se-oglink, .se-oglink").length).catch(() => 0);
         say(`      링크 카드 ${카드수}개 (주소 ${넣은주소}개 넣음)`);
 
-        if (카드수) {
-          const 첫카드 = await ed().$(".se-component.se-oglink, .se-oglink").catch(() => null);
-          if (첫카드) {
-            await 첫카드.click({ delay: 60 }).catch(() => {});
-            await sleep(700);
-            const 가운데 = await 눌러(["가운데 정렬", "가운데정렬", "가운데"]);
-            say(`      링크 카드 가운데 정렬 ${가운데 ? "했습니다" : "단추를 못 찾았습니다"}`);
-          }
+        /**
+         * ⚠️ **첫 카드만 정렬하면 안 됩니다** (2026-09-03 사장님 확인 — 발행 화면에서
+         *    4개가 전부 왼쪽으로 붙어 있었습니다). 정렬은 **카드 하나하나에** 걸립니다.
+         *    그래서 카드 수만큼 돌면서 각각 찍고 가운데 정렬을 누릅니다.
+         */
+        let 가운데수 = 0;
+        for (let i = 0; i < 카드수; i++) {
+          const 잡음 = await ed().evaluate((n) => {
+            const 카드들 = document.querySelectorAll(".se-component.se-oglink, .se-oglink");
+            const c = 카드들[n];
+            if (!c) return null;
+            c.scrollIntoView({ block: "center" });
+            const b = c.getBoundingClientRect();
+            if (!b || !b.width) return null;
+            return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+          }, i).catch(() => null);
+          if (!잡음) continue;
+          let ox = 0, oy = 0;
+          try {
+            const fe = await ed().frameElement();
+            const fb = fe && await fe.boundingBox();
+            if (fb) { ox = fb.x; oy = fb.y; }
+          } catch {}
+          await page.mouse.click(ox + 잡음.x, oy + 잡음.y).catch(() => {});
+          await sleep(600);
+          if (await 눌러(["가운데 정렬", "가운데정렬", "가운데"])) 가운데수++;
+          await sleep(400);
         }
+        if (카드수) say(`      링크 카드 가운데 정렬 ${가운데수}/${카드수}개`);
       } catch (e) { say(`      ⚠ 링크 카드 실패: ${String(e.message || e).slice(0, 60)}`); }
       /**
        * 사진이 **자리에** 들어갔는지 실제로 셉니다.
