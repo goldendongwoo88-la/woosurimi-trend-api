@@ -159,6 +159,17 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
          *    아니면 서식이 정말 안 남는지 **글자 크기를 직접 세서** 가립니다.
          */
         링크카드: document.querySelectorAll(".se-component.se-oglink, .se-oglink").length,
+        /** 대표 지시(2026-09-03): 하단 해시태그 + 링크 박스 전부 가운데 정렬 */
+        태그가운데: (() => {
+          const ps = [...document.querySelectorAll(".se-text-paragraph")]
+            .filter((p) => { const t=(p.textContent||"").trim();
+              return t.indexOf("#") === 0 && (t.match(/#/g)||[]).length >= 3; });
+          if (!ps.length) return "태그줄 없음";
+          return JSON.stringify(ps.map((p) => ({
+            클래스: String(p.className).slice(0, 56),
+            정렬: getComputedStyle(p).textAlign,
+          })));
+        })(),
         주소줄: [...document.querySelectorAll(".se-text-paragraph")]
                   .filter((n) => /^https?:\/\//.test((n.textContent || "").trim())).length,
         큰글자: (() => {

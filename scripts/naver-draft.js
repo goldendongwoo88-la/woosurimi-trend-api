@@ -1761,6 +1761,126 @@ ${blogId} 로그인이 안 돼 있습니다.
           await sleep(400);
         }
         if (카드수) say(`      링크 카드 가운데 정렬 ${가운데수}/${카드수}개`);
+
+        /**
+         * ── 맨 아래 해시태그 줄도 가운데로 (대표 지시 2026-09-03) ──
+         * "하단 해시태그 + 링크 박스 전부 가운데 정렬 하기"
+         *
+         * ⚠️ 본문 중간에 `#` 으로 시작하는 문장이 있을 수 있으니 **태그 줄만** 고릅니다 —
+         *    `#` 로 시작하고 태그가 **3개 이상** 붙어 있는 문단만 봅니다.
+         */
+        let 태그정렬 = 0, 태그줄 = 0;
+        const 태그본것 = await ed().evaluate(() => {
+          const ps = [...document.querySelectorAll(".se-text-paragraph")]
+            .filter((p) => { const t = (p.textContent || "").trim();
+              return t.indexOf("#") === 0 && (t.match(/#/g) || []).length >= 3; });
+          return ps.map((p) => {
+            const b = p.getBoundingClientRect();
+            return `폭${Math.round(b.width)}·${String(p.className).slice(-16)}`;
+          }).slice(0, 3);
+        }).catch(() => ["못읽음"]);
+        say(`      해시태그 후보 ${태그본것.length}개 ${태그본것.join(" / ")}`);
+        for (let t = 0; t < 4; t++) {
+          const 자리T = await ed().evaluate((이미) => {
+            const ps = [...document.querySelectorAll(".se-text-paragraph")];
+            for (let k = 0; k < ps.length; k++) {
+              const p = ps[k];
+              const 글 = (p.textContent || "").trim();
+              if (!/^#\S/.test(글)) continue;
+              if ((글.match(/#/g) || []).length < 3) continue;
+              if (이미.includes(k)) continue;
+              p.scrollIntoView({ block: "center" });
+              const b = p.getBoundingClientRect();
+              if (!b || !b.width) continue;
+              return { k, x: b.left + Math.min(b.width / 2, 200), y: b.top + b.height / 2 };
+            }
+            return null;
+          }, []).catch(() => null);
+          if (!자리T) break;
+          태그줄++;
+          let ox2 = 0, oy2 = 0;
+          try {
+            const fe = await ed().frameElement();
+            const fb = fe && await fe.boundingBox();
+            if (fb) { ox2 = fb.x; oy2 = fb.y; }
+          } catch {}
+          await page.mouse.click(ox2 + 자리T.x, oy2 + 자리T.y).catch(() => {});
+          await sleep(500);
+          /**
+           * ⚠️ **글 문단은 정렬 단추가 바로 없습니다** (2026-09-03 실측 — 카드는 4/4 되는데
+           *    해시태그는 0/4 였습니다). 사진·링크 카드는 뜨는 도구막대에 정렬이 바로 있지만,
+           *    글 문단은 도구막대의 **「정렬」 드롭다운을 열고** 골라야 합니다:
+           *      button.se-property-toolbar-drop-down-button (se-align-… 이 붙어 있음)
+           */
+          let 눌림 = false;
+          for (const f of page.frames()) {
+            const 열림 = await f.evaluate(() => {
+              const b = [...document.querySelectorAll("button")]
+                .find((x) => /se-align/.test(String(x.className))
+                          && /drop-down/.test(String(x.className)));
+              if (!b) return false;
+              b.click(); return true;
+            }).catch(() => false);
+            if (!열림) continue;
+            await sleep(600);
+            /** 열린 뒤 무엇이 있는지 한 번 찍습니다 — 못 찾으면 이름이 다른 것입니다 */
+            const 보기 = await f.evaluate(() => [...document.querySelectorAll("button, li, a")]
+              .filter((x) => x.offsetParent !== null && /align|정렬|가운데|왼쪽|오른쪽/i
+                .test((x.textContent || "") + " " + String(x.className) + " " + (x.getAttribute("aria-label") || "")))
+              .map((x) => ((x.textContent || "").trim().slice(0, 10) || "?") + "|" + String(x.className).slice(0, 40))
+              .slice(0, 10)).catch(() => []);
+            if (t === 0) 보기.forEach((v) => say(`      [정렬항목] ${v}`));
+            /**
+             * ⚠️ **`el.click()` 은 무시됩니다.** 드롭다운은 열리는데(항목이 다 보임)
+             *    「가운데 정렬」을 evaluate 안에서 눌러도 문단 클래스가 안 바뀌었습니다
+             *    (2026-09-03 실측 0/4). 이 편집기는 **진짜 마우스**만 봅니다.
+             *    그래서 요소를 잡아 elementHandle.click() 으로 누릅니다.
+             */
+            /**
+             * ⚠️ **단추를 하나씩 검사하면 그 사이에 드롭다운이 닫힙니다.**
+             *    `$$("button, li, a")` 로 수백 개를 잡아 하나씩 evaluate 하는 데 몇 초가 걸려
+             *    정작 누를 때는 메뉴가 사라져 있었습니다 (2026-09-03 실측 0/4).
+             *    항목 클래스가 `se-toolbar-option-icon-button` 이므로 **그것만** 잡습니다(4개뿐).
+             */
+            const 항목들 = await f.$$(".se-toolbar-option-icon-button").catch(() => []);
+            for (const h of 항목들) {
+              const 맞나 = await h.evaluate((x) =>
+                /가운데/.test(x.textContent || x.getAttribute("aria-label") || "")).catch(() => false);
+              if (!맞나) continue;
+              await h.click({ delay: 60 }).catch(() => {});
+              눌림 = true;
+              break;
+            }
+            break;
+          }
+          await sleep(500);
+          /**
+           * ⚠️ **눌렀다는 것만 보고 세면 안 됩니다.** 드롭다운에서 「가운데」를 눌렀다고
+           *    로그가 4/4 였는데 저장본을 열어 보니 `se-text-paragraph-align-left` 였습니다
+           *    (2026-09-03 실측). 그래서 **문단 클래스가 실제로 바뀌었는지**를 셉니다.
+           */
+          const 진짜가운데 = await ed().evaluate(() => {
+            for (const p of document.querySelectorAll(".se-text-paragraph")) {
+              const t = (p.textContent || "").trim();
+              if (t.indexOf("#") !== 0 || (t.match(/#/g) || []).length < 3) continue;
+              return String(p.className).includes("align-center");
+            }
+            return false;
+          }).catch(() => false);
+          if (진짜가운데) { 태그정렬++; break; }
+          if (!눌림) say("      ⚠ 정렬 드롭다운에서 「가운데」를 못 찾았습니다");
+          // 이미 가운데가 됐는지 보고, 됐으면 그만합니다 (같은 줄을 계속 잡지 않게)
+          const 됐나 = await ed().evaluate(() => {
+            for (const p of document.querySelectorAll(".se-text-paragraph")) {
+              const 글 = (p.textContent || "").trim();
+              if (!/^#\S/.test(글) || (글.match(/#/g) || []).length < 3) continue;
+              return String(p.className).includes("align-center");
+            }
+            return false;
+          }).catch(() => false);
+          if (됐나) break;
+        }
+        if (태그줄) say(`      해시태그 줄 가운데 정렬 ${태그정렬}/${태그줄}개`);
       } catch (e) { say(`      ⚠ 링크 카드 실패: ${String(e.message || e).slice(0, 60)}`); }
       /**
        * 사진이 **자리에** 들어갔는지 실제로 셉니다.
