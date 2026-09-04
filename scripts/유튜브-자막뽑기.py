@@ -61,12 +61,25 @@ def 자막받기(url, work, cookies):
     code, out = run(args, timeout=300)
     if "members-only" in out.lower() or "Join this channel" in out:
         print("  ⚠ 회원 전용입니다. 쿠키를 읽을 브라우저에 그 계정으로 로그인돼 있어야 합니다.")
-    vtts = sorted((f for f in os.listdir(work) if f.endswith(".vtt")),
-                  key=lambda f: -os.path.getsize(os.path.join(work, f)))
+    vtts = [f for f in os.listdir(work) if f.endswith(".vtt")]
     if not vtts:
         return None
-    text = vtt_to_text(os.path.join(work, vtts[0]))
-    print(f"  자막 {vtts[0]} → {len(text):,}자")
+
+    # ⚠️ 파일이 큰 쪽을 고르면 안 된다. 영어 자동번역본이 한국어 원본보다 크다.
+    #    2026-09-04 킴스 2부에서 실제로 영어(7,713자)를 집었다. 한국어 원본은 3,713자였다.
+    #    말한 언어 그대로인 ko-orig 이 종목 이름·숫자가 가장 정확하다.
+    순서 = [".ko-orig.vtt", ".ko.vtt", ".ko-ko.vtt", ".en.vtt"]
+    def 우선(f):
+        for i, suf in enumerate(순서):
+            if f.endswith(suf):
+                return (i, -os.path.getsize(os.path.join(work, f)))
+        return (len(순서), -os.path.getsize(os.path.join(work, f)))
+
+    pick = sorted(vtts, key=우선)[0]
+    text = vtt_to_text(os.path.join(work, pick))
+    if not pick.startswith("sub.ko"):
+        print(f"  ⚠ 한국어 자막이 없어 {pick} 를 씁니다 (번역본이라 이름·숫자가 뭉개질 수 있습니다)")
+    print(f"  자막 {pick} → {len(text):,}자")
     return text or None
 
 
