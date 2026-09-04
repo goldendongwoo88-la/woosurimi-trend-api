@@ -218,6 +218,32 @@ const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
     console.log("");
   }
 
+  // ── 내 블로그 성과 ──
+  //
+  // ⚠️ 이 주소들은 **channelId 가 없으면 400/403 이 난다.** 그걸 몰라서 다섯 개를 전부 틀렸다
+  //    (2026-09-04 실측). 짐작을 그만두고 페이지의 실제 요청을 잡아서 알아냈다.
+  //    metric=cv 는 조회수(count of view) 를 뜻한다.
+  let 성과 = null;
+  if (!flag("--지도")) {
+    const C = `channelId=${blogId}&service=naver_blog`;
+    const 오늘 = new Date().toISOString().slice(0, 10);
+    const 시작 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+    성과 = await page.evaluate(async (C, 날짜, 오늘, 시작) => {
+      const 가져오기 = async (u) => {
+        try { const r = await fetch(u, { credentials: "include" }); return r.ok ? (await r.json()).data : null; }
+        catch { return null; }
+      };
+      return {
+        어제: await 가져오기(`/api/v6/home/yesterday-summary?${C}&date=${오늘}`),
+        실시간: await 가져오기(`/api/v6/home/realtime-summary?${C}&date=${오늘}`),
+        급상승글: await 가져오기(`/api/v6/home/soaring-contents?${C}&date=${날짜}&interval=day`),
+        유입도메인: await 가져오기(`/api/v6/inflow-analysis/referrer-domain?${C}&date=${날짜}&interval=day&limit=10&metric=cv`),
+        체류시간: await 가져오기(`/api/v6/integrated-analysis/average-duration?${C}&startDate=${시작}&endDate=${날짜}&interval=day`),
+        조회수추이: await 가져오기(`/api/v6/integrated-analysis/view-count?${C}&startDate=${시작}&endDate=${날짜}&interval=day`),
+      };
+    }, C, 날짜, 오늘, 시작);
+  }
+
   await 정리();
 
   // ── 저장 ──
@@ -281,6 +307,23 @@ const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
       );
     }
     console.log(`\n엑셀: ${표파일}`);
+  }
+
+  // ── 내 블로그 성과 표 ──
+  if (성과) {
+    const 있는것 = Object.entries(성과).filter(([, v]) => v != null);
+    if (있는것.length) {
+      const 성과파일 = path.join(OUT, `성과-${blogId}-${날짜}.json`);
+      fs.writeFileSync(성과파일, JSON.stringify(성과, null, 1), "utf8");
+      console.log(`\n── 내 블로그 (${blogId}) ──`);
+      for (const [이름, v] of 있는것) {
+        const 요약 = Array.isArray(v) ? `${v.length}건` : JSON.stringify(v).replace(/\s+/g, " ").slice(0, 100);
+        console.log(`  ${이름.padEnd(10)} ${요약}`);
+      }
+      const 못받은것 = Object.entries(성과).filter(([, v]) => v == null).map(([k]) => k);
+      if (못받은것.length) console.log(`  (못 받음: ${못받은것.join(", ")})`);
+      console.log(`  원본: ${성과파일}`);
+    }
   }
 
   console.log(`\n원본(주소 훑기): ${파일}`);
