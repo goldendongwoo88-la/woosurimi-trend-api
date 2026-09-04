@@ -148,6 +148,72 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
       return;
     }
 
+    /** ── 캡션 실험 — 클릭 뒤 커서가 어디로 가는지 찍는다 ── */
+    let ox = 0, oy = 0;
+    try {
+      const fe = await body.frameElement();
+      const fb = fe && await fe.boundingBox();
+      if (fb) { ox = fb.x; oy = fb.y; }
+    } catch {}
+
+    const 어디 = async (라벨) => {
+      const v = await body.evaluate(() => {
+        const 적기 = (e) => e ? (e.tagName + "." + String(e.className || "").slice(0, 34)) : "없음";
+        const s = window.getSelection();
+        let 커서 = null;
+        if (s && s.anchorNode) 커서 = s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement;
+        const cap = document.querySelector(".se-component.se-image .se-caption");
+        return JSON.stringify({
+          활성: 적기(document.activeElement),
+          커서: 적기(커서),
+          캡션안: !!(커서 &&커서.closest && 커서.closest(".se-caption")),
+          캡션클래스: cap ? String(cap.className).slice(-26) : "없음",
+        });
+      }).catch((e) => "읽기실패 " + e.message.slice(0, 30));
+      console.log(`   [${라벨}] ${v}`);
+    };
+
+    const 캡자리 = async () => body.evaluate(() => {
+      const cap = document.querySelector(".se-component.se-image .se-caption");
+      if (!cap) return null;
+      const p = cap.querySelector(".se-text-paragraph") || cap;
+      p.scrollIntoView({ block: "center" });
+      const b = p.getBoundingClientRect();
+      if (!b.width || !b.height) return null;
+      return { x: b.left + Math.min(b.width / 2, 100), y: b.top + b.height / 2, w: Math.round(b.width), h: Math.round(b.height) };
+    }).catch(() => null);
+
+    await 어디("누르기 전");
+    const c = await 캡자리();
+    console.log(`   캡션 자리: ${JSON.stringify(c)}`);
+    if (c) {
+      await page.mouse.click(ox + c.x, oy + c.y, { delay: 60 });
+      await new Promise((r) => setTimeout(r, 800));
+      await 어디("한 번 클릭");
+      await page.mouse.click(ox + c.x, oy + c.y, { clickCount: 2, delay: 60 });
+      await new Promise((r) => setTimeout(r, 800));
+      await 어디("두 번 클릭");
+    }
+    // 사진을 먼저 고른 뒤 캡션
+    const 사진자리 = await body.evaluate(() => {
+      const img = document.querySelector(".se-component.se-image img.se-image-resource");
+      if (!img) return null;
+      img.scrollIntoView({ block: "center" });
+      const b = img.getBoundingClientRect();
+      return { x: b.left + b.width / 2, y: b.top + b.height * 0.5 };
+    }).catch(() => null);
+    if (사진자리) {
+      await page.mouse.click(ox + 사진자리.x, oy + 사진자리.y, { delay: 60 });
+      await new Promise((r) => setTimeout(r, 900));
+      await 어디("사진 클릭 후");
+      const c2 = await 캡자리();
+      if (c2) {
+        await page.mouse.click(ox + c2.x, oy + c2.y, { delay: 60 });
+        await new Promise((r) => setTimeout(r, 800));
+        await 어디("사진→캡션");
+      }
+    }
+
     const r = await body.evaluate(() => {
       const all = [...document.querySelectorAll(".se-component")];
       const 본문 = all.filter((c) => !c.closest(".se-documentTitle"));
@@ -166,14 +232,6 @@ if (!blogId) { console.error("사용법: node naver-draft-verify.js <블로그ID
          *    아니면 서식이 정말 안 남는지 **글자 크기를 직접 세서** 가립니다.
          */
         링크카드: document.querySelectorAll(".se-component.se-oglink, .se-oglink").length,
-        /** 대표 지시(2026-09-03): 사진 출처는 사진 밑 회색칸에. 본문에 남으면 안 됩니다 */
-        캡션출처: [...document.querySelectorAll(".se-caption .se-text-paragraph")]
-                    .filter((p) => /출처/.test(p.textContent || "")).length,
-        본문출처: JSON.stringify([...document.querySelectorAll(".se-text-paragraph")]
-                    .filter((p) => /▲/.test(p.textContent || ""))
-                    .map((p) => ({ 글: (p.textContent || "").trim().slice(0, 18),
-                                    캡션안: !!p.closest(".se-caption"),
-                                    부모: String((p.parentElement || {}).className || "").slice(0, 30) }))),
         /** 대표 지시(2026-09-03): 하단 해시태그 + 링크 박스 전부 가운데 정렬 */
         태그가운데: (() => {
           const ps = [...document.querySelectorAll(".se-text-paragraph")]

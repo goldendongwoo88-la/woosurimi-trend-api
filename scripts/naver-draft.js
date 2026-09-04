@@ -1170,10 +1170,19 @@ ${blogId} 로그인이 안 돼 있습니다.
             const 사진들 = [...document.querySelectorAll(".se-component.se-image")];
             const img = 사진들[n];
             if (!img) return null;
-            // 이 사진 바로 다음 부품이 출처 줄인가
-            let 다음 = img.nextElementSibling;
-            while (다음 && !(다음.textContent || "").trim()) 다음 = 다음.nextElementSibling;
-            const 글 = 다음 ? (다음.textContent || "").trim() : "";
+            /**
+             * 이 사진 바로 다음 **문단**이 출처 줄인가.
+             * ⚠️ **다음 요소의 textContent 를 통째로 읽으면 안 됩니다** (2026-09-04 실측 —
+             *    "▲ 사진 출처 : 뉴시스작품을 안 좋아해서가 아니었다.…" 처럼 **본문 전체**가
+             *    딸려왔습니다. 그 긴 글을 캡션에 넣고, 지울 때는 짧은 줄과 안 맞아 실패했습니다).
+             *    문서 순서대로 훑어 **사진 다음에 오는 첫 `.se-text-paragraph`** 만 봅니다.
+             */
+            const 모든문단 = [...document.querySelectorAll(".se-text-paragraph")];
+            const 다음문단 = 모든문단.find((p) =>
+              !p.closest(".se-caption")
+              && (img.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING)
+              && (p.textContent || "").trim());
+            const 글 = 다음문단 ? (다음문단.textContent || "").trim() : "";
             if (!/^▲\s*(사진\s*)?출처/.test(글)) return { 없음: true };
             const cap = img.querySelector(".se-caption");
             if (!cap) return { 없음: true };
@@ -1193,89 +1202,126 @@ ${blogId} 로그인이 안 돼 있습니다.
             if (fb) { ox = fb.x; oy = fb.y; }
           } catch {}
           /**
-           * ⚠️ **0.5초만 기다리고 포기해서 4개 다 놓쳤습니다** (2026-09-03 실측 0/4).
-           *    저장본을 열어 재 보니 캡션은 **클릭 없이도 높이 24로 보이고 있었습니다.**
-           *    막 붙여넣은 직후에는 아직 안 그려졌을 뿐입니다.
-           *    그래서 ① 먼저 그냥 찾아보고 ② 없으면 사진을 눌러 깨운 뒤 ③ 넉넉히 기다립니다.
+           * ── 사진 설명칸(회색칸)에 출처를 넣는 길 — 2026-09-04에 풀었습니다 ──
+           *
+           * 다섯 번 실패한 뒤 **커서가 어디로 가는지 직접 찍어** 원인을 잡았습니다.
+           *
+           *   ① 캡션 안쪽 문단은 **사진을 고르기 전에는 크기가 0** 입니다.
+           *      그래서 "캡션이 안 보인다"가 아니라 **누를 자리가 없었던 것**입니다.
+           *   ② 사진을 클릭하면 캡션에 `se-is-on` 이 붙습니다. 그때 크기가 생깁니다.
+           *   ③ 그 캡션을 클릭하면 `se-is-focused` 가 붙습니다. **이때 글이 들어갑니다.**
+           *
+           * ⚠️ **`getSelection()` 으로 판정하면 안 됩니다.** 캡션에 커서가 있어도
+           *    selection 은 `ARTICLE.se-components-wrap` 을 가리켰습니다. 그걸 보고
+           *    "커서가 안 들어간다"고 다섯 번 잘못 결론 냈습니다.
+           *    **판정은 캡션의 `se-is-focused` 클래스로 합니다.**
            */
-          /**
-           * ⚠️ **좌표로 클릭했더니 본문 문단에 글자가 들어갔습니다** (2026-09-03 실측 —
-           *    캡션에 "▲ 출처 : 서강준 인스타그램익숙해진 연인이 낯선 감정" 처럼
-           *    출처 뒤에 본문 문장이 붙어 나왔습니다. 초안이 망가집니다).
-           *    좌표 대신 **요소 자체를 잡아** 누릅니다. 그리고 넣기 전후로 확인합니다:
-           *      · 넣기 전 → 그 칸이 비어 있어야 한다(`se-is-empty`)
-           *      · 넣은 뒤 → 칸의 글이 **출처 줄과 똑같아야** 한다
-           *    하나라도 어긋나면 되돌리고(Ctrl+Z) 본문 줄은 그대로 둡니다.
-           */
-          /**
-           * ⚠️ **모듈(`.se-caption`)을 누르면 커서가 안 들어갑니다** (2026-09-03 실측 — 4개 중
-           *    3개는 안내문구 "사진 설명을 입력하세요." 그대로였고, 1개는 본문에 섞였습니다).
-           *    글이 들어가는 곳은 그 **안쪽 문단**(`.se-caption .se-text-paragraph`) 입니다.
-           *    그리고 타자 전에 **커서가 정말 캡션 안에 있는지** 확인합니다 —
-           *    이걸 안 보면 본문에 출처가 박히고 원고가 망가집니다.
-           */
-          const 칸들 = await ed().$$(".se-component.se-image .se-caption .se-text-paragraph").catch(() => []);
-          const 칸 = 칸들[i];
-          if (!칸) { say(`      ⚠ ${i + 1}번째 사진에 설명칸이 없습니다 — 본문 줄은 그대로 둡니다`); continue; }
+          const 캡션상태 = async (k) => ed().evaluate((n) => {
+            const img = [...document.querySelectorAll(".se-component.se-image")][n];
+            const cap = img && img.querySelector(".se-caption");
+            if (!cap) return null;
+            const c = String(cap.className);
+            const p = cap.querySelector(".se-text-paragraph") || cap;
+            p.scrollIntoView({ block: "center" });
+            const b = p.getBoundingClientRect();
+            /**
+             * ⚠️ **모듈 전체를 읽으면 뒤 본문까지 딸려옵니다** (2026-09-04 실측 —
+             *    "▲ 사진 출처 : 뉴시스작품을 안 좋아해서가" 처럼 나왔습니다.
+             *    글은 캡션에 제대로 들어갔는데 **읽는 쪽이 틀려서** 실패로 판정했습니다).
+             *    캡션 글은 **안쪽 첫 문단**만 읽습니다.
+             */
+            return { 켜짐: c.includes("se-is-on"), 잡힘: c.includes("se-is-focused"),
+                     빔: c.includes("se-is-empty"), 글: (p.textContent || "").trim(),
+                     x: b.left + Math.min(b.width / 2, 100), y: b.top + b.height / 2,
+                     폭: Math.round(b.width), 높: Math.round(b.height) };
+          }, k).catch(() => null);
 
-          /**
-           * 캡션은 **사진이 선택된 뒤에야** 커서를 받습니다. 그래서 사진을 먼저 누릅니다.
-           * 사진 위에는 대표·AI활용·삭제 단추가 겹쳐 있어 **한가운데가 아니라 아래 78% 지점**을
-           * 찍습니다(동료 세션 2a 가 알려준 자리 — 단추는 위아래 모서리에 몰려 있습니다).
-           */
+          let 상태 = await 캡션상태(i);
+          if (!상태) { say(`      ⚠ ${i + 1}번째 사진에 설명칸이 없습니다`); continue; }
+          if (!상태.빔) { say(`      ⚠ ${i + 1}번째 설명칸이 이미 차 있습니다 — 건너뜁니다`); continue; }
+
+          // ② 사진을 눌러 캡션을 켭니다
           const 사진자리 = await ed().evaluate((k) => {
             const img = [...document.querySelectorAll(".se-component.se-image")][k];
             if (!img) return null;
             img.scrollIntoView({ block: "center" });
             const el = img.querySelector("img.se-image-resource") || img;
             const b = el.getBoundingClientRect();
-            return { x: b.left + b.width / 2, y: b.top + b.height * 0.78 };
+            return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
           }, i).catch(() => null);
-          if (사진자리) {
-            await page.mouse.click(ox + 사진자리.x, oy + 사진자리.y).catch(() => {});
-            await sleep(600);
+          if (!사진자리) { say(`      ⚠ ${i + 1}번째 사진 자리를 못 잡았습니다`); continue; }
+          await page.mouse.click(ox + 사진자리.x, oy + 사진자리.y, { delay: 60 }).catch(() => {});
+          await sleep(900);
+          상태 = await 캡션상태(i);
+          if (!상태 || !상태.켜짐 || 상태.높 <= 0) {
+            say(`      ⚠ ${i + 1}번째 설명칸이 안 켜집니다 — 본문 줄은 그대로 둡니다`); continue;
           }
-          await 칸.click({ delay: 60 }).catch(() => {});
-          await sleep(500);
-          /**
-           * ⚠️ 캡션을 눌러도 커서가 안 들어갑니다(네 번 확인). 마지막 한 가지 —
-           *    **사진이 선택된 상태에서 그냥 타자를 치면** 캡션으로 들어가는지 봅니다.
-           *    (동영상 때도 답은 "한 단계 더 안쪽에 다른 진입점" 이었습니다 — 동료 세션 43)
-           *    커서 확인은 그대로 둡니다. 아니면 아무것도 안 칩니다.
-           */
-          const 커서캡션 = await ed().evaluate(() => {
-            let e = document.activeElement;
-            const s = window.getSelection();
-            if (s && s.anchorNode) e = s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement;
-            return !!(e && e.closest && e.closest(".se-caption"));
-          }).catch(() => false);
-          if (!커서캡션) { say(`      ⚠ ${i + 1}번째 — 커서가 설명칸에 안 들어갑니다. 본문 줄은 그대로 둡니다`); continue; }
+
+          // ③ 캡션을 눌러 글자를 받을 상태로 만듭니다
+          await page.mouse.click(ox + 상태.x, oy + 상태.y, { delay: 60 }).catch(() => {});
+          await sleep(700);
+          상태 = await 캡션상태(i);
+          if (!상태 || !상태.잡힘) {
+            say(`      ⚠ ${i + 1}번째 설명칸이 안 잡힙니다(se-is-focused 없음)`); continue;
+          }
 
           await page.keyboard.type(감.글, { delay: 8 });
           await sleep(600);
-
-          const 캡션글 = await 칸.evaluate((e) => (e.textContent || "").trim()).catch(() => "");
+          const 캡션글 = (await 캡션상태(i) || {}).글 || "";
           if (캡션글 !== 감.글) {
-            say(`      ⚠ ${i + 1}번째 설명칸에 딴 게 들어갔습니다("${캡션글.slice(0, 26)}") — 되돌립니다`);
-            for (let z = 0; z < 40; z++) await page.keyboard.down("Control").then(async () => {
-              await page.keyboard.press("KeyZ"); await page.keyboard.up("Control");
-            }).catch(() => {});
+            say(`      ⚠ ${i + 1}번째 설명칸에 딴 게 들어갔습니다("${캡션글.slice(0, 24)}") — 되돌립니다`);
+            for (let z = 0; z < 40; z++) {
+              await page.keyboard.down("Control");
+              await page.keyboard.press("KeyZ");
+              await page.keyboard.up("Control");
+            }
             await sleep(600);
             continue;
           }
 
-          // 캡션에 제대로 들어간 것을 확인한 뒤에만 본문 줄을 지웁니다
-          const 지움 = await ed().evaluate((글) => {
+          /**
+           * 캡션에 넣은 뒤 **본문에 남은 출처 줄을 지웁니다.**
+           *
+           * ⚠️ **DOM 에서 remove() 하면 저장 때 되살아납니다** (2026-09-04 실측 —
+           *    지웠다고 로그가 찍혔는데 저장본에는 캡션과 본문 두 곳에 다 남아 있었습니다).
+           *    스마트에디터는 화면(DOM)이 아니라 **자기 모델**을 저장합니다.
+           *    그래서 사람이 하듯 **진짜 마우스로 줄을 찍고 키보드로 지웁니다.**
+           */
+          const 줄자리 = await ed().evaluate((글) => {
+            const 정리 = (t) => (t || "").replace(/\s+/g, "");
+            const 찾는것 = 정리(글);
             for (const p of document.querySelectorAll(".se-text-paragraph")) {
-              if (p.closest(".se-caption")) continue;          // 캡션 안은 건드리지 않는다
-              if ((p.textContent || "").trim() !== 글) continue;
-              const 부품 = p.closest(".se-component") || p;
-              부품.remove();
-              return true;
+              if (p.closest(".se-caption")) continue;
+              if (정리(p.textContent) !== 찾는것) continue;
+              p.scrollIntoView({ block: "center" });
+              const b = p.getBoundingClientRect();
+              if (!b.width || !b.height) continue;
+              return { x: b.left + Math.min(b.width / 2, 120), y: b.top + b.height / 2 };
             }
-            return false;
-          }, 감.글).catch(() => false);
+            return null;
+          }, 감.글).catch(() => null);
+
+          let 지움 = false;
+          if (줄자리) {
+            await page.mouse.click(ox + 줄자리.x, oy + 줄자리.y, { delay: 60 }).catch(() => {});
+            await sleep(400);
+            await page.keyboard.press("Home");
+            await page.keyboard.down("Shift");
+            await page.keyboard.press("End");
+            await page.keyboard.up("Shift");
+            await page.keyboard.press("Delete");     // 글자를 지운다
+            await sleep(200);
+            await page.keyboard.press("Backspace");  // 빈 줄까지 없앤다
+            await sleep(500);
+            지움 = await ed().evaluate((글) => {
+              const 정리 = (t) => (t || "").replace(/\s+/g, "");
+              const 찾는것 = 정리(글);
+              return ![...document.querySelectorAll(".se-text-paragraph")]
+                .some((p) => !p.closest(".se-caption") && 정리(p.textContent) === 찾는것);
+            }, 감.글).catch(() => false);
+          }
           if (지움) 옮김++;
+          else say(`      ⚠ ${i + 1}번째 — 캡션엔 넣었는데 본문 줄이 안 지워집니다`);
         }
         if (대상) say(`      사진 출처 → 사진 설명칸 ${옮김}/${대상}개 옮겼습니다`);
       } catch (e) { say(`      ⚠ 사진 설명칸 옮기기 실패: ${String(e.message || e).slice(0, 60)}`); }
