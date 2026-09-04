@@ -1,0 +1,413 @@
+{
+ "어제": {
+  "date": [
+   "2026-09-02",
+   "2026-09-03"
+  ],
+  "cv": {
+   "cv": [
+    22810,
+    21304
+   ],
+   "visit": [
+    22692,
+    21159
+   ],
+   "uv": [
+    22655,
+    21113
+   ]
+  },
+  "revenue": {
+   "revenue": [
+    4888,
+    3930
+   ],
+   "impression": [
+    1956,
+    2524
+   ],
+   "click": [
+    6,
+    17
+   ]
+  },
+  "video": null,
+  "longForm": {
+   "pc": [
+    56,
+    45
+   ],
+   "pt": [
+    804404,
+    641466
+   ]
+  },
+  "clip": {
+   "pc": [
+    60,
+    80
+   ],
+   "pt": [
+    949158,
+    1230446
+   ]
+  },
+  "searchInflow": {
+   "searchInflow": [
+    1268,
+    1205
+   ]
+  },
+  "mainInflow": {
+   "mainInflow": [
+    120,
+    464
+   ]
+  }
+ },
+ "실시간": {
+  "metricRanks": [
+   {
+    "metricValue": 17926,
+    "metricType": "cv",
+    "rank": [
+     {
+      "title": "남자 가르마펌 6:4, 두 번 헤매고 나서야 알게 된 것",
+      "contentId": "http://blog.naver.com/man_is_best/224399049403",
+      "metricValue": 766
+     },
+     {
+      "title": "좁쌀여드름·여드름흔적, 판테놀 재생크림 솔직후기",
+      "contentId": "http://blog.naver.com/man_is_best/224400050173",
+      "metricValue": 715
+     },
+     {
+      "title": "\"무대에서 노출 사고날뻔한 5세대 걸그룹\" 코디가 밉다",
+      "contentId": "http://blog.naver.com/man_is_best/224389902908",
+      "metricValue": 694
+     },
+     {
+      "title": "여자 앞머리펌·앞머리 스타일, 자를수록 더 뜨는 이유",
+      "contentId": "http://blog.naver.com/man_is_best/224399352485",
+      "metricValue": 692
+     },
+     {
+      "title": "만다리나덕 라이트 컬렉션 크로스백, 여행에 쓴 온라인 익스클루시브 남자가방",
+      "contentId": "http://blog.naver.com/man_is_best/224399905148",
+      "metricValue": 691
+     },
+     {
+      "title": "투미 19 디그리 프론트 액세스 캐리어, Tumi 여행용 출장용 캐리어로 추천하는 이유",
+      "contentId": "http://blog.naver.com/man_is_best/224390238204",
+      "metricValue": 682
+     },
+     {
+      "title": "디올 소바쥬 엑스트레 \"조니뎁이 다시 나온 그 향수\" 남자 향수 추천 실제 후기",
+      "contentId": "http://blog.naver.com/man_is_best/224396714600",
+      "metricValue": 681
+     },
+     {
+      "title": "\"못생긴 니가 꺼져\" 티빙도 예상 못한 불량연애2 2기 화제 장면",
+      "contentId": "http://blog.naver.com/man_is_best/224390527838",
+      "metricValue": 680
+     },
+     {
+      "title": "\"예뻐서 자꾸 보네\" 김고은 가을 무드 제대로 느껴지는 스노우피크 어패럴 여성 아우터 자켓 코디",
+      "contentId": "http://blog.naver.com/man_is_best/224391863205",
+      "metricValue": 680
+     },
+     {
+      "title": "쉐이빙폼·면도크림 뒤끝 따가웠던 30대, 거품 없는 젤로 갈아탄 후기",
+      "contentId": "http://blog.naver.com/man_is_best/224397672502",
+      "metricValue": 680
+     }
+    ]
+   },
+   {
+    "metricValue": 914,
+    "metricType": "search_inflow",
+    "rank": [
+     {
+      "metricValue": 32,
+      "query": "가르마펌"
+     },
+     {
+      "metricValue": 32,
+      "query": "다이소 아쿠아슈즈"
+     },
+     {
+      "metricValue": 25,
+      "query": "엄현경"
+     },
+     {
+      "metricValue": 21,
+      "query": "군대 px 화장품 추천"
+     },
+     {
+      "metricValue": 21,
+      "query": "다이소 화장품"
+     },
+     {
+      "metricValue": 19,
+      "query": "px 화장품"
+     },
+     {
+      "metricValue": 19,
+      "query": "다이소 화장품 추천"
+     },
+     {
+      "metricValue": 18,
+      "query": "좁쌀여드름"
+     },
+     {
+      "metricValue": 15,
+      "query": "아쿠아슈즈"
+     },
+     {
+      "metricValue": 12,
+      "query": "남자 가르마펌"
+     }
+    ]
+   },
+   {
+    "metricValue": 313,
+    "metricType": "main_inflow",
+    "rank": [
+     {
+      "title": "군대 px 화장품 추천 \"신상 BEST 6종\" 내돈내산",
+      "contentId": "http://blog.naver.com/man_is_best/224386811395",
+      "metricValue": 255
+     },
+     {
+      "title": "남자 가르마펌 6:4, 두 번 헤매고 나서야 알게 된 것",
+      "contentId": "http://blog.naver.com/man_is_best/224399049403",
+      "metricValue": 32
+     },
+     {
+      "title": "\"풍자 33kg 다이어트 감량 안부러워\" 신기루 레전드 팩폭",
+      "contentId": "http://blog.naver.com/man_is_best/224384013363",
+      "metricValue": 5
+     },
+     {
+      "title": "\"마지막 선택에서 엇갈렸다는\" 넷플릭스 불량연애2 최종 커플 결과 현커 히카루 앗슨 루루 근황",
+      "contentId": "http://blog.naver.com/man_is_best/224382718791",
+      "metricValue": 3
+     },
+     {
+      "title": "\"이게 진짜 오픈형 이어폰 음질 맞아?\" 샥즈 오픈핏 에어 2 신제품 착용 후기",
+      "contentId": "http://blog.naver.com/man_is_best/224382256111",
+      "metricValue": 2
+     },
+     {
+      "title": "[내돈내산] 피팅룸에서 직접 입어봄! 유니클로 배럴진 네이비 사이즈 팁 & 남자 코디 (유니클로 청바지 추천)",
+      "contentId": "http://blog.naver.com/man_is_best/224370479002",
+      "metricValue": 1
+     },
+     {
+      "title": "직접 큐리케어 펄즈 내돈내산 해보고 나서야 왜 다들 뷰티디바이스 추천 하는지 알았습니다.",
+      "contentId": "http://blog.naver.com/man_is_best/224376438212",
+      "metricValue": 1
+     },
+     {
+      "title": "지축 미용실 내돈내산 추천! 손질 편하고 깔끔한 남자 머리 스타일, 아이비리그컷 성공 후기",
+      "contentId": "http://blog.naver.com/man_is_best/224378972592",
+      "metricValue": 1
+     },
+     {
+      "title": "\"진작 쓸걸 후회했다\" 가려움증 단번에 잠재운 비듬 샴푸 추천",
+      "contentId": "http://blog.naver.com/man_is_best/224380572094",
+      "metricValue": 1
+     },
+     {
+      "title": "올리브영 추천템 내돈내산 세럼 추천 2주 사용 솔직 후기",
+      "contentId": "http://blog.naver.com/man_is_best/224383714876",
+      "metricValue": 1
+     }
+    ]
+   }
+  ]
+ },
+ "급상승글": [
+  {
+   "title": "남자 가르마펌 6:4, 두 번 헤매고 나서야 알게 된 것",
+   "contentId": "http://blog.naver.com/man_is_best/224399049403",
+   "metaUrl": "http://blog.naver.com/man_is_best/224399049403",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224399049403/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224399049403/cv",
+   "createdAt": 1788359405955,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA5MDJfMTgg/MDAxNzg4MzU3NjQxODMy.qj-1f4Wh40kvq4IWNA3ynMl121IQV-4wdWx7pDPkz40g.w2KvNgQW9XgNhMMJ2tai8PLfsYJAhKE8oq2MXP1mGOgg.PNG/card01.png?type=w800",
+   "rank": 1,
+   "metricValue": 881,
+   "metricDeltaValue": 853
+  },
+  {
+   "title": "여자 앞머리펌·앞머리 스타일, 자를수록 더 뜨는 이유",
+   "contentId": "http://blog.naver.com/man_is_best/224399352485",
+   "metaUrl": "http://blog.naver.com/man_is_best/224399352485",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224399352485/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224399352485/cv",
+   "createdAt": 1788395493348,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA5MDNfMTQz/MDAxNzg4MzkwODg4MzE3._xyyCFiLIq62Txx0Bj-EA7htYefIn2VeHOR0xjVuz30g.Jrkkpyf9QrZ2dA1w7yWGfBANgtnjq6zJOxtOty4OhHgg.PNG/p06.png?type=w800",
+   "rank": 2,
+   "metricValue": 645,
+   "metricDeltaValue": 645
+  },
+  {
+   "title": "리본 머리묶기·헤어끈, 한 시간 만에 풀리는 이유",
+   "contentId": "http://blog.naver.com/man_is_best/224399603858",
+   "metaUrl": "http://blog.naver.com/man_is_best/224399603858",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224399603858/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224399603858/cv",
+   "createdAt": 1788408827817,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA5MDNfMTE1/MDAxNzg4NDA4NzM1Njk1.HBrr7LFF2felXm2gauIj7ZaCBszHmP7qGVEGjWY4Cb0g.xRErs6NsRbaldgEWNJ8aV2bCckQWlqs5YXx2X-4-RYQg.PNG/p02.png?type=w800",
+   "rank": 3,
+   "metricValue": 495,
+   "metricDeltaValue": 495
+  },
+  {
+   "title": "만다리나덕 라이트 컬렉션 크로스백, 여행에 쓴 온라인 익스클루시브 남자가방",
+   "contentId": "http://blog.naver.com/man_is_best/224399905148",
+   "metaUrl": "http://blog.naver.com/man_is_best/224399905148",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224399905148/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224399905148/cv",
+   "createdAt": 1788422934108,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA5MDNfMTA4/MDAxNzg4NDIyODMxMTA3.ILTb-LycCayljPWeO_-HwcodrW7VHSIBCRqnoBhTP2Ag.99HCKyJRvkgzlEzDN4vWE_uD7GUzr5BI1aBvGi1zYrQg.JPEG/p10.jpg?type=w800",
+   "rank": 4,
+   "metricValue": 276,
+   "metricDeltaValue": 276
+  },
+  {
+   "title": "좁쌀여드름·여드름흔적, 판테놀 재생크림 솔직후기",
+   "contentId": "http://blog.naver.com/man_is_best/224400050173",
+   "metaUrl": "http://blog.naver.com/man_is_best/224400050173",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224400050173/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224400050173/cv",
+   "createdAt": 1788432336018,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA5MDNfMTE5/MDAxNzg4NDMyMjU1NDAz.QFAttHgjZRKU3odCrpYzYlc911_ie-5bLxb9DnlpKxwg.t2LIuTH-_STloofwGnOrMSmY5FyJYGhRQ_rhgOk_b0Qg.JPEG/p07.jpg?type=w800",
+   "rank": 5,
+   "metricValue": 169,
+   "metricDeltaValue": 169
+  },
+  {
+   "title": "눈썹스티커, 붙인 자리가 저녁에 들뜨는 이유",
+   "contentId": "http://blog.naver.com/man_is_best/224400060694",
+   "metaUrl": "http://blog.naver.com/man_is_best/224400060694",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224400060694/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224400060694/cv",
+   "createdAt": 1788436800000,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA5MDNfNzAg/MDAxNzg4NDExMDcxMTUx.5ueFJ4pnDuSpNBNRNzEK2lKhMDRnJqL_ImKaThx7DYYg.cuC-q3mEFFy6SzCXDMkBW7AJNBCtl-4Ijcc9Ul_pvscg.PNG/p01.png?type=w800",
+   "rank": 6,
+   "metricValue": 153,
+   "metricDeltaValue": 153
+  },
+  {
+   "title": "팔자주름, 크림보다 먼저.. 하루 3분이면 되는 것",
+   "contentId": "http://blog.naver.com/man_is_best/224398143553",
+   "metaUrl": "http://blog.naver.com/man_is_best/224398143553",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224398143553/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224398143553/cv",
+   "createdAt": 1788307671665,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA5MDJfNzQg/MDAxNzg4MzA3NTc2ODA2._yS-XAwWa1iIe8dd2c_M3jQfqRjbBVhg3qY-lEcb44og._D9lxZ3pmg3VG0bD1L6bIOjMqexJbnfnv02Pv8OtvWAg.JPEG/01.jpg?type=w800",
+   "rank": 7,
+   "metricValue": 808,
+   "metricDeltaValue": 44
+  },
+  {
+   "title": "최진혁도 선택한 오제닉스 바이오폴릭 탈모앰플 100ml 정수리 두피케어 솔직히 알아보기",
+   "contentId": "http://blog.naver.com/man_is_best/224384029735",
+   "metaUrl": "http://blog.naver.com/man_is_best/224384029735",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224384029735/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224384029735/cv",
+   "createdAt": 1787200200000,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA4MjBfNCAg/MDAxNzg3MTc1MzU1OTg3.2FafQ-5ZTrN21UnCDAp3_M0W-5IfrcZTpytuJOAPHVIg.1W6eh4H9cMDfnrSIW5H5nL6bJ7h1R2aB4vUJ_-F6774g.JPEG/blog_img_1.jpg?type=w800",
+   "rank": 8,
+   "metricValue": 22,
+   "metricDeltaValue": 21
+  },
+  {
+   "title": "[내돈내산] 피팅룸에서 직접 입어봄! 유니클로 배럴진 네이비 사이즈 팁 & 남자 코디 (유니클로 청바지 추천)",
+   "contentId": "http://blog.naver.com/man_is_best/224370479002",
+   "metaUrl": "http://blog.naver.com/man_is_best/224370479002",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224370479002/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224370479002/cv",
+   "createdAt": 1786024574901,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA4MDZfMjQ3/MDAxNzg2MDIyMDM1MTA2.atSf033Y5YhlNu_AnEBOZ1PPwNO16ESMRzHA73yTovAg.JKjF8d0Vmj68Y308hFF4eaLYjGnpv--kv89QvpfZdcMg.JPEG/%C0%AF%B4%CF%C5%AC%B7%CE_%B9%E8%B7%B2%C1%F8_%B3%D7%C0%CC%BA%F1_%BB%E7%C0%CC%C1%EE_17.jpg?type=w800",
+   "rank": 9,
+   "metricValue": 85,
+   "metricDeltaValue": 19
+  },
+  {
+   "title": "\"풍자 33kg 다이어트 감량 안부러워\" 신기루 레전드 팩폭",
+   "contentId": "http://blog.naver.com/man_is_best/224384013363",
+   "metaUrl": "http://blog.naver.com/man_is_best/224384013363",
+   "statUrl": "https://blog.stat.naver.com/blog/article/224384013363/cv",
+   "mobileStatUrl": "https://blog.stat.naver.com/m/blog/article/224384013363/cv",
+   "createdAt": 1787173200000,
+   "thumbnailUrl": "https://mblogthumb-phinf.pstatic.net/MjAyNjA4MjBfMjE3/MDAxNzg3MTcyMDgyNjA4.5vtqrgLyi4L6UnP974exB2T0LJLADH3yJgkigWOgfKIg.fqI0xFz3fvH-1KxP44lAHKG31lQ0phRxbZ7eJQg6d2kg.PNG/%BD%BA%C5%A9%B8%B0%BC%A6_2026-08-20_053724.png?type=w800",
+   "rank": 10,
+   "metricValue": 34,
+   "metricDeltaValue": 8
+  }
+ ],
+ "유입도메인": null,
+ "체류시간": [
+  {
+   "date": "2026-08-21",
+   "metricValue": 29.401954009481745
+  },
+  {
+   "date": "2026-08-22",
+   "metricValue": 32.082179915000786
+  },
+  {
+   "date": "2026-08-23",
+   "metricValue": 44.61646343257443
+  },
+  {
+   "date": "2026-08-24",
+   "metricValue": 36.80803043901613
+  },
+  {
+   "date": "2026-08-25",
+   "metricValue": 33.477130648076425
+  },
+  {
+   "date": "2026-08-26",
+   "metricValue": 31.562592556646386
+  },
+  {
+   "date": "2026-08-27",
+   "metricValue": 28.96079680907173
+  },
+  {
+   "date": "2026-08-28",
+   "metricValue": 23.874124994824662
+  },
+  {
+   "date": "2026-08-29",
+   "metricValue": 17.26909390920157
+  },
+  {
+   "date": "2026-08-30",
+   "metricValue": 19.406053672440255
+  },
+  {
+   "date": "2026-08-31",
+   "metricValue": 16.394165316817535
+  },
+  {
+   "date": "2026-09-01",
+   "metricValue": 17.59469585477138
+  },
+  {
+   "date": "2026-09-02",
+   "metricValue": 17.367815583727197
+  },
+  {
+   "date": "2026-09-03",
+   "metricValue": 18.66379000569476
+  }
+ ],
+ "조회수추이": null
+}
