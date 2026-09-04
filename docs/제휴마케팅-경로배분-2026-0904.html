@@ -1,0 +1,182 @@
+<meta charset="utf-8">
+<title>제휴 마케팅 경로 배분 — 우수리미</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family:"Malgun Gothic","맑은 고딕",sans-serif; font-size:10.5pt; line-height:1.6;
+         color:#16181d; margin:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  h1 { font-size:21pt; margin:0 0 5px; letter-spacing:-.02em; }
+  h2 { font-size:13.5pt; margin:24px 0 9px; padding:7px 0 7px 12px;
+       border-left:5px solid #1b5e58; background:#f2f6f5; page-break-after:avoid; }
+  h3 { font-size:11pt; margin:15px 0 6px; color:#1b5e58; page-break-after:avoid; }
+  p { margin:0 0 9px; }
+  .cover { border-bottom:3px solid #16181d; padding-bottom:12px; margin-bottom:18px; }
+  .meta { color:#6b7075; font-size:9pt; }
+  table { border-collapse:collapse; width:100%; margin:8px 0 13px; font-size:9.5pt; page-break-inside:avoid; }
+  th,td { border:1px solid #cfd4d3; padding:6px 8px; text-align:left; vertical-align:top; }
+  th { background:#eaf0ef; font-weight:700; }
+  td.n,th.n { text-align:right; font-family:Consolas,monospace; font-variant-numeric:tabular-nums; }
+  .lead { background:#fff8e6; border:1px solid #e8cf90; padding:12px 14px; margin:12px 0 18px; }
+  .warn { background:#fdf1ee; border-left:4px solid #b0402a; padding:10px 13px; margin:10px 0 14px; }
+  .ok { background:#eef6f4; border-left:4px solid #1b5e58; padding:10px 13px; margin:10px 0 14px; }
+  tr.hi td { color:#b0402a; font-weight:700; }
+  tr.dim td { color:#8a9099; }
+  ol,ul { margin:0 0 10px; padding-left:19px; } li { margin-bottom:4px; }
+  .small { font-size:9pt; color:#55595e; }
+  .num { font-family:Consolas,monospace; font-variant-numeric:tabular-nums; }
+  .brk { page-break-before:always; }
+</style>
+
+<div class="cover">
+  <h1>제휴 마케팅 — 어디에 무엇을 붙일 것인가</h1>
+  <div class="meta">우수리미 · 2026-09-04 · 객단가는 쿠팡 API 실매칭 34건에서 뽑은 값</div>
+</div>
+
+<div class="lead">
+  <strong>한 줄</strong><br>
+  <strong>우리는 가장 비싼 물건을 파는 자산에 가장 낮은 요율을 붙여놨습니다.</strong>
+  우수리미 유튜브의 소재 객단가 중앙값은 <span class="num">129,000원</span>인데
+  거기 붙은 게 15개 경로 중 공동 최하위인 쿠팡 3%입니다.
+  같은 소재에 토스 10%를 붙이면 건당 <span class="num">3,870원 → 12,900원</span>, <strong>3.3배</strong>입니다.
+</div>
+
+<h2>1. 근거 — 우리 소재의 진짜 객단가</h2>
+<p>기존 비교표는 객단가를 <span class="num">25,000원</span>으로 고정해 요율만 비교합니다.
+그런데 <strong>쿠팡 API로 실제 매칭한 우리 소재 34건</strong>을 재보니 값이 다릅니다.</p>
+<table>
+  <tr><th>항목</th><th class="n">값</th></tr>
+  <tr><td>매칭 소재</td><td class="n">34건</td></tr>
+  <tr class="hi"><td>중앙값</td><td class="n">129,000원</td></tr>
+  <tr><td>평균</td><td class="n">255,024원</td></tr>
+  <tr><td>최저 ~ 최고</td><td class="n">1,860 ~ 1,540,000원</td></tr>
+  <tr><td>2만원 이상 비율</td><td class="n">91%</td></tr>
+</table>
+<p>모델 기본값의 <strong>5.2배</strong>입니다. 로봇청소기·안마의자·이동식 TV·3D 프린터를 다루는 채널이라
+당연한 결과인데, <strong>이 사실이 경로 선택에 반영돼 있지 않았습니다.</strong></p>
+
+<h2>2. 지렛대는 둘이고, 곱해집니다</h2>
+<table>
+  <tr><th style="width:22%">지렛대</th><th style="width:14%" class="n">배수</th><th>근거</th></tr>
+  <tr class="hi"><td>① 객단가 (무엇을 고르나)</td><td class="n">10.7배</td>
+      <td>네이버 브랜드커넥트 실물 16건 — 2만원 이상 12건 평균 5,986원 vs 미만 4건 평균 559원</td></tr>
+  <tr><td>② 요율 (어디에 거나)</td><td class="n">3.3배</td>
+      <td>쿠팡 3% → 토스·무신사·에이블리 10%</td></tr>
+</table>
+<div class="ok">
+  <strong>둘은 곱해집니다.</strong> 비싼 물건을 고르고 거기에 높은 요율을 붙이면 이론상 최대 35배입니다.
+  <strong>①이 ②보다 3배 큽니다</strong> — 순서를 틀리면 안 됩니다. 요율 갈아타기부터 하지 말고
+  <strong>소재 선정 기준(객단가 2만원 문턱)을 먼저</strong> 넣습니다.
+</div>
+<p class="small">브랜드커넥트 실측에서 수수료 1등은 <strong>요율 1%짜리 아이폰(15,582원)</strong>,
+꼴찌는 요율 12%짜리 크레아틴(2,868원)이었습니다. 요율만 보면 정반대 결론이 납니다.</p>
+
+<h2>3. 자산별 배분 — 전환 1건당 수수료</h2>
+
+<h3>① 우수리미 유튜브 (가전·리빙) — 객단가 129,000원 <span class="small">실측</span></h3>
+<table>
+  <tr><th>경로</th><th class="n">요율</th><th class="n">건당</th><th class="n">쿠팡 대비</th><th>비고</th></tr>
+  <tr class="hi"><td>토스 쉐어링크</td><td class="n">10%</td><td class="n">12,900원</td><td class="n">3.3배</td><td>⚠️ 가전 취급 여부 확인 필요 · 9/30 프로모션</td></tr>
+  <tr><td>네이버 쇼핑커넥트</td><td class="n">7.9%</td><td class="n">10,191원</td><td class="n">2.6배</td><td>약관 동의만. <strong>가전 취급 확실</strong></td></tr>
+  <tr><td>오늘의집 큐레이터</td><td class="n">5%</td><td class="n">6,450원</td><td class="n">1.7배</td><td>리빙·가구에 정확히 맞음</td></tr>
+  <tr class="dim"><td>쿠팡 파트너스 <em>(현재)</em></td><td class="n">3%</td><td class="n">3,870원</td><td class="n">1.0</td><td>이미 23편 연결 · <strong>24시간 어트리뷰션</strong></td></tr>
+</table>
+<div class="warn">
+  <strong>쿠팡을 버리면 안 되는 이유가 하나 있습니다.</strong> 쿠팡은 <strong>클릭 후 24시간 안에 산
+  아무 물건</strong>이 다 잡힙니다. 소개한 로봇청소기를 안 사도 그날 산 기저귀·세제가 수수료가 됩니다.
+  다른 경로에 이 조건이 있는지 확인되지 않았습니다. <strong>요율만 보고 갈아타면 이 부분을 잃을 수 있습니다.</strong>
+  → 권고: <strong>고가 제품은 고요율 경로, 생필품·소모품은 쿠팡</strong>으로 나눠 붙입니다.
+</div>
+
+<h3>② 뷰티 블로그 (화장품) — 객단가 3만원 <span class="small">추정</span></h3>
+<table>
+  <tr><th>경로</th><th class="n">요율</th><th class="n">건당</th><th>비고</th></tr>
+  <tr class="hi"><td>올리브영 큐레이터</td><td class="n">7%</td><td class="n">2,100원</td><td><strong>가입 심사 없음</strong> — 올리브영 회원이면 앱에서 약관 동의로 즉시</td></tr>
+  <tr class="dim"><td>쿠팡</td><td class="n">3%</td><td class="n">900원</td><td>2.3배 손해</td></tr>
+</table>
+
+<h3>③ 패션 (골든 착용후기) — 객단가 5만원 <span class="small">추정</span></h3>
+<table>
+  <tr><th>경로</th><th class="n">요율</th><th class="n">건당</th><th>비고</th></tr>
+  <tr class="hi"><td>무신사 큐레이터 / 지그재그 / 에이블리</td><td class="n">10%</td><td class="n">5,000원</td>
+      <td>무신사=남성복(골든 183cm·XL 프로필 있음) · 지그재그/에이블리=여성복(차수리미)</td></tr>
+  <tr class="dim"><td>쿠팡</td><td class="n">3%</td><td class="n">1,500원</td><td>3.3배 손해</td></tr>
+</table>
+
+<h3>④ 살림·리빙 블로그 — 객단가 6만원 <span class="small">추정</span></h3>
+<table>
+  <tr><th>경로</th><th class="n">요율</th><th class="n">건당</th><th>비고</th></tr>
+  <tr class="hi"><td>네이버 쇼핑커넥트</td><td class="n">7.9%</td><td class="n">4,740원</td><td>블로그가 네이버 안이라 동선이 짧음</td></tr>
+  <tr><td>오늘의집</td><td class="n">5%</td><td class="n">3,000원</td><td>인테리어·수납 소재에 적합</td></tr>
+  <tr class="dim"><td>쿠팡</td><td class="n">3%</td><td class="n">1,800원</td><td></td></tr>
+</table>
+
+<div class="ok">
+  <strong>교차 비교가 이 보고서의 요점입니다.</strong><br>
+  가전 129,000 × <strong>쿠팡 3%</strong> = <span class="num">3,870원</span><br>
+  뷰티 30,000 × <strong>올리브영 7%</strong> = <span class="num">2,100원</span><br>
+  → 요율이 절반 이하인데 <strong>1.8배 법니다.</strong> 어느 경로에 거느냐보다
+  <strong>무엇을 소개하느냐</strong>가 큽니다.
+</div>
+
+<div class="brk"></div>
+<h2>4. 가입 순서 — 문턱이 낮고 이득이 큰 순</h2>
+<table>
+  <tr><th style="width:5%">#</th><th style="width:22%">경로</th><th style="width:22%">문턱</th><th style="width:12%">붙일 자산</th><th>왜 이 순서</th></tr>
+  <tr class="hi"><td>1</td><td>네이버 쇼핑커넥트</td><td>약관 동의만</td><td>유튜브·블로그</td>
+      <td>가전 취급이 확실하고 7.9%. <strong>심사 없이 오늘 됩니다</strong></td></tr>
+  <tr class="hi"><td>2</td><td>올리브영 큐레이터</td><td>앱에서 약관 동의<br>(회원이면 심사 없음)</td><td>뷰티 블로그</td>
+      <td>뷰티 소재가 이미 매일 나옵니다. 붙일 곳이 바로 있습니다</td></tr>
+  <tr><td>3</td><td>토스 쉐어링크</td><td>✅ API 승인 완료<br>키 발급만 남음</td><td>고가 제품</td>
+      <td>10%로 최고. 다만 <strong>9/30 프로모션</strong>이라 시간이 없습니다</td></tr>
+  <tr><td>4</td><td>무신사 큐레이터</td><td>미확인</td><td>패션(골든)</td><td>남성복 10%. 착용 프로필이 이미 정리돼 있습니다</td></tr>
+  <tr><td>5</td><td>오늘의집 큐레이터</td><td>미확인</td><td>리빙</td><td>5%로 낮지만 리빙 소재와 결이 맞습니다</td></tr>
+  <tr class="dim"><td>—</td><td>쿠팡 <em>(유지)</em></td><td>연결 완료</td><td>생필품·소모품</td><td>24시간 어트리뷰션 때문에 <strong>버리지 않습니다</strong></td></tr>
+</table>
+
+<h2>5. 🔴 토스는 26일짜리 창입니다</h2>
+<p>토스 쉐어링크 10%는 <strong>2026-09-30까지 프로모션</strong>이고 10월 이후 요율은 공개되지 않았습니다.
+오늘(9/4) 기준 <strong>26일</strong> 남았습니다.</p>
+<ul>
+  <li>이 값을 영구 수수료로 계획에 넣으면 안 됩니다</li>
+  <li>26일 안에 <strong>실적을 만들어 봐야</strong> 10월에 남길지 뺄지 판단할 근거가 생깁니다</li>
+  <li>API 승인은 났고 <strong>키 발급만</strong> 남았습니다. 키 만들 때 호출 서버 IP를 같이 등록해야 합니다</li>
+  <li><strong>9월 말에 반드시 재확인</strong> — 요율이 내려가면 경로 배분을 다시 짭니다</li>
+</ul>
+
+<h2>6. 확인이 필요한 것 — 여기 위에 계획을 쌓지 않았습니다</h2>
+<table>
+  <tr><th style="width:32%">확인할 것</th><th>왜 중요한가</th></tr>
+  <tr><td><strong>토스 쉐어링크가 가전을 취급하나</strong></td>
+      <td>10%가 우리 최대 자산에 적용되는지가 이 계획의 최대 변수입니다.
+          금융 앱이라 상품군이 제한적일 수 있습니다. <strong>확인 전에는 1순위로 올리지 않았습니다</strong></td></tr>
+  <tr><td>각 경로의 <strong>어트리뷰션 창</strong></td>
+      <td>쿠팡의 24시간 조건이 다른 곳에도 있는지. 없다면 요율 차이만큼의 이득이 그만큼 상쇄됩니다</td></tr>
+  <tr><td>뷰티·패션·리빙 <strong>실제 객단가</strong></td>
+      <td>가전만 실측했고 나머지 셋은 추정입니다. 첫 정산이 나오면 이 표를 덮어씁니다</td></tr>
+  <tr><td>한 설명란에 <strong>여러 제휴 링크</strong>를 넣어도 되나</td>
+      <td>각 사 약관 확인 필요. 클릭이 분산되는 문제도 있습니다</td></tr>
+</table>
+
+<h2>7. 실행 순서</h2>
+<table>
+  <tr><th style="width:5%">#</th><th style="width:46%">할 일</th><th style="width:12%">누가</th><th>기대</th></tr>
+  <tr class="hi"><td>1</td><td><strong>소재 선정에 "객단가 2만원 문턱"을 코드로 박기</strong><br>
+      <span class="small">가입 없이 오늘 되는 것. 지렛대가 제일 큽니다(10.7배)</span></td><td>제가</td><td>즉시</td></tr>
+  <tr><td>2</td><td>네이버 쇼핑커넥트 약관 동의 → 가전 링크 전환</td><td>사장님</td><td>건당 2.6배</td></tr>
+  <tr><td>3</td><td>올리브영 큐레이터 약관 동의 → 뷰티 블로그에 적용</td><td>사장님</td><td>건당 2.3배</td></tr>
+  <tr><td>4</td><td>토스 API 키 발급 (서버 IP 등록 잊지 말 것)</td><td>사장님</td><td>26일 창</td></tr>
+  <tr><td>5</td><td>경로별 링크 생성기에 subId 규칙 통일</td><td>제가</td><td>정산 대조</td></tr>
+  <tr><td>6</td><td>9/30 토스 요율 재확인 → 배분 재조정</td><td>같이</td><td>9월 말</td></tr>
+</table>
+
+<div class="warn">
+  <strong>순서를 지켜야 하는 이유</strong> — 1번(소재 기준)이 2~4번(경로 갈아타기)보다 <strong>3배 큽니다.</strong>
+  가입부터 하고 소재는 그대로 두면, 싼 물건에 높은 요율을 붙이는 셈이라 대부분을 놓칩니다.
+</div>
+
+<p class="small" style="margin-top:20px;border-top:1px solid #cfd4d3;padding-top:10px">
+  <strong>출처</strong> — 객단가: 쿠팡 파트너스 API 실매칭 34건(2026-09-04 조회) ·
+  요율·가입 문턱: <span class="num">_shared/revenue-model.js --routes</span>(2026-09-04 갱신) ·
+  객단가 10.7배 실측 및 토스 9/30 프로모션: <span class="num">docs/수익화-실행계획-2026-0903.md</span>.<br>
+  <strong>표기 원칙</strong> — 실측과 추정을 구분했습니다. "확인 필요"로 적은 항목 위에 계획을 쌓지 않았습니다.
+</p>
