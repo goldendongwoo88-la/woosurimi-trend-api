@@ -178,16 +178,20 @@ const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
   // 그래서 주제 목록을 먼저 받고 3개씩 끊어 전부 훑는다.
   //   rank   그날 그 주제에서 몇 등으로 유입됐나
   //   ratio  그 주제 유입에서 차지하는 비중
+  //   rankChange 어제 대비 몇 계단 올랐나 ← 화면의 ▲2 / ▼2
   //
-  // ⚠️ 화면에는 ▲2 / ▼2 가 붙는데, **직접 부르면 그 값(rankChange)이 안 온다.**
-  //    파라미터는 페이지와 똑같이 맞췄는데도 응답 크기가 5,034 대 3,900 으로 다르다(2026-09-04 실측).
-  //    헤더 차이로 보이지만 추측으로 뚫으면 언제 막힐지 모른다.
-  //    그래서 **순위를 매일 저장해 우리가 변동을 계산한다.** 첫날은 비교 대상이 없어 '처음'만 뜬다.
+  // ⚠️ rankChange 는 **`hasRankChange=true` 를 붙여야만 온다.** 없으면 조용히 빠진 채로 온다
+  //    (2026-09-04: 파라미터를 페이지와 맞췄는데도 응답이 5,034 대 3,900 으로 달랐던 원인이 이것이었다.
+  //     헤더 차이인 줄 알고 헤맸는데, 페이지의 실제 요청을 잡아 보니 파라미터 하나였다).
+  //    네이버 값이 없을 때를 대비해 순위를 매일 저장하고 우리 계산도 남겨둔다.
   // 페이지 안에서 fetch 하므로 로그인 쿠키가 그대로 실린다.
   let 급상승 = [];
   if (!flag("--지도")) {
     받아적기 = false;                       // 여기서부터는 값을 직접 받는다
     const q = `contentType=text&date=${날짜}&interval=day&service=naver_blog`;
+    // hasRankChange 는 /trend/category 만 아는 값이다.
+    // 공용 q 에 넣었더니 주제목록 호출(category-inflow-ranks)이 0개를 돌려줬다(2026-09-04 실측).
+    const q순위변동 = q + '&hasRankChange=true';
     const 주제목록 = await page.evaluate(async (q) => {
       const r = await fetch(`/api/v6/trend/category-inflow-ranks?${q}`, { credentials: "include" });
       if (!r.ok) return [];
@@ -203,10 +207,10 @@ const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
         const r = await fetch(url, { credentials: "include" });
         if (!r.ok) return [];
         return (await r.json()).data || [];
-      }, q, 묶음, Number(val("--개수") || 20));
+      }, q순위변동, 묶음, Number(val("--개수") || 20));
       for (const c of got) {
         for (const k of (c.queryList || [])) {
-          급상승.push({ 주제: c.category, 키워드: k.query, 순위: k.rank, 변동: k.rankChange, 비중: k.ratio });
+          급상승.push({ 주제: c.category, 키워드: k.query, 순위: k.rank, 비중: k.ratio, 네이버변동: k.rankChange ?? null });
         }
       }
       await new Promise((r) => setTimeout(r, 400));   // 남의 서버다
@@ -241,7 +245,10 @@ const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
     const 키 = r.주제 + "|" + r.키워드;
     const 옛순위 = 지난것 ? 지난것[키] : undefined;
     r.지난순위 = 옛순위 ?? null;
-    r.변동 = 옛순위 == null ? null : 옛순위 - r.순위;   // 양수 = 올라감
+    const 우리계산 = 옛순위 == null ? null : 옛순위 - r.순위;   // 양수 = 올라감
+    // 네이버 값이 있으면 그걸 쓴다. 첫날부터 나오고, 네이버가 직접 매긴 값이라 더 맞다.
+    r.변동 = r.네이버변동 ?? 우리계산;
+    r.출처 = r.네이버변동 != null ? "네이버" : (우리계산 == null ? "처음" : "우리계산");
   }
   이력[날짜] = Object.fromEntries(급상승.map((r) => [r.주제 + "|" + r.키워드, r.순위]));
   for (const d of Object.keys(이력).sort().slice(0, -14)) delete 이력[d];   // 14회분만
@@ -254,8 +261,8 @@ const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
       const t = v == null ? "" : String(v);
       return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
     };
-    const csv = [["주제", "키워드", "순위", "지난순위", "변동", "비중%"].join(",")].concat(
-      급상승.map((r) => [r.주제, r.키워드, r.순위, r.지난순위 ?? "처음", r.변동 ?? "", (r.비중 * 100).toFixed(3)].map(esc).join(","))
+    const csv = [["주제", "키워드", "순위", "순위변동", "변동출처", "지난순위", "비중%"].join(",")].concat(
+      급상승.map((r) => [r.주제, r.키워드, r.순위, r.변동 ?? "", r.출처, r.지난순위 ?? "", (r.비중 * 100).toFixed(3)].map(esc).join(","))
     );
     const 표파일 = path.join(OUT, `급상승-${blogId}-${날짜}.csv`);
     fs.writeFileSync(표파일, BOM + csv.join("\r\n"), "utf8");
@@ -266,7 +273,7 @@ const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
     console.log("\n가장 많이 오른 20개");
     console.log("   변동   순위  주제            검색어");
     console.log("  " + "─".repeat(64));
-    const 보일것 = 지난회차 ? 오른것.slice(0, 20) : 급상승.filter((r) => r.순위 <= 2).slice(0, 20);
+    const 보일것 = 오른것.length ? 오른것.slice(0, 20) : 급상승.filter((r) => r.순위 <= 2).slice(0, 20);
     for (const r of 보일것) {
       console.log(
         "  " + (r.변동 == null ? "새" : "▲" + r.변동).padStart(5) + String(r.순위).padStart(6) + "  " +
