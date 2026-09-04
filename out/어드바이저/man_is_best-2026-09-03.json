@@ -1,0 +1,318 @@
+[
+ {
+  "url": "https://creator-advisor.naver.com/api/v6/home/realtime-summary?channelId=man_is_best&date=2026-09-04&service=naver_blog",
+  "상태": 200,
+  "크기": 3310,
+  "body": {
+   "path": "/api/v6/home/realtime-summary",
+   "parameters": {
+    "channelId": "man_is_best",
+    "date": "2026-09-04",
+    "service": "naver_blog"
+   },
+   "data": {
+    "metricRanks": [
+     {
+      "metricValue": 11605,
+      "metricType": "cv",
+      "rank": [
+       {
+        "title": "남자 가르마펌 6:4, 두 번 헤매고 나서야 알게 된 것",
+        "contentId": "http://blog.naver.com/man_is_best/224399049403",
+        "metricValue": 499
+       },
+       {
+        "title": "좁쌀여드름·여드름흔적, 판테놀 재생크림 솔직후기",
+        "contentId": "http://blog.naver.com/man_is_best/224400050173",
+        "metricValue": 471
+       },
+       {
+        "title": "\"무대에서 노출 사고날뻔한 5세대 걸그룹\" 코디가 밉다",
+        "contentId": "http://blog.naver.com/man_is_best/224389902908",
+        "metricValue": 454
+       },
+       {
+        "title": "만다리나덕 라이트 컬렉션 크로스백, 여행에 쓴 온라인 익스클루시브 남자가방",
+        "contentId": "http://blog.naver.com/man_is_best/224399905148",
+        "metricValue": 452
+       },
+       {
+        "title": "여자 앞머리펌·앞머리 스타일, 자를수록 더 뜨는 이유",
+        "contentId": "http://blog.naver.com/man_is_best/224399352485",
+        "metricValue": 450
+       },
+       {
+        "title": "쉐이빙폼·면도크림 뒤끝 따가웠던 30대, 거품 없는 젤로 갈아탄 후기",
+        "contentId": "http://blog.naver.com/man_is_best/224397672502",
+        "metricValue": 445
+       },
+       {
+        "title": "투미 19 디그리 프론트 액세스 캐리어, Tumi 여행용 출장용 캐리어로 추천하는 이유",
+        "contentId": "http://blog.naver.com/man_is_best/224390238204",
+        "metricValue": 444
+       },
+       {
+        "title": "디올 소바쥬 엑스트레 \"조니뎁이 다시 나온 그 향수\" 남자 향수 추천 실제 후기",
+        "contentId": "http://blog.naver.com/man_is_best/224396714600",
+        "metricValue": 444
+       },
+       {
+        "title": "\"40대에도 어울리는 여자 짧은 숏컷\" 자꾸 눈이 가는 여배우",
+        "contentId": "http://blog.naver.com/man_is_best/224389849506",
+        "metricValue": 443
+       },
+       {
+        "title": "\"못생긴 니가 꺼져\" 티빙도 예상 못한 불량연애2 2기 화제 장면",
+        "contentId": "http://blog.naver.com/man_is_best/224390527838",
+        "metricValue": 443
+       }
+      ]
+     },
+     {
+      "metricValue": 658,
+      "metricType": "search_inflow",
+      "rank": [
+       {
+        "metricValue": 22,
+        "query": "다이소 아쿠아슈즈"
+       },
+       {
+        "metricValue": 21,
+        "query": "가르마펌"
+       },
+       {
+        "metricValue": 20,
+        "query": "엄현경"
+       },
+       {
+        "metricValue": 16,
+        "query": "다이소 화장품"
+       },
+       {
+        "metricValue": 13,
+        "query": "다이소 화장품 추천"
+       },
+       {
+        "metricValue": 13,
+        "query": "좁쌀여드름"
+       },
+       {
+        "metricValue": 12,
+        "query": "px 화장품"
+       },
+       {
+        "metricValue": 12,
+        "query": "군대 px 화장품 추천"
+       },
+       {
+        "metricValue": 12,
+        "query": "아쿠아슈즈"
+       },
+       {
+        "metricValue": 10,
+        "query": "유니클로 배럴진"
+       }
+      ]
+     },
+     {
+      "metricValue": 231,
+      "metricType": "main_inflow",
+      "rank": [
+       {
+        "title": "군대 px 화장품 추천 \"신상 BEST 6종\" 내돈내산",
+        "contentId": "http://blog.naver.com/man_is_best/224386811395",
+        "metricValue": 193
+       },
+       {
+        "title": "남자 가르마펌 6:4, 두 번 헤매고 나서야 알게 된 것",
+        "contentId": "http://blog.naver.com/man_is_best/224399049403",
+        "metricValue": 19
+       },
+       {
+        "title": "\"풍자 33kg 다이어트 감량 안부러워\" 신기루 레전드 팩폭",
+        "contentId": "http://blog.naver.com/man_is_best/224384013363",
+        "metricValue": 5
+       },
+       {
+        "title": "\"이게 진짜 오픈형 이어폰 음질 맞아?\" 샥즈 오픈핏 에어 2 신제품 착용 후기",
+        "contentId": "http://blog.naver.com/man_is_best/224382256111",
+        "metricValue": 2
+       },
+       {
+        "title": "\"마지막 선택에서 엇갈렸다는\" 넷플릭스 불량연애2 최종 커플 결과 현커 히카루 앗슨 루루 근황",
+        "contentId": "http://blog.naver.com/man_is_best/224382718791",
+        "metricValue": 2
+       },
+       {
+        "title": "[내돈내산] 피팅룸에서 직접 입어봄! 유니클로 배럴진 네이비 사이즈 팁 & 남자 코디 (유니클로 청바지 추천)",
+        "contentId": "http://blog.naver.com/man_is_best/224370479002",
+        "metricValue": 1
+       },
+       {
+        "title": "직접 큐리케어 펄즈 내돈내산 해보고 나서야 왜 다들 뷰티디바이스 추천 하는지 알았습니다.",
+        "contentId": "http://blog.naver.com/man_is_best/224376438212",
+        "metricValue": 1
+       },
+       {
+        "title": "올리브영 추천템 내돈내산 세럼 추천 2주 사용 솔직 후기",
+        "contentId": "http://blog.naver.com/man_is_best/224383714876",
+        "metricValue": 1
+       },
+       {
+        "title": "다이소 화장품 추천템 내돈내산 \"피부과 실장도 쟁여둔다\"",
+        "contentId": "http://blog.naver.com/man_is_best/224386025102",
+        "metricValue": 1
+       },
+       {
+        "title": "\"그 시절 응원봉 다시 켠다\" 빅뱅 20주년 콘서트 2026 티켓 가격 안아까워",
+        "contentId": "http://blog.naver.com/man_is_best/224386277590",
+        "metricValue": 1
+       }
+      ]
+     }
+    ]
+   },
+   "apiDate": "2026-09-04"
+  }
+ },
+ {
+  "url": "https://creator-advisor.naver.com/api/v6/home/realtime-summary-histogram?channelId=man_is_best&date=2026-09-04&metricType=cv&service=naver_blog",
+  "상태": 200,
+  "크기": 1645,
+  "body": {
+   "path": "/api/v6/home/realtime-summary-histogram",
+   "parameters": {
+    "channelId": "man_is_best",
+    "date": "2026-09-04",
+    "metricType": "cv",
+    "service": "naver_blog"
+   },
+   "data": [
+    {
+     "datetime": "2026-09-04T00:00:00",
+     "metric": 273
+    },
+    {
+     "datetime": "2026-09-04T00:30:00",
+     "metric": 226
+    },
+    {
+     "datetime": "2026-09-04T01:00:00",
+     "metric": 252
+    },
+    {
+     "datetime": "2026-09-04T01:30:00",
+     "metric": 239
+    },
+    {
+     "datetime": "2026-09-04T02:00:00",
+     "metric": 190
+    },
+    {
+     "datetime": "2026-09-04T02:30:00",
+     "metric": 189
+    },
+    {
+     "datetime": "2026-09-04T03:00:00",
+     "metric": 14
+    },
+    {
+     "datetime": "2026-09-04T03:30:00",
+     "metric": 24
+    },
+    {
+     "datetime": "2026-09-04T04:00:00",
+     "metric": 127
+    },
+    {
+     "datetime": "2026-09-04T04:30:00",
+     "metric": 133
+    },
+    {
+     "datetime": "2026-09-04T05:00:00",
+     "metric": 289
+    },
+    {
+     "datetime": "2026-09-04T05:30:00",
+     "metric": 285
+    },
+    {
+     "datetime": "2026-09-04T06:00:00",
+     "metric": 75
+    },
+    {
+     "datetime": "2026-09-04T06:30:00",
+     "metric": 84
+    },
+    {
+     "datetime": "2026-09-04T07:00:00",
+     "metric": 331
+    },
+    {
+     "datetime": "2026-09-04T07:30:00",
+     "metric": 342
+    },
+    {
+     "datetime": "2026-09-04T08:00:00",
+     "metric": 682
+    },
+    {
+     "datetime": "2026-09-04T08:30:00",
+     "metric": 685
+    },
+    {
+     "datetime": "2026-09-04T09:00:00",
+     "metric": 528
+    },
+    {
+     "datetime": "2026-09-04T09:30:00",
+     "metric": 522
+    },
+    {
+     "datetime": "2026-09-04T10:00:00",
+     "metric": 678
+    },
+    {
+     "datetime": "2026-09-04T10:30:00",
+     "metric": 677
+    },
+    {
+     "datetime": "2026-09-04T11:00:00",
+     "metric": 160
+    },
+    {
+     "datetime": "2026-09-04T11:30:00",
+     "metric": 152
+    },
+    {
+     "datetime": "2026-09-04T12:00:00",
+     "metric": 712
+    },
+    {
+     "datetime": "2026-09-04T12:30:00",
+     "metric": 722
+    },
+    {
+     "datetime": "2026-09-04T13:00:00",
+     "metric": 678
+    },
+    {
+     "datetime": "2026-09-04T13:30:00",
+     "metric": 664
+    },
+    {
+     "datetime": "2026-09-04T14:00:00",
+     "metric": 591
+    },
+    {
+     "datetime": "2026-09-04T14:30:00",
+     "metric": 587
+    },
+    {
+     "datetime": "2026-09-04T15:00:00",
+     "metric": 475
+    }
+   ]
+  }
+ }
+]
