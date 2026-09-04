@@ -1123,29 +1123,67 @@ ${blogId} 로그인이 안 돼 있습니다.
        */
       try {
         const 첫사진 = await ed().$(".se-component.se-image").catch(() => null);
-        if (첫사진) {
+        if (!첫사진) {
+          say("      ⚠ 사진 AI 활용 — 사진을 못 찾았습니다");
+        } else {
           await 첫사진.click({ delay: 60 }).catch(() => {});
           await sleep(1200);
-          // ① 먼저 "전체" 가 붙은 단추를 찾습니다 — 한 번에 다 켜집니다.
-          const 전체 = await 눌러(["전체 AI 활용", "전체AI활용", "전체 AI활용", "모든 사진 AI 활용"]);
-          if (전체) {
-            await sleep(1500);
-            say("      사진 AI 활용 — 전체로 켰습니다");
+
+          /**
+           * ⚠️ **합성 클릭(evaluate 안의 el.click())은 스마트에디터가 무시합니다.**
+           *    2026-09-04 사장님 화면에서 「AI 활용 설정」이 꺼진 채로 저장돼 있었습니다.
+           *    되돌아가는 경로가 evaluate 클릭이라 아무 일도 안 일어났는데,
+           *    로그에는 "토글 N개 켰습니다" 로 찍혔습니다. 조용한 실패였습니다.
+           *    → 좌표를 재서 **page.mouse 로 진짜 클릭**합니다.
+           */
+          let 켰다 = await 눌러(["전체 AI 활용", "전체AI활용", "전체 AI활용", "모든 사진 AI 활용"]);
+          if (켰다) await sleep(1500);
+
+          if (!켰다) {
+            // 전체 단추가 없으면 사진마다 토글을 **진짜 마우스로** 켭니다.
+            let n = 0;
+            for (let i = 0; i < 20; i++) {
+              const c = await ed().evaluate(() => {
+                for (const el of document.querySelectorAll("button, [role='switch'], input[type=checkbox]")) {
+                  const 근처 = ((el.closest("div, li") || {}).innerText) || "";
+                  if (!/AI 활용|AI활용/.test(근처)) continue;
+                  if (el.getAttribute("aria-checked") === "true" || el.checked === true) continue;
+                  const r = el.getBoundingClientRect();
+                  if (!r.width || !r.height) continue;
+                  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+                }
+                return null;
+              }).catch(() => null);
+              if (!c) break;
+              await page.mouse.click(c.x, c.y).catch(() => {});
+              await sleep(350);
+              n++;
+            }
+            켰다 = n > 0;
+            say(`      사진 AI 활용 — 토글 ${n}개 켰습니다`);
+          }
+
+          /**
+           * 🔴 **켜졌는지 세어서 확인합니다.** 눌렀다는 것과 켜졌다는 것은 다릅니다.
+           *    오늘 이 저장소에서 그 차이로 다섯 번 헛돌았습니다.
+           */
+          const 상태 = await ed().evaluate(() => {
+            let 켜짐 = 0, 전체 = 0;
+            for (const el of document.querySelectorAll("button, [role='switch'], input[type=checkbox]")) {
+              const 근처 = ((el.closest("div, li") || {}).innerText) || "";
+              if (!/AI 활용|AI활용/.test(근처)) continue;
+              전체++;
+              if (el.getAttribute("aria-checked") === "true" || el.checked === true) 켜짐++;
+            }
+            return { 켜짐, 전체 };
+          }).catch(() => null);
+          if (상태 && 상태.전체) {
+            say(`      사진 AI 활용 — ${상태.켜짐}/${상태.전체} 켜짐`);
+            if (상태.켜짐 < 상태.전체) say("      ⚠️ 다 안 켜졌습니다 — 화면에서 확인하십시오");
+          } else if (켰다) {
+            say("      사진 AI 활용 — 켰습니다 (개수 확인 불가)");
           } else {
-            // ② 전체 단추가 없으면 사진마다 토글을 켭니다.
-            const 켠수 = await ed().evaluate(() => {
-              let n = 0;
-              for (const el of document.querySelectorAll("button, [role='switch'], input[type=checkbox]")) {
-                const 근처 = (el.closest("div, li") || {}).innerText || "";
-                if (!/AI 활용|AI활용/.test(근처)) continue;
-                const 켜짐 = el.getAttribute("aria-checked") === "true" || el.checked === true;
-                if (켜짐) continue;
-                el.click();
-                n++;
-              }
-              return n;
-            }).catch(() => -1);
-            say(`      사진 AI 활용 — 토글 ${켠수}개 켰습니다`);
+            say("      ⚠️ 사진 AI 활용 — 단추도 토글도 못 찾았습니다");
           }
         }
       } catch (e) { say(`      ⚠ 사진 AI 활용 실패: ${String(e.message || e).slice(0, 50)}`); }
@@ -1327,19 +1365,28 @@ ${blogId} 로그인이 안 돼 있습니다.
       } catch (e) { say(`      ⚠ 사진 설명칸 옮기기 실패: ${String(e.message || e).slice(0, 60)}`); }
 
       let subOk = 0;
-      const subs = await ed().$$("p[data-wsu-subhead], .se-text-paragraph");
       /**
-       * ⚠️ 잡힌 개수를 **먼저** 찍습니다. 예전에는 루프가 전부 continue 로 빠져도
-       *    로그가 하나도 안 남아서, 판정이 틀린 건지 클릭이 틀린 건지 알 수 없었습니다.
+       * ⚠️ **손잡이를 미리 다 잡아 두면 안 됩니다.**
+       *    한 개를 고칠 때마다 편집기가 문단을 다시 그려서, 아직 손대지 않은 뒤쪽 손잡이가
+       *    `Node is detached from document` 로 죽습니다
+       *    (2026-09-04 실측: 7개 중 5개가 이렇게 날아가 소제목이 안 들어갔습니다).
+       *    그래서 **글자로 목록을 먼저 만들고, 한 개 처리할 때마다 새로 찾아** 씁니다.
+       *    글자는 다시 그려도 안 바뀌므로 손잡이보다 오래 갑니다.
        */
-      const 후보수 = await ed().evaluate(() => {
-        const ps = [...document.querySelectorAll("p[data-wsu-subhead], .se-text-paragraph")];
-        return ps.filter((n) =>
+      const 소제목글 = await ed().evaluate(() => {
+        const 정리 = (s) => (s || "").replace(/\s+/g, " ").trim();
+        const 소 = (n) =>
           n.hasAttribute("data-wsu-subhead")
           || Boolean(n.querySelector("span[style*='38px'], span.se-fs38"))
-          || (typeof n.className === "string" && n.className.includes("se-fs38"))).length;
-      }).catch(() => -1);
-      say(`      소제목 찾는 중 — 문단 ${subs.length}개 · 소제목으로 잡힌 것 ${후보수}개`);
+          || (typeof n.className === "string" && n.className.includes("se-fs38"));
+        return [...document.querySelectorAll("p[data-wsu-subhead], .se-text-paragraph")]
+          .filter(소).map((n) => 정리(n.textContent)).filter(Boolean);
+      }).catch(() => []);
+      const 후보수 = 소제목글.length;
+      const 문단수 = await ed().evaluate(
+        () => document.querySelectorAll("p[data-wsu-subhead], .se-text-paragraph").length
+      ).catch(() => -1);
+      say(`      소제목 찾는 중 — 문단 ${문단수}개 · 소제목으로 잡힌 것 ${후보수}개`);
 
       /**
        * ⚠️ **도구막대는 본문과 다른 프레임에 있을 수 있습니다.**
@@ -1381,21 +1428,30 @@ ${blogId} 로그인이 안 돼 있습니다.
         if (후보.length) { say("      [서식칸 후보] " + 후보.join(" | ")); break; }
       }
       const tb = () => 툴바프레임 || ed();
-      for (const el of subs) {
+      for (const 글 of 소제목글) {
         try {
           /**
+           * 글자로 **지금 화면에서 다시 찾습니다.** 앞 소제목을 고치느라 문단이 다시 그려졌어도
+           * 여기서 새 손잡이를 얻으므로 detached 로 죽지 않습니다.
+           *
            * ⚠️ **<b> 로 소제목을 가리면 안 됩니다.** 본문의 [강조] 도 <b> 로 나가서
            *    강조 문단이 소제목으로 잡히고, 정작 소제목은 놓칩니다(2026-09-03 실측: 5개 중 2개).
            *    소제목은 38px 로 나가므로 그걸 봅니다.
            *    ⚠️ 네이버가 style="font-size:38px" 를 class="se-fs38" 로 바꿉니다.
            *    style 만 보면 후보가 0개가 되어 루프가 통째로 헛돕니다(2026-09-03 실측).
            */
-          const isSub = await el.evaluate((n) =>
-            n.hasAttribute('data-wsu-subhead')
-            || Boolean(n.querySelector('span[style*="38px"], span[style*="38.0px"], span.se-fs38'))
-            || /font-size:\s*38(\.0)?px/.test(n.getAttribute('style') || '')
-            || (typeof n.className === 'string' && n.className.includes('se-fs38')));
-          if (!isSub) continue;
+          const 손잡이 = await ed().evaluateHandle((t) => {
+            const 정리 = (s) => (s || "").replace(/\s+/g, " ").trim();
+            const 소 = (n) =>
+              n.hasAttribute("data-wsu-subhead")
+              || Boolean(n.querySelector('span[style*="38px"], span[style*="38.0px"], span.se-fs38'))
+              || /font-size:\s*38(\.0)?px/.test(n.getAttribute("style") || "")
+              || (typeof n.className === "string" && n.className.includes("se-fs38"));
+            return [...document.querySelectorAll("p[data-wsu-subhead], .se-text-paragraph")]
+              .find((n) => 소(n) && 정리(n.textContent) === t) || null;
+          }, 글).catch(() => null);
+          const el = 손잡이 && 손잡이.asElement();
+          if (!el) { say(`      ⚠ 소제목을 다시 못 찾음 — "${글.slice(0, 14)}"`); continue; }
           await el.evaluate((n) => n.scrollIntoView({ block: 'center' }));
           await sleep(250);
           await el.click({ clickCount: 3, delay: 40 });     // 세 번 눌러 문단을 통째로 고릅니다
