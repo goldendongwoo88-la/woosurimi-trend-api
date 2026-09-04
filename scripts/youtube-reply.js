@@ -93,7 +93,7 @@ async function 최근영상(핸들, 개수) {
 
 // ── 댓글 ──────────────────────────────────────────────────────────
 // 답글이 이미 달린 건 뺀다. 이미 답한 데 또 다는 게 제일 볼썽사납다.
-async function 댓글(videoId, 개수) {
+async function 댓글(videoId, 개수, 채널명) {
   let out = [];
   try {
     const r = await api("commentThreads", {
@@ -102,6 +102,9 @@ async function 댓글(videoId, 개수) {
     for (const t of r.items || []) {
       if ((t.snippet.totalReplyCount || 0) > 0) continue;      // 이미 답글 있음
       const c = t.snippet.topLevelComment.snippet;
+      // 내가 단 댓글(고정댓글 등)에 내가 답하지 않는다. 실측에서 실제로 그랬다.
+      if (c.authorChannelId?.value === t.snippet.channelId) continue;
+      if (채널명 && c.authorDisplayName === 채널명) continue;
       out.push({
         댓글id: t.snippet.topLevelComment.id,
         작성자: c.authorDisplayName,
@@ -124,11 +127,19 @@ const 말투표 = {
   감사: "고마움을 먼저 말하는 존댓말",
 };
 
-function 프롬프트(영상제목, 댓글본문, 말투) {
+function 프롬프트(영상제목, 댓글본문, 말투, 채널명) {
+  const 한글 = /[가-힣]/.test(댓글본문);
   return [
-    "너는 유튜브 채널 주인이다. 내 영상에 달린 댓글에 답글 한 개를 쓴다.",
+    `너는 유튜브 채널 "${채널명}" 의 주인이고, 이 영상을 직접 만든 사람이다.`,
+    "댓글에 답글 한 개를 쓴다.",
     "",
     "규칙",
+    "- **네가 만든 영상이다.** \"나도 해보고 싶다\", \"저도 사고 싶네요\" 처럼 남 일처럼 말하지 않는다.",
+    "  이미 써 보고 찍은 사람의 말투로 쓴다.",
+    "- 댓글에 나온 **사람 이름·아이 이름·제품명은 글자 그대로 옮긴다.** 비슷한 말로 바꾸지 않는다.",
+    한글
+      ? "- 한국어로 답한다."
+      : "- 이 댓글은 한국어가 아니다. **댓글과 같은 언어로 짧게 답한다.** 한국어로 답하지 않는다.",
     "- 30~60자. 한 문장에서 두 문장.",
     `- ${말투표[말투] || 말투표.친근}`,
     "- 그 댓글에만 해당되는 말을 한다. 댓글에 나온 것을 하나 집어서 답한다.",
@@ -143,13 +154,13 @@ function 프롬프트(영상제목, 댓글본문, 말투) {
   ].join("\n");
 }
 
-async function 초안(영상제목, 댓글본문, 말투) {
+async function 초안(영상제목, 댓글본문, 말투, 채널명) {
   try {
     const r = await fetch(`${LLM}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        messages: [{ role: "user", content: 프롬프트(영상제목, 댓글본문, 말투) }],
+        messages: [{ role: "user", content: 프롬프트(영상제목, 댓글본문, 말투, 채널명) }],
         chat_template_kwargs: { enable_thinking: false },
         temperature: 0.8, max_tokens: 200, stream: false,
       }),
@@ -215,7 +226,7 @@ function saveCsv(rows, file) {
   for (let i = 0; i < 영상들.length; i++) {
     const v = 영상들[i];
     process.stdout.write(`\r  댓글 수집 ${i + 1}/${영상들.length} · ${v.제목.slice(0, 26)}                    `);
-    for (const c of await 댓글(v.id, num("--댓글", 20))) {
+    for (const c of await 댓글(v.id, num("--댓글", 20), 채널명)) {
       rows.push({ 영상id: v.id, 영상제목: v.제목, ...c });
     }
   }
@@ -224,7 +235,7 @@ function saveCsv(rows, file) {
   if (LLM있나 && rows.length) {
     for (let i = 0; i < rows.length; i++) {
       process.stdout.write(`\r  초안 ${i + 1}/${rows.length}                    `);
-      rows[i].답글 = await 초안(rows[i].영상제목, rows[i].본문, 말투);
+      rows[i].답글 = await 초안(rows[i].영상제목, rows[i].본문, 말투, 채널명);
     }
     console.log("");
   }
