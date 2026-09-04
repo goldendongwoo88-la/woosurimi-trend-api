@@ -64,13 +64,26 @@ if (!fs.existsSync(profileDir)) {
 // SingletonLock 만 보다가 못 잡아서 "browser is already running" 으로 죽었다(2026-09-04 실측).
 // 그리고 어차피 창을 닫으라고 하는 것보다 붙는 쪽이 낫다 — 사장님 작업을 안 끊는다.
 // 붙는 주소는 DevToolsActivePort 첫 줄에 포트로 적혀 있다.
-function 떠있는크롬() {
+// ⚠️ DevToolsActivePort 는 크롬이 닫혀도 남는다. 낡은 포트에 붙으려다 실패한다
+//    (2026-09-04 실측 — 파일엔 57719 인데 그 포트는 죽어 있었다).
+//    그래서 파일만 믿지 않고 **실제로 응답하는지 확인한 뒤** 쓴다. 안 되면 새로 띄운다.
+async function 떠있는크롬() {
   const 잠김 = ["lockfile", "SingletonLock"].some((f) => fs.existsSync(path.join(profileDir, f)));
   if (!잠김) return null;
+  let port;
   try {
-    const port = fs.readFileSync(path.join(profileDir, "DevToolsActivePort"), "utf8").split("\n")[0].trim();
-    return port ? `http://127.0.0.1:${port}` : null;
+    port = fs.readFileSync(path.join(profileDir, "DevToolsActivePort"), "utf8").split("\n")[0].trim();
   } catch { return null; }
+  if (!port) return null;
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const r = await fetch(`${url}/json/version`, { signal: AbortSignal.timeout(2500) });
+    if (!r.ok) return null;
+    return url;
+  } catch {
+    console.log(`(포트 ${port} 는 죽어 있어 새로 띄웁니다 — 파일만 남은 것입니다)`);
+    return null;
+  }
 }
 
 const 어제 = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -83,7 +96,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const 관심 = /trend|keyword|inflow|search|summary|stat|rank|category|main/i;
 
 (async () => {
-  const 붙을주소 = 떠있는크롬();
+  const 붙을주소 = await 떠있는크롬();
   let browser, 붙었나 = false, 내탭;
 
   if (붙을주소) {
