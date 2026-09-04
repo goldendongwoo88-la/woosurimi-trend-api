@@ -1167,7 +1167,7 @@ ${blogId} 로그인이 안 돼 있습니다.
            * 🔴 **켜졌는지 세어서 확인합니다.** 눌렀다는 것과 켜졌다는 것은 다릅니다.
            *    오늘 이 저장소에서 그 차이로 다섯 번 헛돌았습니다.
            */
-          const 상태 = await ed().evaluate(() => {
+          let 상태 = await ed().evaluate(() => {
             let 켜짐 = 0, 전체 = 0;
             for (const el of document.querySelectorAll("button, [role='switch'], input[type=checkbox]")) {
               const 근처 = ((el.closest("div, li") || {}).innerText) || "";
@@ -1177,6 +1177,39 @@ ${blogId} 로그인이 안 돼 있습니다.
             }
             return { 켜짐, 전체 };
           }).catch(() => null);
+          /**
+           * 🔴 **전부 켜져야 합니다** (사장님 확정 2026-09-04: "사진도 전부 AI활용 설정").
+           *    덜 켜졌으면 남은 것만 한 번 더 누릅니다. 「전체」 단추가 일부만 먹는 경우가 있습니다.
+           */
+          if (상태 && 상태.전체 && 상태.켜짐 < 상태.전체) {
+            for (let i = 0; i < 상태.전체 - 상태.켜짐 + 3; i++) {
+              const c = await ed().evaluate(() => {
+                for (const el of document.querySelectorAll("button, [role='switch'], input[type=checkbox]")) {
+                  const 근처 = ((el.closest("div, li") || {}).innerText) || "";
+                  if (!/AI 활용|AI활용/.test(근처)) continue;
+                  if (el.getAttribute("aria-checked") === "true" || el.checked === true) continue;
+                  const r = el.getBoundingClientRect();
+                  if (!r.width || !r.height) continue;
+                  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+                }
+                return null;
+              }).catch(() => null);
+              if (!c) break;
+              await page.mouse.click(c.x, c.y).catch(() => {});
+              await sleep(350);
+            }
+            상태 = await ed().evaluate(() => {
+              let 켜짐 = 0, 전체 = 0;
+              for (const el of document.querySelectorAll("button, [role='switch'], input[type=checkbox]")) {
+                const 근처 = ((el.closest("div, li") || {}).innerText) || "";
+                if (!/AI 활용|AI활용/.test(근처)) continue;
+                전체++;
+                if (el.getAttribute("aria-checked") === "true" || el.checked === true) 켜짐++;
+              }
+              return { 켜짐, 전체 };
+            }).catch(() => 상태);
+          }
+
           if (상태 && 상태.전체) {
             say(`      사진 AI 활용 — ${상태.켜짐}/${상태.전체} 켜짐`);
             if (상태.켜짐 < 상태.전체) say("      ⚠️ 다 안 켜졌습니다 — 화면에서 확인하십시오");
@@ -1687,17 +1720,40 @@ ${blogId} 로그인이 안 돼 있습니다.
                * AI 활용 — 기본이 꺼짐이라 **매번 켜야 합니다.**
                * 우리 영상은 전부 AI 로 만든 것이라 켜는 게 맞습니다(사장님 확정).
                */
-              const 켰나 = await 레이어.evaluate(() => {
+              /**
+               * ⚠️ **합성 클릭(evaluate 안의 el.click())은 무시됩니다.**
+               *    사진 쪽에서 이것 때문에 AI 활용이 안 켜진 채 저장됐습니다(2026-09-04).
+               *    영상도 같은 코드였습니다. **좌표를 재서 진짜 마우스로** 누릅니다.
+               */
+              const 자리 = await 레이어.evaluate(() => {
                 const 켜짐 = (el) => el.getAttribute("aria-checked") === "true" || el.checked === true;
                 for (const el of document.querySelectorAll("input[type=checkbox], [role='switch'], button")) {
                   const 근처 = (el.closest("div, li, tr") || {}).innerText || "";
                   if (!/AI 활용|AI활용/.test(근처)) continue;
-                  if (켜짐(el)) return "이미 켜짐";
-                  el.click();
-                  return "켰습니다";
+                  if (켜짐(el)) return { 이미: true };
+                  const r = el.getBoundingClientRect();
+                  if (!r.width || !r.height) continue;
+                  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
                 }
-                return "칸을 못 찾음";
-              }).catch(() => "확인실패");
+                return null;
+              }).catch(() => null);
+
+              let 켰나 = "칸을 못 찾음";
+              if (자리 && 자리.이미) 켰나 = "이미 켜짐";
+              else if (자리) {
+                await page.mouse.click(자리.x, 자리.y).catch(() => {});
+                await sleep(500);
+                // 🔴 눌렀다와 켜졌다는 다릅니다. 세어서 확인합니다.
+                const 확인 = await 레이어.evaluate(() => {
+                  for (const el of document.querySelectorAll("input[type=checkbox], [role='switch'], button")) {
+                    const 근처 = (el.closest("div, li, tr") || {}).innerText || "";
+                    if (!/AI 활용|AI활용/.test(근처)) continue;
+                    return el.getAttribute("aria-checked") === "true" || el.checked === true;
+                  }
+                  return null;
+                }).catch(() => null);
+                켰나 = 확인 === true ? "켜짐 확인" : (확인 === false ? "⚠️ 눌렀는데 안 켜짐" : "눌렀음(확인 불가)");
+              }
               say(`      ④ AI 활용 표시 ${켰나}`);
             } else say("      ④ 동영상 정보 레이어를 못 찾았습니다");
             await sleep(1500);
