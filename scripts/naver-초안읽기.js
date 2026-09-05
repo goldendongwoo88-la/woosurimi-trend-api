@@ -66,50 +66,40 @@ const 낼 = path.join(__dirname, "..", "..", "golden-office", "out", "2026-09-05
   }
   await sleep(1500);
 
-  let 열림 = null;
-  for (const f of page.frames()) {
-    const 자리 = await f.evaluate(() => {
-      // 「저장 15」 처럼 개수가 붙은 요소를 찾고, 그 **형제**의 좌표를 돌려줍니다
-      const el = [...document.querySelectorAll("button,a,span,div")].find((x) => {
-        const t = (x.textContent || "").trim();
-        return /^저장\s*\d+\+?$/.test(t) && x.getBoundingClientRect().width > 0;
-      });
-      if (!el) return null;
-      const 개수 = el.textContent.trim();
-      const 형제 = [...(el.parentElement ? el.parentElement.children : [])]
-        .filter((c) => c !== el && c.getBoundingClientRect().width > 0);
-      const 목표 = 형제[형제.length - 1] || el;
-      const r = 목표.getBoundingClientRect();
-      return { x: r.x + r.width / 2, y: r.y + r.height / 2, 개수, 형제수: 형제.length };
-    }).catch(() => null);
-    if (자리) {
-      say(`저장 개수: ${자리.개수} · 형제 ${자리.형제수}개 — 형제를 누릅니다`);
-      await page.mouse.click(자리.x, 자리.y);
-      열림 = 자리;
-      break;
-    }
-  }
-  if (!열림) { say("⚠ 저장 개수 표시를 못 찾았습니다"); await browser.close(); process.exit(1); }
-  await sleep(5000);
-
-  // 화면을 찍습니다 — 세 번 더듬었으면 찍어 보는 게 빠릅니다
-  const 사진길 = 낼.replace(/\.txt$/, ".png");
-  await page.screenshot({ path: 사진길, fullPage: false });
-  say(`화면: ${사진길}`);
-
+  /**
+   * 목록 열기 — **한 프레임 안에서 통째로** 합니다 (naver-draft.js 가 쓰는 방식).
+   *   ① 「저장 N」 요소를 찾고
+   *   ② 그 **부모의 첫 형제 button** 을 `el.click()` 으로 누르고
+   *   ③ 2.5초 기다렸다가 li·tr 을 읽습니다
+   * ⚠️ page.mouse.click 에 프레임 좌표를 주면 엉뚱한 데를 누릅니다(오른쪽 위 다른 메뉴가 열렸습니다).
+   * ⚠️ 「저장」 요소 자체를 누르면 **빈 초안이 생깁니다.** 형제라야 합니다.
+   */
   let 줄 = [];
+  let 개수 = "?";
   for (const f of page.frames()) {
-    const r = await f.evaluate(() =>
-      [...document.querySelectorAll("li,tr,div[class*=item],div[class*=list]")]
-        .map((e) => (e.innerText || "").replace(/\s+/g, " ").trim())
-        .filter((t) => t.length > 6 && t.length < 200)
-        .slice(0, 80)
-    ).catch(() => []);
-    if (r.length > 줄.length) 줄 = r;
+    let r = null;
+    try {
+      r = await f.evaluate(async () => {
+        const 보임 = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
+        const 저장 = [...document.querySelectorAll("button, a")].filter(보임)
+          .find((b) => /^저장(\s*\d+\+?)?$/.test((b.textContent || "").trim()));
+        if (!저장) return null;
+        const 개수 = (저장.textContent || "").trim();
+        const 형제 = 저장.parentElement ?저장.parentElement.querySelectorAll("button") : [];
+        for (const b of 형제) if (b !== 저장) { b.click(); break; }
+        await new Promise((r) => setTimeout(r, 2600));
+        const rows = [...document.querySelectorAll("li, tr")]
+          .map((n) => (n.textContent || "").replace(/\s+/g, " ").trim())
+          .filter((t) => /\d{4}\.\d{2}\.\d{2}/.test(t));
+        return { 개수, rows: rows.slice(0, 40) };
+      });
+    } catch {}
+    if (r && r.rows && r.rows.length) { 줄 = r.rows; 개수 = r.개수; break; }
   }
+  say(`${개수} · 줄 ${줄.length}개`);
 
-  const 본 = [...new Set(줄)].filter((t) => /\d{4}\.\d{2}\.\d{2}|\d{2}[.:]\d{2}/.test(t));
-  fs.writeFileSync(낼, [`저장 ${열림.개수}`, "", ...본].join("\n"), "utf8");
+  const 본 = [...new Set(줄)];
+  fs.writeFileSync(낼, [개수, "", ...본].join("\n"), "utf8");
   say(`■ 줄 ${본.length}개 → ${낼}`);
   await browser.close();
 })();

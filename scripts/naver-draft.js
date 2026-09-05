@@ -1423,6 +1423,33 @@ ${blogId} 로그인이 안 돼 있습니다.
         if (대상) say(`      사진 출처 → 사진 설명칸 ${옮김}/${대상}개 옮겼습니다`);
       } catch (e) { say(`      ⚠ 사진 설명칸 옮기기 실패: ${String(e.message || e).slice(0, 60)}`); }
 
+      /**
+       * ── 🔴 내용이 다 들어갔습니다. **여기서 저장합니다** (2026-09-05) ──
+       *
+       * 여기까지가 **내용**입니다 — 본문·사진·사진 출처.
+       * 이 뒤(소제목 꾸미기·링크 카드)는 **보기 좋게 만드는 일**이지 내용이 아닙니다.
+       *
+       * 그런데 그 꾸미기 중에 네이버가 편집기 iframe 을 새로 만들어 버립니다.
+       * 그러면 손잡이가 죽고, 마지막 저장이 죽은 프레임을 눌러 **아무것도 안 남습니다.**
+       * 2026-09-05 에 경제 7편이 「저장 눌렀습니다」까지 찍고도 목록에 하나도 없었습니다 —
+       * 로그만 믿고 「8편 저장 완료」라고 보고했다가, 목록을 읽고서야 알았습니다.
+       *
+       * → 꾸미기 전에 저장해 둡니다. 뒤가 다 깨져도 **원고와 사진은 남습니다.**
+       *   이어서 쓰는 중이라 뒤에서 다시 저장해도 새 초안이 생기지 않습니다.
+       */
+      try {
+        const r = await frameE.evaluate(() => {
+          const 보임 = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
+          const b = [...document.querySelectorAll("button, a")].filter(보임)
+            .find((x) => /^저장(\s*\d+\+?)?$/.test((x.textContent || "").trim()));
+          if (!b) return null;
+          b.click();
+          return (b.textContent || "").trim();
+        });
+        if (r) { say(`      [먼저 저장] "${r}" 눌렀습니다 — 꾸미기가 깨져도 원고는 남습니다`); await sleep(4500); }
+        else say("      ⚠ 먼저 저장할 단추를 못 찾았습니다");
+      } catch (e) { say(`      ⚠ 먼저 저장 실패: ${String(e.message || e).slice(0, 44)}`); }
+
       let subOk = 0;
       /**
        * ⚠️ **손잡이를 미리 다 잡아 두면 안 됩니다.**
@@ -1820,6 +1847,7 @@ ${blogId} 로그인이 안 돼 있습니다.
 
       say(`      소제목 ${subOk}개를 네이버 공식 스타일로 바꿨습니다`);
 
+
       /**
        * ── 링크를 카드형으로 (사장님 확정 2026-09-03) ──
        *
@@ -2101,6 +2129,7 @@ ${blogId} 로그인이 안 돼 있습니다.
        */
       const fresh = page.frames().find((f) => /PostWriteForm/.test(f.url()));
       if (fresh) frameE = fresh;
+
     }
 
     /**
