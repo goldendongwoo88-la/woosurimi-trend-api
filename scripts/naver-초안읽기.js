@@ -35,6 +35,37 @@ const 낼 = path.join(__dirname, "..", "..", "golden-office", "out", "2026-09-05
     { waitUntil: "networkidle2", timeout: 60000 });
   await sleep(8000);
 
+  /**
+   * ⚠️ 먼저 「작성 중인 글이 있습니다」 팝업을 닫습니다.
+   * 이게 떠 있으면 화면 전체가 덮여서 **아무 단추도 안 눌립니다.**
+   * 2026-09-05 에 목록을 0줄로 두 번 읽은 원인이 이것이었습니다(화면을 찍고서야 봤습니다).
+   * 「확인」을 누르면 옛 내용을 이어서 열어 버리니 반드시 **취소**입니다.
+   */
+  /**
+   * 팝업의 「취소」는 **프레임 안에서 el.click()** 으로 눌러야 합니다.
+   * page.mouse.click 에 프레임 좌표를 주면 페이지 좌표로 해석돼 엉뚱한 데를 누릅니다
+   * (2026-09-05에 「닫음」이 두 번 찍혔는데 화면에는 팝업이 그대로였습니다).
+   * 편집기 도구막대와 반대입니다 — 그쪽은 합성 클릭을 무시합니다. 자리마다 다릅니다.
+   */
+  for (let n = 1; n <= 8; n++) {
+    let 있음 = false;
+    for (const f of page.frames()) {
+      const r = await f.evaluate(() => {
+        const 보임 = (el) => { const b = el.getBoundingClientRect();
+          return b.width > 0 && b.height > 0 && getComputedStyle(el).visibility !== "hidden"; };
+        if (!/작성 중인 글이 있습니다|이어서 작성/.test(document.body?.innerText || "")) return { p: false };
+        const c = [...document.querySelectorAll("button,a")].filter(보임)
+          .find((b) => /^\s*취소\s*$/.test(b.textContent || ""));
+        if (c) { c.click(); return { p: true, c: true }; }
+        return { p: true, c: false };
+      }).catch(() => ({ p: false }));
+      if (r.p) { 있음 = true; if (r.c) say("팝업 닫음 (취소)"); }
+    }
+    if (!있음) break;
+    await sleep(1200);
+  }
+  await sleep(1500);
+
   let 열림 = null;
   for (const f of page.frames()) {
     const 자리 = await f.evaluate(() => {
@@ -60,6 +91,11 @@ const 낼 = path.join(__dirname, "..", "..", "golden-office", "out", "2026-09-05
   }
   if (!열림) { say("⚠ 저장 개수 표시를 못 찾았습니다"); await browser.close(); process.exit(1); }
   await sleep(5000);
+
+  // 화면을 찍습니다 — 세 번 더듬었으면 찍어 보는 게 빠릅니다
+  const 사진길 = 낼.replace(/\.txt$/, ".png");
+  await page.screenshot({ path: 사진길, fullPage: false });
+  say(`화면: ${사진길}`);
 
   let 줄 = [];
   for (const f of page.frames()) {

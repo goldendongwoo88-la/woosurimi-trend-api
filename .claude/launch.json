@@ -28,6 +28,14 @@
         "8188"
       ],
       "port": 8188
+    },
+    {
+      "name": "golden-hall",
+      "runtimeExecutable": "C:/nodejs-portable/node-v20.15.0-win-x64/node.exe",
+      "runtimeArgs": [
+        "C:/Users/김동우/OneDrive/Desktop/my-project/_tools/골든현관/server.cjs"
+      ],
+      "port": 8000
     }
   ]
 }
