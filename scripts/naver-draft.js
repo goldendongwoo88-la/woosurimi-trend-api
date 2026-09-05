@@ -530,7 +530,15 @@ ${blogId} 로그인이 안 돼 있습니다.
      * (실측 2026-09-02: 화면에는 제목이 보이는데 저장 목록에는 "제목 없음"으로 들어갔습니다).
      * applyTitle은 함수 선언(호이스팅)이라 아래에서 정의해도 여기서 부를 수 있습니다.
      */
-    await applyTitle();
+    /**
+     * ⚠️ **여기서 던지면 저장까지 못 갑니다.**
+     * `frame.evaluate()` 는 프레임이 갈렸을 때 **동기적으로** 던집니다 —
+     * `.catch()` 를 붙여 놔도 안 잡힙니다. try/catch 라야 합니다.
+     * 2026-09-05 에 경제 7편이 여기서 통째로 날아갔습니다
+     * (본문 1,176자와 사진 6장을 이미 다 넣어 놓고서).
+     */
+    try { await applyTitle(); }
+    catch (e) { say(`      ⚠ 제목 넣기 실패(${String(e.message || e).slice(0, 44)}) — 저장은 계속합니다`); }
 
     say("[4/6] 본문에 붙여넣는 중");
     /**
@@ -2051,13 +2059,19 @@ ${blogId} 로그인이 안 돼 있습니다.
        * "올린 사진 N장"은 업로드 성공만 뜻하지 위치를 보장하지 않습니다.
        * 이미지가 전부 문서 끝에 몰려 있으면 마지막 이미지의 위치가 문단 수에 가깝습니다.
        */
-      const 배치 = await ed().evaluate(() => {
+      let 배치 = null;
+      try {
+      배치 = await ed().evaluate(() => {
         const all = [...document.querySelectorAll(".se-component")];
         const img = all.map((n, i) => ({ i, 이미지: n.classList.contains("se-image") }))
           .filter((x) => x.이미지).map((x) => x.i);
         const 남은표식 = (document.body.innerText.match(/[⟦\[]사진\d+[⟧\]]/g) || []).length;
         return { 전체부품: all.length, 이미지위치: img, 부품순서: all.map((n) => (n.classList.contains("se-image") ? "사" : n.classList.contains("se-video") ? "영" : "글")).join(""), 남은표식 };
-      }).catch(() => null);
+      });
+      } catch (e) {
+        // 프레임이 갈리면 여기서 **동기적으로** 던집니다 — .catch() 로는 안 잡힙니다
+        say(`      ⚠ 배치 확인 실패(${String(e.message || e).slice(0, 40)}) — 저장은 계속합니다`);
+      }
       if (배치) say(`      [배치] 부품 ${배치.전체부품}개 · 순서 ${배치.부품순서} · 이미지 ${JSON.stringify(배치.이미지위치)} · 남은 표식 ${배치.남은표식}개`);
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
 
@@ -2109,7 +2123,9 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 이러면 편집기가 입력을 정상으로 받아 모델에도 실립니다.
      * (클립보드는 안 씁니다. 사장님 클립보드를 덮어쓰는 사고가 두 번 났습니다.)
      */
-    await applyTitle();
+    // ⚠️ 프레임이 갈리면 evaluate 가 **동기적으로** 던집니다 — .catch() 로는 안 잡힙니다
+    try { await applyTitle(); }
+    catch (e) { console.log(`      ⚠ 제목 넣기 실패(${String(e.message||e).slice(0,44)}) — 저장은 계속합니다`); }
 
     async function applyTitle() {
       const wantTitle = String(copied.title || "").trim();
@@ -2201,8 +2217,27 @@ ${blogId} 로그인이 안 돼 있습니다.
       } catch {}
     }
 
+    /**
+     * ⚠️ 세기 전에 편집기 프레임을 **다시 잡습니다.**
+     * 소제목 꾸미기·링크 카드 중에 프레임이 갈리면(`detached Frame`) 여기서 죽는데,
+     * 저장이 그 뒤에 있어서 **붙여넣기와 사진까지 다 해 놓고 통째로 날아갔습니다**
+     * (2026-09-05 경제 7편 전부. 로그에는 [4/6] 까지만 찍혔습니다).
+     * 세는 건 보고용이고 저장이 본체입니다 — 세다가 실패해도 저장은 반드시 갑니다.
+     */
+    {
+      // 갈린 프레임은 url() 조차 던집니다 — 한 개씩 안전하게 봅니다
+      let 새프레임 = null;
+      for (const f of page.frames()) {
+        try { if (/PostWriteForm/.test(f.url())) 새프레임 = f; } catch {}
+      }
+      if (새프레임) frameE = 새프레임;
+    }
+
     // ── 5) 뭐가 들어갔는지 세어 봅니다 ──
-    const state = await frameE.evaluate(() => {
+    let state = { chars: 0, images: 0, owned: 0, credits: 0, creditsCentered: 0, title: "" };
+    let 셈성공 = false;
+    try {
+    state = await frameE.evaluate(() => {
       const root = document.querySelector(".se-main-container, .se-content");
       // 제목은 따로 세므로 본문 글자수에서 뺍니다.
       const titleText = (document.querySelector(".se-documentTitle")?.innerText || "").replace(/\s/g, "");
@@ -2233,6 +2268,11 @@ ${blogId} 로그인이 안 돼 있습니다.
         title: (document.querySelector(".se-documentTitle")?.innerText || "").trim().slice(0, 40),
       };
     });
+    셈성공 = true;
+    } catch (e) {
+      // 세는 건 보고용이고 저장이 본체입니다 — 세다 실패해도 저장은 갑니다
+      say(`      ⚠ 세기 실패(${String(e.message || e).slice(0, 40)}) — 그래도 저장은 합니다`);
+    }
     say(`[5/6] 들어간 것 — 글자 ${state.chars.toLocaleString()}자 · 사진 ${state.images}장`
       + ` (네이버가 가진 사진 ${state.owned}장 · 출처줄 ${state.creditsCentered}/${state.credits} 가운데정렬)`);
     if (state.images && state.owned < state.images) {
@@ -2240,7 +2280,12 @@ ${blogId} 로그인이 안 돼 있습니다.
     }
     say(`      제목: ${state.title || "(비어 있음)"}`);
 
-    if (state.chars < 200) {
+    /**
+     * ⚠️ **세는 데 실패했으면 진단도 건너뜁니다.**
+     * 못 셌을 뿐인데 chars=0 이라고 진단으로 들어가면, 그 진단이 또 갈린 프레임을 만져
+     * **저장을 못 하고 죽습니다**(2026-09-05 경제 7편이 여기서 날아갔습니다).
+     */
+    if (셈성공 && state.chars < 200) {
       // 왜 안 들어갔는지 구조를 찍습니다. 짐작으로 선택자를 바꾸는 건 시간 낭비입니다.
       say("      ── 편집기 구조 진단 ──");
       // 그 '31자'가 대체 무슨 글자인지 눈으로 봐야 합니다. 숫자만 봐서는 못 고칩니다.
@@ -2280,6 +2325,30 @@ ${blogId} 로그인이 안 돼 있습니다.
 
     // ── 6) 임시저장 ──
     say("[6/6] 임시저장 누르는 중");
+    /**
+     * ⚠️ **저장 단추를 살아 있는 프레임에서 찾습니다.**
+     * 여기까지 오는 동안 편집기 프레임이 갈릴 수 있습니다(`detached Frame`).
+     * 죽은 손잡이로 evaluate 하면 **동기적으로 던져서** 저장을 못 하고 끝납니다 —
+     * 본문과 사진을 다 넣어 놓고 마지막 한 걸음에서 날아갑니다(2026-09-05 경제 7편).
+     * 그래서 프레임을 전부 훑어 저장 단추가 있는 곳을 씁니다.
+     */
+    const 저장프레임 = await (async () => {
+      for (const f of [frameE, ...page.frames()]) {
+        if (!f) continue;
+        try {
+          const 있나 = await f.evaluate(() => [...document.querySelectorAll("button,a")]
+            .some((b) => /^저장(\s*\d+\+?)?$|임시저장/.test((b.textContent || "").trim())));
+          if (있나) return f;
+        } catch {}
+      }
+      return null;
+    })();
+    if (!저장프레임) {
+      console.error("실패: 저장 단추가 있는 프레임을 못 찾았습니다");
+      if (!show) { try { await browser.close(); } catch {} }
+      process.exit(1);
+    }
+    frameE = 저장프레임;
     const saved = await frameE.evaluate(() => {
       /**
        * 저장 버튼 찾기. offsetParent로 보이는지 판단하면 **position:fixed 버튼이 안 잡힙니다**
@@ -2331,7 +2400,7 @@ ${blogId} 로그인이 안 돼 있습니다.
       const rows = [...document.querySelectorAll("li, tr")]
         .map((n) => (n.textContent || "").trim())
         .filter((t) => /\d{4}\.\d{2}\.\d{2}/.test(t));
-      return rows.slice(0, 2);
+      return rows.slice(0, 12);  // 오늘 저장한 것이 다 있는지 눈으로 보려면 두 줄로는 부족합니다
     }).catch(() => []);
     if (listTitle.length) {
       listTitle.forEach((r, i) => say(`      [목록 ${i + 1}] ${String(r).slice(0, 70)}`));
