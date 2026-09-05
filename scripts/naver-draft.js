@@ -510,14 +510,32 @@ ${blogId} 로그인이 안 돼 있습니다.
      * 그래서 쓸 때마다 살아 있는지 보고, 죽었으면 다시 찾습니다.
      */
     let frameE = editor;
-    const liveFrame = async () => {
-      const alive = frameE ? await frameE.evaluate(() => true).catch(() => false) : false;
-      if (alive) return frameE;
-      for (const f of page.frames()) {
-        const has = await f.evaluate(() => Boolean(
+    /**
+     * 🔴 **여기가 `.catch()` 로 막혀 있었습니다** (2026-09-05 · c9 세션 발견을 받아 고침).
+     *
+     *    갈린 프레임(detached Frame)을 만지면 퍼페티어가 **동기적으로** 던집니다.
+     *    프라미스가 생기기도 전이라 `.catch()` 는 **한 번도 안 불립니다.**
+     *    `try/catch` 라야 잡힙니다.
+     *
+     *    🔴 그런데 이 함수는 **「프레임이 갈렸을 때 다시 찾으라」고 만든 함수**입니다.
+     *       살아남으라고 만든 것이 정작 갈린 프레임에서 죽고 있었습니다.
+     *       c9 쪽은 이것 때문에 경제 7편이 **본문 1,176자와 사진 6장을 다 넣어 놓고** 날아갔습니다.
+     */
+    const 살았나 = async (f) => {
+      if (!f) return false;
+      try { return await f.evaluate(() => true); } catch { return false; }
+    };
+    const 편집기냐 = async (f) => {
+      try {
+        return await f.evaluate(() => Boolean(
           document.querySelector(".se-main-container, .se-content") || document.querySelector(".se-documentTitle")
-        )).catch(() => false);
-        if (has) { frameE = f; return frameE; }
+        ));
+      } catch { return false; }
+    };
+    const liveFrame = async () => {
+      if (await 살았나(frameE)) return frameE;
+      for (const f of page.frames()) {
+        if (await 편집기냐(f)) { frameE = f; return frameE; }
       }
       return frameE;
     };
