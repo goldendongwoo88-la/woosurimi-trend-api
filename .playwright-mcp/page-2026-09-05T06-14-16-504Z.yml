@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - link [ref=e3] [cursor=pointer]:
+    - /url: https://m.naver.com
+    - img "NAVER" [ref=e4]
+  - generic [ref=e5]:
+    - heading [level=1] [ref=e6]:
+      - text: 페이지를
+      - strong [ref=e7]: 찾을 수 없습니다.
+    - paragraph [ref=e8]: 요청하신 페이지가 제거되었거나, 이름이 변경되었거나, 일시적으로 사용이 중단되었습니다.
+    - paragraph [ref=e9]:
+      - text: 관련 문의사항은
+      - link "네이버 고객센터" [ref=e10] [cursor=pointer]:
+        - /url: https://help.naver.com/
+      - text: 에 알려주시면 친절하게 안내해 드리겠습니다.
+    - generic [ref=e11]:
+      - link "이전" [ref=e12] [cursor=pointer]:
+        - /url: javascript:history.back();
+      - link "네이버 홈" [ref=e13] [cursor=pointer]:
+        - /url: https://m.naver.com/
+  - generic [ref=e14]:
+    - text: ©
+    - link "NAVER Corp." [ref=e15] [cursor=pointer]:
+      - /url: https://www.navercorp.com/

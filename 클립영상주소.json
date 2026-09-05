@@ -1,0 +1,10 @@
+{
+  "받은id": "D155EC3DE227826E3155EE9F9E7038BD0E6E",
+  "채널": "해피구름",
+  "조회": 4108257,
+  "playback모양": [
+    "$version",
+    "MPD"
+  ],
+  "MPD": "[{\"Period\":[{\"AdaptationSet\":[{\"Role\":[{\"nvod:LoudnessNormalize\":[{\"nvod:Property\":[{\"@name\":\"targetLoudness\",\"#text\":\"-16.0\"},{\"@name\":\"mode\",\"#text\":\"transparent\"}],\"nvod:Source\":[{\"@type\":\"string\",\"#text\":\"AQAAAAEAIT8BPQEAvwYZKUwddhjqJgAAV7UhDQGnCgK3OAOVPQWGIga1AgnVBBHTBRewCyPhiAJGwieLAdsHlwKGC4EE9AIBAAAAAQAAAgEO_____w==\"}],\"@enable\":\"true\",\"@version\":\"1.1.4\",\"@contentType\":\"application/octet-stream\",\"@contentEncoding\":\"BASE64_SAFE\"}],\"@schemeIdUri\":\"urn:naver:vod:loudnessnormalize:2019-0\"}],\"Representation\":[{\"nvod:Label\":[{\"@kind\":\"qualityId\",\"#text\":\"1080P_1920_4096_192\"},{\"@kind\":\"fps\",\"#text\":\"30\"},{\"@kind\":\"resolution\",\"#text\":\"1080\"}],\"BaseURL\":[\"https://b02-kr-smp-vod.pstatic.net/clip-home/c/read/v2/VOD_ALPHA/clip-home/D155EC3DE227826E3155EE9F9E7038BD0E6E/pd/1787198553894/040ca123-9c4c-11f1-8426-48df37e2c202.mp4?hdnts=exp%3D1788617648%7Eacl%3D%2Fclip-home%2Fc%2Fread%2Fv2%2FVOD"
+}

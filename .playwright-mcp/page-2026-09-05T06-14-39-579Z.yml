@@ -1,0 +1,49 @@
+- generic [ref=f3e2]:
+  - link "본문 바로가기" [ref=f3e3] [cursor=pointer]:
+    - /url: "#content"
+  - main [ref=f3e5]:
+    - banner [ref=f3e6]:
+      - link [ref=f3e9] [cursor=pointer]:
+        - /url: https://m.naver.com
+        - heading "네이버" [level=1] [ref=f3e10]
+    - generic [ref=f3e12]:
+      - generic [ref=f3e13]:
+        - list [ref=f3e14]:
+          - listitem [ref=f3e15]:
+            - generic [ref=f3e16]:
+              - generic: 아이디 또는 전화번호
+              - textbox "아이디 또는 전화번호" [ref=f3e18]
+          - listitem [ref=f3e20]:
+            - generic [ref=f3e21]:
+              - generic: 비밀번호
+              - textbox "비밀번호" [ref=f3e23]
+        - list [ref=f3e27]:
+          - listitem [ref=f3e28]:
+            - button "로그인" [ref=f3e29] [cursor=pointer]
+      - list [ref=f3e32]:
+        - listitem [ref=f3e33]:
+          - link "아이디 찾기" [ref=f3e34] [cursor=pointer]:
+            - /url: https://nid.naver.com/user2/api/route?m=routeIdInquiry&lang=ko_KR
+        - listitem [ref=f3e36]:
+          - link "비밀번호 찾기" [ref=f3e37] [cursor=pointer]:
+            - /url: https://nid.naver.com/user2/api/route?m=routePwInquiry&lang=ko_KR
+        - listitem [ref=f3e39]:
+          - link "회원가입" [ref=f3e40] [cursor=pointer]:
+            - /url: https://nid.naver.com/account/signup?lang=ko_KR&realname=Y&rurl=https%3A%2F%2Fclip.naver.com%2Fmy
+      - iframe [ref=f3e45]:
+        - link [ref=f4e4] [cursor=pointer]:
+          - /url: https://tivan.naver.com/gc/101/qZ2hUHym5iG19BW7EQkDPp-kz8M7bGkBN52K6Mn0a2c47kDkc0jdXETrgeuStxT9OkLejCR1zfWhTNvM-kQRJgO-9n_ea26a1W0kfZCOlAj1Y3ZHK2zvPqllQ2EkKn3JiVPaX2wAbxbi4A1hWKvIFjHSJBxjiKwb_dRtJqht0VfTDQr1-H0UMatnLj9-Hx73R7WVBJz4PhuLuToupAHGiJBqS8BD7zdpBCMOf2FJ47Sw1Jq5vWixF45t9cqUWcFdUnsq_i_P11_GpDPEr-hR2I2zU0Y71ojjzHpQX5lL2JW9vBDruz93fdV8m3PHzCuqD1-3GwJ0wb5ak52aNc2TVfqdhzI6vkx00v1sspxzhMQRr6Bc63Q9KVJGdmOJSCgHt6r3_01u-8wcn66Oma42-V1MAXpehfhy1xmwMpOntICSIPhdTwSzP6-Rvdqgu0PfKZ8jt-rxMwhb_EeY3q1WowiZwLGeCJs75nqse70pt7lr7XTfS42TgAgif8p6C8OUJ8dEiTIC_a_CJikOsXSSBdxLwUwJW_9Kvg7V_hmm0qbXZOSFgd7eaBXZA_MewqrYYT8Ifzlg754yrwwblnH7Oa7mbr3wiIlRsX2rICF4AtGdEf76zdTwPCrjMCxDmr6nZ-IoQiqSh_J2tPesIlCy5DLM-BJTA_a2upJS_z2l7HavNfvY86LgXBR-IubCjKdjWfiurM6UWt6YJq7TKUeQww8KZkFDmjpqbpoOnwZPJ4AcodK0nMVPKQKcPFdPKx4ex_7jaUWIXp2HX0u7mboSRslr9HJLi63MQwmKBeeDluUYloKlMxmflmuxpnqFelr429yXhlAEAPNwDVx4zFRlLu4YmtRcU-x7bEda56VeZPw-MXbeqiHsH2ql1SmhLBgourP6d5lu8GDq_qYeM1Bkblv1ATRzyWMEVyW1KIYa75UKTvSYR2-PpPOiGcWxgRFCUOXTvEcQS2eKOa6ZNwd3rrRpv17K2ueFjjWoFQOnQsWATETGv0M4elPV-ZE4JCpDnajJLjVFqPiY62TQH5shqgkSLD2PNZjQU-lxvrGw1hYokirwoufY-W9RA_nWyu2M97GG5v_5o47FzOAxi3Gt5h22GtMG0Bk_vlnuy3Qr_rjaKr0sWIRdBfCCjsJUZxZ2/NE
+          - generic [ref=f4e5]:
+            - img "N+스토어 추석+세일 얼리버드 배송 대란 걱정 해결! 빨리빨리의 민족! 추석도 얼리버드로!" [ref=f4e6]
+            - img "AD" [ref=f4e7]
+    - generic [ref=f3e46]:
+      - contentinfo [ref=f3e47]:
+        - listitem [ref=f3e48]:
+          - link "스마트봇 상담" [ref=f3e49] [cursor=pointer]:
+            - /url: https://nca.naver.com/chat/account/view
+        - listitem [ref=f3e50]:
+          - link "고객센터" [ref=f3e51] [cursor=pointer]:
+            - /url: https://help.naver.com/service/5640/category/bookmark?lang=ko
+        - listitem [ref=f3e52]:
+          - listbox "언어선택" [ref=f3e53] [cursor=pointer]: 한국어
+      - generic [ref=f3e54]: © NAVER Corp.
