@@ -6,6 +6,13 @@
       "sourceType": "github",
       "skillPath": "skills/i-have-adhd/SKILL.md",
       "computedHash": "8464da28e98a4f7884a7ebc060bab0cec318aa30e874239e48e505b95e814132"
+    },
+    "graphify": {
+      "source": "wfsh2026/skill-graphify",
+      "sourceType": "github",
+      "skillPath": "graphify/skill.md",
+      "commit": "a104a0d9fc782f1485ad35cadd14aa6e4cf8a0e8",
+      "computedHash": "9319b5cba5daf8af8ee1dea98cf6d80b14a8c2e2c9354b9b57315f50623f1dd9"
     }
   }
 }
