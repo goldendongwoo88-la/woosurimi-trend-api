@@ -11,3 +11,8 @@ scratch-*
 # 이 컴퓨터 전용 권한 파일 — 세션마다 계속 바뀝니다. 공유하면 충돌만 납니다.
 .claude/settings.local.json
 data/affiliate-links.json
+
+# 유료 자산 — 절대 커밋하지 않습니다.
+# 이 저장소는 공개(public)라 커밋하는 순간 누구나 받을 수 있습니다.
+# 전자책·릴스·기획안 등 판매용 파일은 여기에만 둡니다.
+private-assets/
