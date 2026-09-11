@@ -31,7 +31,7 @@ const DAILY_LIMIT = 3;
  */
 async function make({ topic, lines = [], product = "", place = "" } = {}) {
   if (!isConfigured()) {
-    const e = new Error("AI가 연결되지 않았습니다."); e.status = 503; throw e;
+    const e = new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요."); e.noKeys = true; e.status = 503; throw e;
   }
   if (!String(topic || "").trim()) {
     const e = new Error("영상 주제를 알려주세요."); e.status = 400; throw e;
