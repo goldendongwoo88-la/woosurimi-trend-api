@@ -7,6 +7,7 @@
 
 const path = require("path");
 const fs = require("fs");
+const { GENERATED_DIR } = require("./bgmGenerate");
 
 const BGM_DIR = path.join(__dirname, "..", "assets", "bgm");
 
@@ -49,10 +50,39 @@ const TRACKS = [
 ];
 
 function getTrackPath(id) {
+  // AI로 생성한 곡(bgmGenerate.js)은 id가 "gen-"으로 시작하고 generated/ 폴더에 있습니다.
+  if (String(id || "").startsWith("gen-")) {
+    for (const ext of ["mp3", "wav"]) {
+      const p = path.join(GENERATED_DIR, `${id.replace(/^gen-/, "")}.${ext}`);
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
+  }
   const track = TRACKS.find((t) => t.id === id);
   if (!track) return null;
   const p = path.join(BGM_DIR, `${id}.mp3`);
   return fs.existsSync(p) ? p : null;
+}
+
+/** ACE-Step으로 이전에 생성해 둔 곡 목록 — 서버를 새로 열어도 예전 생성곡이 계속 보이게 합니다. */
+function listGenerated() {
+  try {
+    if (!fs.existsSync(GENERATED_DIR)) return [];
+    return fs
+      .readdirSync(GENERATED_DIR)
+      .filter((f) => /\.(mp3|wav)$/i.test(f))
+      .map((f) => ({
+        id: `gen-${path.parse(f).name}`,
+        label: "AI 생성 배경음악",
+        mood: "custom",
+        description: "ACE-Step 1.5로 생성한 곡입니다.",
+        generated: true,
+        previewUrl: `/bgm/generated/${f}`,
+      }))
+      .sort((a, b) => (a.id < b.id ? 1 : -1)); // 최신순(파일명에 타임스탬프가 들어있음)
+  } catch {
+    return [];
+  }
 }
 
 // scenes(장면 배열)의 caption 텍스트를 모아서 각 트랙의 keywords와 겹치는 개수로
@@ -68,4 +98,4 @@ function recommendBgm(scenes = []) {
   return scored;
 }
 
-module.exports = { TRACKS, getTrackPath, recommendBgm };
+module.exports = { TRACKS, getTrackPath, recommendBgm, listGenerated };

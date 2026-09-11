@@ -32,6 +32,7 @@ const { execFile } = require("child_process");
 const sharp = require("sharp");
 const ffmpegPath = require("ffmpeg-static");
 const { glyphPaths, alignedText, measureText } = require("./cardNewsGenerator");
+const vaceOutpaint = require("./vaceOutpaint");
 
 const W = 1080;
 const H = 1920;
@@ -274,17 +275,35 @@ function buildAssForClip(cues, moment, outPath) {
  * ⚠️ 흐린 배경을 쓰지 않습니다. 피사체 위치로 **진짜 잘라냅니다.**
  * 잘리는 부분이 생기지만, 인물이 크게 보이는 쪽이 훨씬 잘 봅니다.
  */
-async function renderShort(srcPath, moment, destPath, { cues = [], channel = "", theme = "light", subtitles = true } = {}) {
+async function renderShort(srcPath, moment, destPath, { cues = [], channel = "", theme = "light", subtitles = true, outpaint = false } = {}) {
   const dur = +(moment.end - moment.start).toFixed(2);
   const work = path.join(os.tmpdir(), "l2s-" + crypto.randomUUID().slice(0, 8));
   fs.mkdirSync(work, { recursive: true });
+  let outpaintedClip = null; // 성공하면 이 파일을 크롭 대신 씁니다.
 
   try {
     const { w: srcW, h: srcH } = await probeSize(srcPath);
 
-    // 영상 자리 비율(1080:1240)에 맞춰 원본에서 잘라낼 폭
+    // ⚠️ 2026-09 추가 — Wan-VACE 아웃페인팅(opt-in). 잘라내는 대신 화면 양옆을 AI가
+    // 채워 넣습니다. 로컬 GPU + ComfyUI가 필요하고 크롭보다 훨씬 느리므로 기본은 꺼져
+    // 있습니다. 실패해도(ComfyUI 꺼짐, 워크플로 없음, 타임아웃 등) 절대 전체를 죽이지
+    // 않고 바로 아래 크롭 방식으로 조용히 물러섭니다.
+    if (outpaint) {
+      try {
+        if (await vaceOutpaint.isAvailable()) {
+          outpaintedClip = await vaceOutpaint.outpaintClip(srcPath, moment, W, LAYOUT.videoH);
+        } else {
+          console.warn("[shortsStudio] outpaint 요청됐지만 ComfyUI/워크플로가 준비 안 돼 크롭 방식으로 진행합니다.");
+        }
+      } catch (err) {
+        console.error("[shortsStudio] Wan-VACE 아웃페인팅 실패, 크롭 방식으로 대체합니다:", err.message);
+        outpaintedClip = null;
+      }
+    }
+
+    // 영상 자리 비율(1080:1240)에 맞춰 원본에서 잘라낼 폭 (아웃페인팅을 안 쓸 때만 필요)
     const cropW = Math.min(srcW, Math.round(srcH * (W / LAYOUT.videoH)));
-    const cropX = await findCropX(srcPath, moment.start, dur, srcW, srcH, cropW);
+    const cropX = outpaintedClip ? 0 : await findCropX(srcPath, moment.start, dur, srcW, srcH, cropW);
 
     const framePng = path.join(work, "frame.png");
     fs.writeFileSync(framePng, await buildFramePng({
@@ -295,10 +314,17 @@ async function renderShort(srcPath, moment, destPath, { cues = [], channel = "",
       channel, theme,
     }));
 
-    const steps = [
-      `[0:v]crop=${cropW}:${srcH}:${cropX}:0,scale=${W}:${LAYOUT.videoH}:flags=lanczos[vid]`,
-      `[1:v][vid]overlay=0:${LAYOUT.videoTop}[out0]`,
-    ];
+    // outpaintedClip이 있으면 그 영상(이미 목표 크기로 아웃페인팅된 별도 파일)을 셋째
+    // 입력으로 넣고 거기서 [vid]를 뽑습니다. 없으면 예전처럼 원본을 잘라서 [vid]를 만듭니다.
+    const steps = outpaintedClip
+      ? [
+          `[2:v]scale=${W}:${LAYOUT.videoH}[vid]`,
+          `[1:v][vid]overlay=0:${LAYOUT.videoTop}[out0]`,
+        ]
+      : [
+          `[0:v]crop=${cropW}:${srcH}:${cropX}:0,scale=${W}:${LAYOUT.videoH}:flags=lanczos[vid]`,
+          `[1:v][vid]overlay=0:${LAYOUT.videoTop}[out0]`,
+        ];
 
     let last = "out0";
     if (subtitles && cues.length) {
@@ -311,10 +337,15 @@ async function renderShort(srcPath, moment, destPath, { cues = [], channel = "",
       }
     }
 
+    // 오디오는 항상 원본(input 0)의 같은 구간에서 가져옵니다 — outpaintedClip은 소리가
+    // 없는(-an) 영상만 있는 파일이라서요(vaceOutpaint.js 참고).
+    const inputArgs = outpaintedClip
+      ? ["-ss", String(moment.start), "-t", String(dur), "-i", srcPath, "-i", framePng, "-i", outpaintedClip]
+      : ["-ss", String(moment.start), "-t", String(dur), "-i", srcPath, "-i", framePng];
+
     await run(ffmpegPath, [
       "-y",
-      "-ss", String(moment.start), "-t", String(dur), "-i", srcPath,
-      "-i", framePng,
+      ...inputArgs,
       "-filter_complex", steps.join(";"),
       "-map", `[${last}]`, "-map", "0:a?",
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
@@ -324,9 +355,10 @@ async function renderShort(srcPath, moment, destPath, { cues = [], channel = "",
       destPath,
     ], { timeout: 900000 });
 
-    return { cropX, cropW, srcW, srcH };
+    return { cropX, cropW, srcW, srcH, outpainted: !!outpaintedClip };
   } finally {
     try { fs.rmSync(work, { recursive: true, force: true }); } catch {}
+    if (outpaintedClip) { try { fs.rmSync(outpaintedClip, { force: true }); } catch {} }
   }
 }
 

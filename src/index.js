@@ -12,7 +12,10 @@ const { findOpportunities, CATEGORY_SEEDS } = require("./opportunityFinder");
 const { searchRecentNews, searchMergedNews, getBuzzNews, attachImages } = require("./naverNewsSearch");
 const { planShortform, planFromPhotos } = require("./shortformPlanner");
 const { renderShortformVideo, FRAME_STYLES } = require("./videoRenderer");
-const { recommendBgm, getTrackPath } = require("./bgmLibrary");
+const bgmLibrary = require("./bgmLibrary");
+const { recommendBgm, getTrackPath } = bgmLibrary;
+const bgmGenerate = require("./bgmGenerate");
+const localModels = require("./localModels");
 const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
@@ -131,6 +134,14 @@ app.get("/api/mate-titles", async (req, res) => {
   let hot = null;
   try { hot = await hotIssues.collect(); } catch {}
   res.json(mateTitles.suggest(area, hot, Math.min(20, Number(req.query.n) || 10)));
+});
+
+// 4개 로컬 오픈소스 AI 모델(ComfyUI·ACE-Step·faster-whisper)이 지금 이 컴퓨터에서 실제로
+// 켜져 있는지 한 번에 보여줍니다. 전부 꺼져 있어도 서버는 정상 동작하고, 관련 기능들은
+// 기존 방식(그라디언트 배경·크롭 방식 쇼츠 등)으로 조용히 대체됩니다.
+// GET /api/local-models/status
+app.get("/api/local-models/status", async (req, res) => {
+  res.json(await localModels.getLocalModelStatus({ fresh: req.query.fresh === "true" }));
 });
 
 app.get("/api/trends", (req, res) => {
@@ -330,7 +341,29 @@ app.post("/api/shortform/bgm-suggestions", (req, res) => {
   res.json({
     note: "우수리미가 자체 제작한(저작권 걱정 없는) 심플 배경음 5종입니다. 대본 내용을 보고 어울리는 순서로 정렬했어요.",
     tracks,
+    // 이전에 ACE-Step으로 직접 생성해 둔 곡들 — 있으면 화면에 "내가 만든 곡" 목록으로 같이 보여줄 수 있습니다.
+    generated: bgmLibrary.listGenerated(),
   });
+});
+
+// ACE-Step 1.5(로컬)로 새 배경음악 한 곡을 즉석에서 생성합니다. 이 컴퓨터에서 ACE-Step이
+// 실행 중이어야 합니다(README/오픈소스-AI-모델-다운로드-가이드.md 참고) — 안 켜져 있으면
+// 명확한 이유와 함께 실패합니다(기존 5종 라이브러리는 그대로 쓸 수 있습니다).
+// POST /api/shortform/bgm-generate  body: { prompt, durationSec, lyrics, label }
+app.post("/api/shortform/bgm-generate", async (req, res) => {
+  const prompt = (req.body?.prompt || "").trim();
+  if (!prompt) return res.status(400).json({ error: "missing_prompt", message: "곡 분위기를 설명하는 prompt가 필요합니다." });
+  try {
+    const track = await bgmGenerate.generateBgmTrack({
+      prompt,
+      label: req.body?.label,
+      durationSec: Number(req.body?.durationSec) || 30,
+      lyrics: req.body?.lyrics || "",
+    });
+    res.json({ ok: true, track });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: "generate_failed", message: err.message });
+  }
 });
 
 // 대본(scenes)의 캡션 텍스트를 보고, src/videoTemplates.js에 있는 자막 디자인 5종을
@@ -1129,8 +1162,9 @@ app.get("/api/cardnews/stock-photos", async (req, res) => {
   }
 });
 
-app.get("/api/cardnews/generator-status", (req, res) => {
-  res.json(cardNewsGenerator.getGeneratorStatus());
+app.get("/api/cardnews/generator-status", async (req, res) => {
+  const aiBackground = await cardNewsGenerator.aiBackgroundStatus();
+  res.json({ ...cardNewsGenerator.getGeneratorStatus(), aiBackground });
 });
 
 // POST /api/cardnews/plan  body: { topic, pageCount, sourceUrl }
@@ -1197,6 +1231,9 @@ app.post("/api/cardnews/render", cardUpload.array("images", 8), async (req, res)
       layoutId: req.body.layoutId,
       ratio: req.body.ratio,
       images,
+      // 사진이 없는 페이지 배경을 Z-Image Turbo(로컬 ComfyUI)로 생성할지. 안 켜져 있으면
+      // renderCardNewsSet 쪽에서 조용히 그라디언트로 대체하므로 여기서 상태를 미리 안 봐도 됩니다.
+      aiBackground: req.body.aiBackground === "true",
     });
     res.json({
       ...result,
@@ -1301,7 +1338,7 @@ const longToShorts = require("./longToShorts");
 const l2sJobs = new Map();
 
 app.post("/api/long-to-shorts", (req, res) => {
-  const { url, count, topic } = req.body || {};
+  const { url, count, topic, outpaint } = req.body || {};
   if (!/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/.test(String(url || ""))) {
     return res.status(400).json({ message: "유튜브 주소를 넣어주세요." });
   }
@@ -1313,7 +1350,9 @@ app.post("/api/long-to-shorts", (req, res) => {
     if (Date.now() - v.startedAt > 2 * 3600 * 1000) l2sJobs.delete(k);
   }
 
-  longToShorts.fromYoutube(url, { count: Number(count) || 4, topic: topic || "" })
+  // outpaint=true면 Wan-VACE(로컬 ComfyUI)로 잘라내지 않고 채워서 세로로 만듭니다.
+  // 준비 안 돼 있으면(ComfyUI 꺼짐 등) shortsStudio가 알아서 기존 크롭 방식으로 대체합니다.
+  longToShorts.fromYoutube(url, { count: Number(count) || 4, topic: topic || "", outpaint: outpaint === true || outpaint === "true" })
     .then((r) => l2sJobs.set(jobId, { state: "done", startedAt: Date.now(), result: r }))
     .catch((e) => l2sJobs.set(jobId, { state: "failed", startedAt: Date.now(), message: e.message }));
 
@@ -1502,7 +1541,7 @@ const charStorage = multer.diskStorage({
 });
 const uploadChar = multer({ storage: charStorage, limits: { fileSize: 12 * 1024 * 1024, files: 12 } });
 
-app.get("/api/characters/list", (req, res) => {
+app.get("/api/characters/list", async (req, res) => {
   const out = {};
   for (const c of Object.values(characterImage.CHARACTERS)) {
     out[c.id] = {
@@ -1512,7 +1551,10 @@ app.get("/api/characters/list", (req, res) => {
       images: characterImage.existing(c.id),
     };
   }
-  res.json({ characters: out, provider: characterImage.provider() });
+  // comfy: ComfyUI(로컬)로 musubi-tuner LoRA를 얹어 "진짜 같은 얼굴"을 만드는 경로.
+  // provider: comfy를 못 쓸 때 물러서는 클라우드 API(gemini/openai) — 하위 호환용으로 남겨둡니다.
+  const comfy = await characterImage.comfyStatus();
+  res.json({ characters: out, provider: characterImage.provider(), comfy });
 });
 
 app.get("/api/characters/prompts", (req, res) => {

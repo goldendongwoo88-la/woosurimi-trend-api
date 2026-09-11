@@ -20,8 +20,28 @@
 const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
+const comfyClient = require("./comfyClient");
 
 const OUT_DIR = path.join(__dirname, "..", "public", "uploads", "characters");
+
+// ────────────────────────────────────────────────────────────
+// 캐릭터 얼굴 고정 — musubi-tuner로 학습한 LoRA (2026-09 추가)
+//
+// ⚠️ 왜 LoRA인가 — 위 STYLE 프롬프트만으로는 "같은 그림체"는 되어도 "같은 얼굴"까지는
+// 안 됩니다(글로만 얼굴을 고정하는 데는 한계가 있습니다). musubi-tuner로 캐릭터 사진
+// 15~30장을 학습해 LoRA 파일을 만들어두면, ComfyUI에서 그 LoRA를 얹어 생성할 때마다
+// 진짜로 같은 얼굴이 나옵니다. LoRA 학습 자체는 이 서버가 아니라 사장님 컴퓨터에서
+// musubi-tuner를 직접 돌려서 미리 해두는 작업입니다(오픈소스-AI-모델-다운로드-가이드.md
+// 참고) — 여기서는 그렇게 "이미 학습해 둔" LoRA 파일을 불러다 쓰기만 합니다.
+//
+// 캐릭터별로 다른 LoRA 파일명을 쓸 수 있게 아래 환경변수로 매핑합니다. ComfyUI의
+// models/loras 폴더에 있는 파일명을 그대로 적으면 됩니다(경로 없이 파일명만).
+const LORA_ENV_KEYS = { assi: "LORA_ASSI_FILE", yeonhwa: "LORA_YEONHWA_FILE", doryeong: "LORA_DORYEONG_FILE" };
+
+function loraFileFor(charId) {
+  const key = LORA_ENV_KEYS[charId];
+  return (key && process.env[key]) || null;
+}
 
 // ────────────────────────────────────────────────────────────
 // 그림체를 고정하는 부분
@@ -200,6 +220,22 @@ function provider() {
   return null;
 }
 
+/**
+ * 실제로 생성에 쓸 수단을 정합니다. ComfyUI가 켜져 있고 워크플로 파일도 있으면
+ * 최우선입니다 — LoRA로 진짜 같은 얼굴이 나오는 유일한 경로라서, 클라우드 API보다
+ * 앞에 둡니다(클라우드 API는 LoRA를 못 씁니다). 없으면 예전처럼 gemini/openai로 물러섭니다.
+ *
+ * ⚠️ LoRA 파일이 이 캐릭터에 아직 없어도(학습 전이어도) ComfyUI 워크플로 자체는 쓸 수
+ * 있게 둡니다 — 워크플로가 LoRA 없이도 동작하게 만들어졌을 수 있고, 그건 사장님이
+ * ComfyUI 쪽에서 정할 몫입니다. 여기서는 "ComfyUI가 켜져 있고 워크플로가 있는가"만 봅니다.
+ */
+async function resolveProvider(charId) {
+  if (await comfyClient.ping()) {
+    if (comfyClient.hasWorkflow("character-lora")) return "comfy";
+  }
+  return provider();
+}
+
 async function viaGemini(text) {
   const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const model = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
@@ -221,6 +257,22 @@ async function viaGemini(text) {
   if (!img) throw new Error("그림이 돌아오지 않았습니다. 프롬프트가 거부됐을 수 있습니다.");
   const b64 = (img.inlineData || img.inline_data).data;
   return Buffer.from(b64, "base64");
+}
+
+// ComfyUI로 Z-Image/FLUX.2 klein 등에 캐릭터 LoRA를 얹어 그립니다.
+// 워크플로 파일 자체(workflows/character-lora.json)는 ComfyUI에서 사장님이 직접 만들어
+// "Save (API Format)"으로 내보낸 것을 씁니다 — 정확한 노드 구성은 설치한 체크포인트·
+// 커스텀 노드에 따라 다르므로 이 코드가 그래프를 대신 만들지 않습니다(comfyClient.js 설명 참고).
+async function viaComfy(charId, text) {
+  const loraFile = loraFileFor(charId);
+  const files = await comfyClient.runWorkflow("character-lora", {
+    PROMPT: text,
+    LORA_NAME: loraFile || "",
+    WIDTH: 1080,
+    HEIGHT: 1920,
+    SEED: Math.floor(Math.random() * 1_000_000_000),
+  });
+  return fs.readFileSync(files[0]);
 }
 
 async function viaOpenAI(text) {
@@ -252,18 +304,22 @@ async function viaOpenAI(text) {
  */
 async function generate(charId, scene = "speaking") {
   const pr = prompt(charId, scene);
-  const who = provider();
+  const who = await resolveProvider(charId);
   if (!who) {
     return {
       ok: false,
       prompt: pr,
-      why: "이미지 AI 키가 없습니다. GEMINI_API_KEY 또는 OPENAI_API_KEY를 넣으시면 " +
+      why: "이미지 AI가 하나도 준비되어 있지 않습니다. ComfyUI를 켜고 " +
+           "workflows/character-lora.json을 넣거나, GEMINI_API_KEY/OPENAI_API_KEY를 넣으시면 " +
            "자동으로 만들어집니다. 지금은 위 프롬프트를 무료 도구에 붙여넣어 직접 만드셔도 됩니다.",
     };
   }
 
   try {
-    const buf = who === "gemini" ? await viaGemini(pr.text) : await viaOpenAI(pr.text);
+    const buf =
+      who === "comfy" ? await viaComfy(charId, pr.text)
+      : who === "gemini" ? await viaGemini(pr.text)
+      : await viaOpenAI(pr.text);
     fs.mkdirSync(OUT_DIR, { recursive: true });
     const name = `${charId}-${scene}-${Date.now().toString(36)}.jpg`;
     const dest = path.join(OUT_DIR, name);
@@ -272,7 +328,10 @@ async function generate(charId, scene = "speaking") {
       .resize(1080, 1920, { fit: "cover", position: "top" })
       .jpeg({ quality: 90 })
       .toFile(dest);
-    return { ok: true, path: `/uploads/characters/${name}`, prompt: pr, provider: who };
+    const loraNote = who === "comfy" && !loraFileFor(charId)
+      ? " (⚠️ 이 캐릭터엔 아직 학습된 LoRA 파일이 지정되지 않았습니다 — LORA_" + charId.toUpperCase() + "_FILE 환경변수를 넣으면 얼굴이 고정됩니다.)"
+      : "";
+    return { ok: true, path: `/uploads/characters/${name}`, prompt: pr, provider: who, note: loraNote || undefined };
   } catch (e) {
     return { ok: false, prompt: pr, why: `${who}로 만들지 못했습니다: ${e.message}` };
   }
@@ -294,8 +353,20 @@ function existing(charId) {
   }
 }
 
+/** 화면에서 "지금 LoRA로 얼굴이 고정되는 상태인지" 한눈에 보여주는 상태 요약. */
+async function comfyStatus() {
+  const comfyReady = await comfyClient.ping();
+  const workflowReady = comfyClient.hasWorkflow("character-lora");
+  const characters = {};
+  for (const id of Object.keys(CHARACTERS)) {
+    characters[id] = { loraConfigured: !!loraFileFor(id) };
+  }
+  return { comfyReady, workflowReady, characters };
+}
+
 module.exports = {
   CHARACTERS, STYLE, OUT_DIR,
   prompt, allPrompts, generate, existing, provider,
+  resolveProvider, comfyStatus,
   ownsTopic, channelFor,
 };

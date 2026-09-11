@@ -28,6 +28,7 @@ const crypto = require("crypto");
 const sharp = require("sharp");
 const fontkit = require("fontkit");
 const claudeClient = require("./claudeClient");
+const comfyClient = require("./comfyClient");
 const { extractPageData } = require("./pageExtractor");
 
 const FONT_PATH = path.join(__dirname, "..", "assets", "fonts", "NotoSansKR-Bold.ttf");
@@ -487,6 +488,39 @@ function gradientBackgroundSvg(style, w, h) {
     </svg>`);
 }
 
+// ⚠️ AI 배경(Z-Image Turbo, 2026-09 추가) — 글자는 여전히 fontkit이 그립니다, 절대
+// AI에게 맡기지 않습니다. docs/오픈소스-AI-모델-리서치-2026-09.md의 "가장 중요한 발견"
+// 그대로: 오픈 이미지 모델의 한글 렌더링은 아직 신뢰할 수 없어서, AI에게는 "글자 없는
+// 배경 사진"만 만들게 하고 그 위에 우리 폰트 엔진으로 글자를 얹습니다.
+//
+// ComfyUI(로컬)가 켜져 있고 workflows/zimage-cardnews.json이 있을 때만 동작합니다.
+// 둘 다 없으면 예전처럼 스타일 그라디언트 배경으로 조용히 대체됩니다(아래 renderCardImage
+// 참고) — Render 서버에는 GPU가 없어서 애초에 이 경로를 못 타므로, 이건 사장님 컴퓨터에서
+// 로컬로 카드뉴스를 만들 때만 켜지는 선택 기능입니다.
+async function generateAiBackgroundBuffer(style, page, topic, w, h) {
+  const subject = [topic, page.title].filter(Boolean).join(", ");
+  const prompt =
+    `Abstract background photograph for a Korean social media card, themed around: ${subject}. ` +
+    `${style.description}. Cinematic, high quality, professional editorial photography or soft ` +
+    `abstract gradient composition. Absolutely no text, no letters, no words, no watermark, no logo ` +
+    `anywhere in the image — this must be a clean background with empty space for text to be added later.`;
+  const files = await comfyClient.runWorkflow("zimage-cardnews", {
+    PROMPT: prompt,
+    NEGATIVE_PROMPT: "text, letters, words, watermark, logo, signature, low quality, blurry",
+    WIDTH: w,
+    HEIGHT: h,
+    SEED: Math.floor(Math.random() * 1_000_000_000),
+  });
+  // Z-Image가 정확히 w×h로 안 뽑아도(모델 기본 비율이 다를 수 있음) 카드 규격에 맞춥니다.
+  return sharp(files[0]).resize(w, h, { fit: "cover" }).png().toBuffer();
+}
+
+/** 지금 AI 배경을 실제로 쓸 수 있는 상태인지 — 화면에 "AI 배경" 옵션을 보여줄지 판단하는 데 씁니다. */
+async function aiBackgroundStatus() {
+  const comfyReady = await comfyClient.ping();
+  return { comfyReady, workflowReady: comfyClient.hasWorkflow("zimage-cardnews") };
+}
+
 // images 배열의 각 자리는 셋 중 하나입니다: null(사진 없음), 로컬 업로드 파일 경로,
 // 또는 스톡 사진 검색에서 고른 원격 이미지 URL(http로 시작). sharp는 로컬 경로/Buffer를
 // 똑같이 받을 수 있어서, URL이면 여기서 미리 내려받아 Buffer로 바꿔주기만 하면 됩니다.
@@ -752,15 +786,30 @@ function buildOverlaySvg(page, style, layoutId, w, h, pageIndex, totalPages, top
 /**
  * page: { role, title, body }
  * imagePath: (선택) 로컬 이미지 파일 경로 또는 원격 이미지 URL — 있으면 배경 사진으로 씀
+ * useAiBackground: (선택) 사진이 없을 때 그라디언트 대신 Z-Image Turbo로 배경을 생성할지.
+ *   ComfyUI가 꺼져 있거나 워크플로가 없으면 실패하지 않고 조용히 그라디언트로 대체됩니다.
  * 반환: PNG 버퍼
  */
-async function renderCardImage({ page, style, layoutId, ratio, pageIndex, totalPages, topic, imagePath }) {
+async function renderCardImage({ page, style, layoutId, ratio, pageIndex, totalPages, topic, imagePath, useAiBackground = false }) {
   const { w, h } = ASPECT_RATIOS[ratio] || ASPECT_RATIOS["4:5"];
   const resolvedInput = await resolveImageInput(imagePath);
-  // 포스터 프레임형은 자체 하단 스크림이 있어서 스타일 스크림을 겹치지 않습니다(위 주석 참고).
-  const bg = resolvedInput
-    ? await photoBackgroundBuffer(resolvedInput, style, w, h, layoutId !== "framed")
-    : gradientBackgroundSvg(style, w, h);
+  let bg;
+  if (resolvedInput) {
+    // 포스터 프레임형은 자체 하단 스크림이 있어서 스타일 스크림을 겹치지 않습니다(위 주석 참고).
+    bg = await photoBackgroundBuffer(resolvedInput, style, w, h, layoutId !== "framed");
+  } else if (useAiBackground) {
+    try {
+      const aiBg = await generateAiBackgroundBuffer(style, page, topic, w, h);
+      bg = layoutId === "framed" ? aiBg : await sharp(aiBg).composite([{ input: Buffer.from(
+          `<svg width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="${style.scrim}"/></svg>`
+        ) }]).png().toBuffer();
+    } catch (err) {
+      console.error("[cardNewsGenerator] AI 배경 생성 실패, 그라디언트로 대체합니다:", err.message);
+      bg = gradientBackgroundSvg(style, w, h);
+    }
+  } else {
+    bg = gradientBackgroundSvg(style, w, h);
+  }
   const overlay = buildOverlaySvg(page, style, layoutId, w, h, pageIndex, totalPages, topic);
   return sharp(bg).composite([{ input: overlay, top: 0, left: 0 }]).png().toBuffer();
 }
@@ -794,9 +843,11 @@ async function renderPreviewBuffer({ styleId = "midnight-purple", layoutId = "st
  * options.styleId, options.layoutId, options.ratio
  * options.images: (선택) 페이지 순서에 맞춘 배경 소스 배열 — 각 자리는 null(그라디언트 배경),
  *   로컬 업로드 파일 경로, 또는 스톡 사진 URL(http로 시작)
+ * options.aiBackground: (선택) true면 사진이 없는 페이지의 배경을 Z-Image Turbo(로컬 ComfyUI)로
+ *   생성합니다. ComfyUI가 꺼져 있으면 자동으로 그라디언트로 대체됩니다.
  * 반환: { jobId, ratio, styleId, layoutId, pages: [{ index, url }] }
  */
-async function renderCardNewsSet(plan, { styleId = "midnight-purple", layoutId = "stack", ratio = "4:5", images = [] } = {}) {
+async function renderCardNewsSet(plan, { styleId = "midnight-purple", layoutId = "stack", ratio = "4:5", images = [], aiBackground = false } = {}) {
   if (!plan || !Array.isArray(plan.pages) || !plan.pages.length) {
     throw new Error("먼저 대본(plan)을 만들어 주세요.");
   }
@@ -819,6 +870,7 @@ async function renderCardNewsSet(plan, { styleId = "midnight-purple", layoutId =
       totalPages: plan.pages.length,
       topic: plan.topic || "",
       imagePath: images[i] || null,
+      useAiBackground: aiBackground,
     });
     const fileName = `page${i + 1}.png`;
     fs.writeFileSync(path.join(outDir, fileName), buf);
@@ -840,6 +892,7 @@ module.exports = {
   getAspectRatios,
   recommendStyles,
   getGeneratorStatus,
+  aiBackgroundStatus,
   generatePlan,
   renderPreviewBuffer,
   renderCardNewsSet,
