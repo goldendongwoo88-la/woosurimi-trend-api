@@ -185,3 +185,21 @@ pip install -r requirements.txt
 
 받을 드라이브에 이 정도 여유 공간이 있는지 먼저 확인하세요. 다 받은 뒤 폴더를 OneDrive
 동기화 폴더 밑으로 옮기면 자동으로 클라우드에도 백업됩니다.
+
+## 뭐가 안 받아졌는지 한 번에 확인하기
+
+Claude는 사용자님 PC를 직접 볼 수 없어서 "8개 중 뭐가 빠졌는지"를 대신 확인해 드릴 수
+없습니다. 대신 `scripts/check-local-models.ps1`을 PC에서 직접 실행하시면 8개 각각
+받았는지/안 받았는지 바로 보여줍니다.
+
+```powershell
+cd 이 레포를 받아둔 폴더
+powershell -ExecutionPolicy Bypass -File scripts\check-local-models.ps1
+```
+
+위 명령어 그대로 받으셨던 `models\` 폴더 기준입니다. 다른 위치에 받으셨다면:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check-local-models.ps1 -Base "실제경로\models"
+```
+
