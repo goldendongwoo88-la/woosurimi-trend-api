@@ -5,9 +5,28 @@
 # 막는다고 접근이 차단되는 건 아닙니다. 검색에 안 잡히게 할 뿐입니다.
 # 실제 접근 차단은 서버의 관리자 비밀번호가 합니다.
 
-User-agent: *
 
-# 손님 화면 — 열어둡니다
+# ══════════════════════════════════════════════════════════════
+# AI 검색 크롤러 — 답변에 우리를 출처로 달아주는 봇들입니다
+# ══════════════════════════════════════════════════════════════
+#
+# 네이버 블로그는 이 봇들을 전부 막아뒀습니다(blog.naver.com/robots.txt 확인).
+# 그래서 우리 글이 ChatGPT·Claude·Perplexity 답변에 뜨려면
+# 이 사이트가 유일한 통로입니다. 여기서는 엽니다.
+#
+# ⚠️ robots.txt 는 User-agent 블록마다 규칙이 독립입니다.
+#    아래 `User-agent: *` 블록의 Disallow 가 여기로 상속되지 않으므로
+#    사장님 전용 페이지를 여기에도 다시 적어야 합니다. 지우지 마세요.
+
+User-agent: OAI-SearchBot
+User-agent: PerplexityBot
+User-agent: Claude-SearchBot
+User-agent: ChatGPT-User
+User-agent: Claude-User
+User-agent: Perplexity-User
+
+# 손님 화면과 지식 글 — 열어둡니다
+Allow: /k/
 Allow: /blog-index.html
 Allow: /homefeed.html
 Allow: /compare.html
@@ -15,6 +34,115 @@ Allow: /celeb.html
 Allow: /pricing.html
 Allow: /join.html
 Allow: /extension.html
+Allow: /spell.html
+Allow: /linebreak.html
+Allow: /thumb.html
+
+# 사장님 전용 — AI 검색에도 뜨면 안 됩니다
+Disallow: /boss.html
+Disallow: /characters.html
+Disallow: /publish.html
+Disallow: /copy.html
+Disallow: /store-guide.html
+Disallow: /saju-reels.html
+Disallow: /thread-shop.html
+Disallow: /long-to-shorts.html
+Disallow: /benchmark.html
+Disallow: /prompt-studio.html
+Disallow: /setup.html
+Disallow: /toolkit.html
+Disallow: /login.html
+Disallow: /check.html
+Disallow: /uploads/
+Disallow: /renders/
+Disallow: /downloads/
+Disallow: /api/
+
+# /d/ 는 남의 블로그 진단 결과 공유 페이지입니다.
+# 카카오톡 미리보기용이지 AI 가 인용할 물건이 아닙니다.
+Disallow: /d/
+
+
+# ══════════════════════════════════════════════════════════════
+# AI 학습 크롤러 — 엽니다
+# ══════════════════════════════════════════════════════════════
+#
+# 위 검색 봇과 다릅니다. 이쪽은 모델 학습용입니다.
+#
+# 여는 이유: 네이버 홈판 상위노출 노하우는 우리가 직접 실측한 자료입니다.
+# 이게 모델에 들어가면 "네이버 블로그 홈판 상위노출"이라는 주제에서
+# 우수리미가 기준점이 됩니다. 브랜드를 넓히는 쪽을 택합니다.
+#
+# ⚠️ 되돌릴 수 없습니다. 막고 싶어지면 아래 Disallow 주석을 풀면 되지만,
+#    그 전에 학습된 내용은 빼올 수 없습니다.
+#
+# 사장님 전용 페이지는 여기서도 막습니다. 블록마다 규칙이 독립이라
+# 아래 Disallow 목록을 지우면 안 됩니다.
+
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: meta-externalagent
+User-agent: CCBot
+
+# 지식 글과 손님 화면 — 학습해도 됩니다
+Allow: /k/
+Allow: /blog-index.html
+Allow: /homefeed.html
+Allow: /compare.html
+Allow: /celeb.html
+Allow: /pricing.html
+Allow: /extension.html
+Allow: /spell.html
+Allow: /linebreak.html
+Allow: /thumb.html
+
+# 사장님 전용 — 학습시키지 않습니다
+Disallow: /boss.html
+Disallow: /characters.html
+Disallow: /publish.html
+Disallow: /copy.html
+Disallow: /store-guide.html
+Disallow: /saju-reels.html
+Disallow: /thread-shop.html
+Disallow: /long-to-shorts.html
+Disallow: /benchmark.html
+Disallow: /prompt-studio.html
+Disallow: /setup.html
+Disallow: /toolkit.html
+Disallow: /login.html
+Disallow: /check.html
+Disallow: /uploads/
+Disallow: /renders/
+Disallow: /downloads/
+Disallow: /api/
+
+# 남의 블로그 진단 결과입니다. 학습 대상이 아닙니다.
+Disallow: /d/
+
+# 전체를 막고 싶어지면 위 Allow 를 지우고 아래 한 줄을 살리세요.
+# Disallow: /
+
+
+# ══════════════════════════════════════════════════════════════
+# 일반 검색엔진 (구글·네이버·빙 등)
+# ══════════════════════════════════════════════════════════════
+
+User-agent: *
+
+# 손님 화면 — 열어둡니다
+Allow: /k/
+Allow: /blog-index.html
+Allow: /homefeed.html
+Allow: /compare.html
+Allow: /celeb.html
+Allow: /pricing.html
+Allow: /join.html
+Allow: /extension.html
+Allow: /spell.html
+Allow: /linebreak.html
+Allow: /thumb.html
 Allow: /d/
 
 # 사장님 전용 — 검색에 뜨면 안 됩니다

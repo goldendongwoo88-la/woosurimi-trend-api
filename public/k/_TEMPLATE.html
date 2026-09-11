@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!-- ▼▼ 글마다 바꿔야 하는 곳 — 여기만 고치면 됩니다 ▼▼ -->
+<title>{{제목}} — 우수리미</title>
+<meta name="description" content="{{정의 한 줄. '○○는 △△이다' 형태로 씁니다}}" />
+<link rel="canonical" href="https://woosurimi-trend-api.onrender.com/k/{{슬러그}}.html" />
+<link rel="alternate" type="text/markdown" href="/k/{{슬러그}}.md" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "{{제목}}",
+  "inLanguage": "ko-KR",
+  "datePublished": "{{2026-01-01}}",
+  "dateModified": "{{2026-01-01}}",
+  "author": { "@type": "Person", "name": "우수리미" },
+  "publisher": { "@type": "Organization", "name": "우수리미" },
+  "mainEntityOfPage": "https://woosurimi-trend-api.onrender.com/k/{{슬러그}}.html",
+  "citation": [
+    { "@type": "CreativeWork", "name": "{{출처 문서명}}", "url": "{{출처 URL}}" }
+  ]
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "inLanguage": "ko-KR",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "{{1단계에서 뽑은 핵심 질문 1}}",
+      "acceptedAnswer": { "@type": "Answer", "text": "{{그 질문에 대한 본문 첫 문장}}" }
+    },
+    {
+      "@type": "Question",
+      "name": "{{핵심 질문 2}}",
+      "acceptedAnswer": { "@type": "Answer", "text": "{{답}}" }
+    }
+  ]
+}
+</script>
+<!-- ▲▲ 여기까지 ▲▲ -->
+
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+    line-height: 1.8;
+  }
+  header {
+    background: #fff;
+    padding: 20px 16px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  header .wrap { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 8px 0; line-height: 1.4; }
+  .meta { color: #888; font-size: 13px; }
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 24px 16px 60px 16px;
+  }
+  article {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    padding: 24px 20px;
+  }
+  .lead {
+    font-size: 16px;
+    font-weight: 600;
+    padding: 14px 16px;
+    background: #f0f4ff;
+    border-left: 3px solid #4a6cf7;
+    border-radius: 4px;
+    margin: 0 0 24px 0;
+  }
+  h2 {
+    font-size: 17px;
+    margin: 32px 0 10px 0;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+  p { margin: 0 0 14px 0; font-size: 15px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin: 16px 0;
+  }
+  th, td { border: 1px solid #e0e0e0; padding: 8px 10px; text-align: left; }
+  th { background: #fafafa; }
+  .grade {
+    display: inline-block;
+    font-size: 12px;
+    padding: 1px 7px;
+    border-radius: 3px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .g-fact { background: #e7f5e9; color: #256b2e; }
+  .g-hypo { background: #fff4e0; color: #8a5a00; }
+  .g-folk { background: #f0f0f0; color: #666; }
+  .sources { margin-top: 32px; padding-top: 20px; border-top: 1px solid #eee; }
+  .sources h2 { border-top: none; padding-top: 0; margin-top: 0; }
+  .sources li { font-size: 14px; margin-bottom: 8px; }
+  .back { display: inline-block; margin-top: 20px; font-size: 13px; color: #777; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>{{제목 — 질문 원문 그대로. 후킹 장치 쓰지 않습니다}}</h1>
+    <p class="meta">{{2026년 1월 1일}} · 우수리미</p>
+  </div>
+</header>
+
+<main>
+<article>
+
+  <!--
+    첫 문장은 반드시 술어 정의문입니다.
+    "○○는 △△이다" 형태로 씁니다.
+    정설이 없어도 사전적 뜻을 먼저 주고 미확정을 뒤에 붙입니다.
+    예) "어처구니는 상상 밖의 큰 물건을 뜻하는 말이며, 어원은 확정되지 않았다."
+    부정문("확실하게 밝혀지지 않았다")으로 글을 시작하지 않습니다.
+  -->
+  <p class="lead">{{정의 한 줄}}</p>
+
+  <!--
+    소제목은 질문 원문 그대로 씁니다. (네이버판의 10자 제한은 여기 적용하지 않습니다)
+    각 소제목 바로 다음 문장이 그 질문의 답입니다.
+    각 h2 아래 첫 문단의 주어에는 지시어(이·그·해당)를 쓰지 않고
+    핵심 키워드 원형을 그대로 씁니다. 그 문단만 떼어 읽어도 뜻이 통해야 합니다.
+  -->
+  <h2>{{핵심 질문 1을 소제목으로}}</h2>
+  <p>{{답. 2~3문장 한 덩어리. 문장마다 개행하지 않습니다.}}</p>
+
+  <h2>{{핵심 질문 2}}</h2>
+  <p>
+    <!--
+      출처는 완결 문장으로 씁니다.
+      "[기관명]의 [문서·조사명]([연도] 기준)에 따르면 [주장]이다."
+      그 한 문장만 떼어 읽어도 누가 언제 무엇을 말했는지 알 수 있어야 합니다.
+    -->
+    {{국립국어원의 표준국어대사전(2026년 기준)에 따르면 ...}}
+  </p>
+
+  <h2>{{핵심 질문 3}}</h2>
+  <table>
+    <thead><tr><th>{{구분}}</th><th>{{내용}}</th></tr></thead>
+    <tbody>
+      <tr><td>{{항목}}</td><td>{{값}}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>정설과 속설 구분</h2>
+  <p><span class="grade g-fact">정설</span>{{학계에서 확립된 내용}}</p>
+  <p><span class="grade g-hypo">유력 가설</span>{{근거는 있으나 확정되지 않은 내용}}</p>
+  <p><span class="grade g-folk">민간 속설</span>{{널리 퍼졌으나 근거가 확인되지 않은 내용}}</p>
+
+  <div class="sources">
+    <h2>참고한 자료</h2>
+    <ul>
+      <!-- 링크 텍스트는 기관명+문서명으로 씁니다. 맨 URL 금지. -->
+      <li><a href="{{URL}}">{{국립국어원 — 표준국어대사전 '○○' 항목}}</a></li>
+    </ul>
+  </div>
+
+</article>
+
+<a class="back" href="/k/">← 지식교양 목록</a>
+
+</main>
+
+</body>
+</html>
