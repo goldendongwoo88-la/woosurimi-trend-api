@@ -1,0 +1,53 @@
+{
+  "title": "욕실 곰팡이가 다시 생기는 이유",
+  "uploadDate": null,
+  "hookType": "질문형",
+  "whyNow": "",
+  "affiliateItems": [
+    ""
+  ],
+  "disclosure": "이 영상은 쿠팡 파트너스 활동의 일환으로 일정액의 수수료를 제공받습니다.",
+  "priorityModels": "wan2.2 (기본), 안전 대안 ltx2.5",
+  "options": {
+    "transition": "crossfade",
+    "templateId": "bold-black"
+  },
+  "scenes": [
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "닦아도 소용없습니다",
+      "durationSec": 3,
+      "model": "wan2.2",
+      "genPrompt": "Extreme close-up establishing shot: close-up of dark mold spots along bathroom tile silicone grout. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "첫 3초 — 컷 없이 이 한 장면으로만 버팁니다. 훅 문구는 자막으로만 넣고 음성 없음."
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "",
+      "durationSec": 5,
+      "model": "wan2.2",
+      "genPrompt": "close-up of dark mold spots along bathroom tile silicone grout, a cloth wiping it that comes away still stained. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "문제를 대사 없이 눈으로만 보여줍니다."
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "",
+      "durationSec": 7,
+      "model": "wan2.2",
+      "genPrompt": "spraying mold remover directly onto the silicone grout line and letting it sit, then wiping clean with a small brush. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "같은 장면을 3초 넘게 쓰지 않도록 2~3개 앵글로 나눠 생성해도 됩니다."
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "",
+      "durationSec": 5,
+      "model": "wan2.2",
+      "genPrompt": "a hand naturally picking up and holding  at a comfortable angle, calm relaxed motion, product visible but not posed like an advertisement. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "⚠️ 화살표·가격 표시는 이 클립에 생성하지 말고, 편집 단계에서 캡컷/After Effects로 얹으십시오 — 생성 모델은 화면 속 그래픽 오버레이를 안정적으로 못 그립니다."
+    }
+  ]
+}

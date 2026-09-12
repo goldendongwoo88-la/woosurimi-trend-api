@@ -188,6 +188,17 @@ function probeDurationSeconds(filePath) {
   });
 }
 
+// ffmpeg -i 만으로 stderr에 "Audio:" 스트림 줄이 찍히는지로 오디오 트랙 유무를 봅니다.
+// (probeDurationSeconds와 같은 방식 — 출력 파일을 안 주면 항상 에러로 끝나지만, 필요한
+// 정보는 에러가 나기 전에 이미 stderr에 찍혀 있습니다.)
+function probeHasAudio(filePath) {
+  return new Promise((resolve) => {
+    execFile(ffmpegPath, ["-i", filePath], { maxBuffer: 1024 * 1024 * 20, timeout: 15000 }, (err, stdout, stderr) => {
+      resolve(/Audio:/.test((stderr || "").toString()));
+    });
+  });
+}
+
 // ffmpeg 필터 문자열 안에 경로를 넣을 때는 백슬래시(윈도우 경로)와 콜론(드라이브 문자,
 // 필터 옵션 구분자)을 이스케이프해야 깨지지 않습니다.
 function escapeFilterPath(p) {
@@ -876,4 +887,213 @@ async function renderShortformVideo(
   }
 }
 
-module.exports = { renderShortformVideo, sweepOldRenders, RENDERS_DIR, FRAME_STYLES, applyEmphasis, buildCaptionSrt, buildCaptionEvents };
+// ══════════════════════════════════════════════════════════════════════════
+// ── 실사(생성) 영상 클립 조립 ──
+//
+// renderShortformVideo 위쪽은 전부 "사진 한 장 + 자막 + 팬·줌"으로 영상을 합성하는
+// 슬라이드쇼 파이프라인입니다. Wan 2.2·LTX-2.5 같은 로컬 영상 생성 모델로 장면마다
+// "진짜 동영상 클립"을 만든 다음이라면, 사진 대신 그 클립을 넣어 자막·전환만
+// 똑같이 입히면 됩니다 — 그래서 위 파이프라인을 복제하지 않고 그대로 재사용합니다.
+//
+// ⚠️ 정지 이미지의 "-loop 1"과 다릅니다. 이건 진짜 동영상을 정해진 길이만큼
+// 반복 재생하는 "-stream_loop"을 씁니다 — 생성 모델이 보통 5초 안팎 클립만
+// 뽑아주는데 장면 길이(특히 나레이션이 길 때)가 그보다 길 수 있기 때문입니다.
+// ══════════════════════════════════════════════════════════════════════════
+
+async function renderClipSegment({
+  clipPath,
+  captionText,
+  duration,
+  outPath,
+  narrationPath = null,
+  templateId = "bold-black",
+  hookText = "",
+  encodePreset = "veryfast",
+  fadeIn = true,
+  fadeOut = true,
+}) {
+  const template = getTemplate(templateId);
+  const assFile = outPath.replace(/\.mp4$/, ".ass");
+  const events = buildCaptionEvents(captionText, duration, template.accent);
+
+  if (hookText && hookText.trim()) {
+    events.push({
+      start: 0,
+      end: duration,
+      style: "Hook",
+      text: `{\\fad(250,0)}${applyEmphasis(wrapHookLines(hookText.trim()).join("\n"), template.accent)}`,
+    });
+  }
+
+  fs.writeFileSync(assFile, buildAss({
+    width: WIDTH,
+    height: HEIGHT,
+    styles: [
+      { name: "Body", forceStyle: template.forceStyle },
+      { name: "Hook", forceStyle: template.hookStyle },
+    ],
+    events,
+  }), "utf8");
+
+  const fontsDir = escapeFilterPath(path.dirname(FONT_PATH));
+  const subtitles = `subtitles=filename='${escapeFilterPath(assFile)}':fontsdir='${fontsDir}'`;
+
+  const fadeSteps = [];
+  if (fadeIn) fadeSteps.push(`fade=t=in:st=0:d=${FADE_SEC}`);
+  if (fadeOut) fadeSteps.push(`fade=t=out:st=${Math.max(duration - FADE_SEC, 0)}:d=${FADE_SEC}`);
+  const fade = fadeSteps.join(",");
+
+  // 생성 모델마다 화면 비율이 다를 수 있어(16:9·1:1 등) 사진과 같은 방식으로
+  // 세로 9:16에 맞춰 커버 크롭합니다.
+  const vf = [buildCoverCropFilter(WIDTH, HEIGHT), subtitles, fade, `fps=${FPS}`, "format=yuv420p"]
+    .filter(Boolean)
+    .join(",");
+
+  // 나레이션이 있으면 그걸 주 소리로 씁니다(클립 자체 소리 유무와 무관하게 일관된
+  // 목소리를 내기 위해). 없으면 클립에 소리가 있는지 먼저 확인해서 있으면 그대로
+  // 쓰고(관찰형 핸드헬드 영상의 현장음), 없으면 무음 트랙을 채웁니다.
+  let audioArgs;
+  let audioMap;
+  if (narrationPath) {
+    audioArgs = ["-i", narrationPath];
+    audioMap = ["-map", "0:v", "-map", "1:a"];
+  } else if (await probeHasAudio(clipPath)) {
+    audioArgs = [];
+    audioMap = ["-map", "0:v", "-map", "0:a"];
+  } else {
+    audioArgs = ["-f", "lavfi", "-t", String(duration), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"];
+    audioMap = ["-map", "0:v", "-map", "1:a"];
+  }
+
+  const args = [
+    "-y",
+    "-stream_loop", "-1", "-t", String(duration), "-i", clipPath,
+    ...audioArgs,
+    "-vf", vf,
+    ...audioMap,
+    ...videoCodecArgs(encodePreset, { crf: 20 }),
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    // 사진 버전과 같은 이유입니다 — 나레이션이 장면 길이보다 짧으면 뒤를 무음으로
+    // 채우고 길이를 못박아서, 나중에 xfade 이어붙이기(계획한 길이 기준)가 안 깨지게 합니다.
+    "-af", "apad",
+    "-t", String(duration),
+    outPath,
+  ];
+  await runFfmpeg(args);
+  if (fs.existsSync(assFile)) fs.unlinkSync(assFile);
+}
+
+/**
+ * Wan 2.2·LTX-2.5 등 로컬 생성 모델로 미리 만들어둔 영상 클립들을 받아서, 장면마다
+ * 자막·나레이션을 입히고 크로스페이드로 이어 붙여 완성된 숏폼/롱폼 mp4로 만듭니다.
+ *
+ * scenes: [{ clip: "절대경로.mp4", caption: "자막 텍스트", durationSec?: 5 }, ...]
+ *   - clip: 로컬 파일 경로(이 서버에서 접근 가능해야 합니다 — 사장님 PC에서 돌릴 때는
+ *     문제없지만, 클라우드에 올려서 쓸 거면 먼저 서버로 업로드해야 합니다)
+ *   - durationSec: 생략하면 나레이션 길이(있으면) 또는 자막 길이 추정치를 씁니다
+ */
+async function assembleFromClips(
+  scenes,
+  {
+    bgmPath = null,
+    voice = null,
+    templateId = "bold-black",
+    hookText = "",
+    transition = "crossfade", // 실사 클립은 하드컷보다 크로스페이드가 훨씬 자연스럽습니다
+    encodePreset = "veryfast",
+    onPhase = null,
+  } = {}
+) {
+  if (!scenes || !scenes.length) throw new Error("장면(scene)이 없습니다.");
+  if (!fs.existsSync(RENDERS_DIR)) fs.mkdirSync(RENDERS_DIR, { recursive: true });
+  sweepOldRenders();
+
+  const jobId = crypto.randomUUID();
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `clipassemble-${jobId}-`));
+  const reportPhase = (phase) => {
+    const memMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    console.log(`[clip-assemble ${jobId.slice(0, 8)}] ${phase} — RSS ${memMb}MB`);
+    if (onPhase) onPhase(phase, memMb);
+  };
+
+  let synthesizeVoice = null;
+  if (voice && voice.provider) {
+    ({ synthesizeVoice } = require("./voiceProvider"));
+  }
+
+  try {
+    const segmentPaths = [];
+    const durations = [];
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      if (!scene.clip || !fs.existsSync(scene.clip)) {
+        throw new Error(`장면 ${i + 1}의 영상 클립을 찾을 수 없습니다: ${scene.clip || "(경로 없음)"}`);
+      }
+
+      let narrationPath = null;
+      let sceneDuration = Math.max(scene.durationSec || 3, estimateMinDurationForCaption(scene.caption));
+      if (synthesizeVoice) {
+        const narrCandidate = path.join(workDir, `narr${i}.mp3`);
+        try {
+          await synthesizeVoice({ text: scene.caption, provider: voice.provider, voiceId: voice.voiceId, destPath: narrCandidate });
+          const dur = await probeDurationSeconds(narrCandidate);
+          narrationPath = narrCandidate;
+          if (dur) sceneDuration = Math.max(sceneDuration, dur + 0.4);
+        } catch (err) {
+          // 나레이션이 실패해도 클립 자체 소리(또는 무음)로 계속 진행합니다.
+        }
+      }
+
+      const segPath = path.join(workDir, `clipseg${i}.mp4`);
+      await renderClipSegment({
+        clipPath: scene.clip,
+        captionText: scene.caption,
+        duration: sceneDuration,
+        outPath: segPath,
+        narrationPath,
+        templateId,
+        hookText,
+        encodePreset,
+        fadeIn: i === 0,
+        fadeOut: i === scenes.length - 1,
+      });
+      segmentPaths.push(segPath);
+      durations.push(sceneDuration);
+      reportPhase(`장면 ${i + 1}/${scenes.length} 완료`);
+    }
+
+    const concatenatedPath = path.join(workDir, "concat.mp4");
+    let totalDuration;
+    reportPhase("장면 합치기 시작");
+    if (transition === "crossfade") {
+      try {
+        totalDuration = await concatWithCrossfade(segmentPaths, durations, concatenatedPath, TRANSITION_SEC);
+      } catch (e) {
+        // xfade가 어떤 이유로든 실패하면 하드컷으로 안전하게 대체합니다.
+        await concatSegments(segmentPaths, concatenatedPath);
+        totalDuration = durations.reduce((a, b) => a + b, 0);
+      }
+    } else {
+      await concatSegments(segmentPaths, concatenatedPath);
+      totalDuration = durations.reduce((a, b) => a + b, 0);
+    }
+    reportPhase("장면 합치기 완료");
+
+    const fileName = `${jobId}.mp4`;
+    const finalPath = path.join(RENDERS_DIR, fileName);
+    if (bgmPath) {
+      await muxBgmAndNarration(concatenatedPath, bgmPath, totalDuration, finalPath);
+    } else {
+      fs.copyFileSync(concatenatedPath, finalPath);
+    }
+    reportPhase("마무리 완료");
+
+    return { fileName, publicPath: `/renders/${fileName}`, durationSec: totalDuration };
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+module.exports = { renderShortformVideo, sweepOldRenders, RENDERS_DIR, FRAME_STYLES, applyEmphasis, buildCaptionSrt, buildCaptionEvents, assembleFromClips };

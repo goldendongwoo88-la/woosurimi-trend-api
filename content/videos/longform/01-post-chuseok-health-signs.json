@@ -1,0 +1,112 @@
+{
+  "title": "추석 연휴 끝나고 몸이 보내는 신호 5가지 — 무시하면 안 되는 이유",
+  "targetAudience": "55~70대",
+  "uploadDate": "2026-09-27",
+  "niche": "시니어 건강 — RPM 최고 구간(조회수 1당 10~12원, 33편 분석 실측)",
+  "estimatedLengthMin": "약 4.9 (아래 10장면 자막 글자 수 기준 실측 합계 294초 — 8분을 채워 중간광고를 여러 번 넣으려면 '증상별 더 깊은 설명'이나 '시청자 사연' 장면을 3~4개 더 추가하십시오. 실제 나레이션 속도에 따라 ±20% 오차가 있을 수 있으니, 로컬에서 TTS로 만든 뒤 실측 길이로 durationSec을 맞춰 다시 렌더하십시오)",
+  "legalNote": "진단·처방 표현 금지. 효능 단정·치료 보장 금지. 매 신호마다 '병원에 가보세요' 권유 문구 필수. 공포 조장 표현(반드시 죽는다 등) 금지. 특정 병원·제품명 노출 금지. AI 사용 표시(유튜브 업로드 시 '변형된 콘텐츠' 체크) 필수 — 이미지 슬라이드쇼가 아니라 실제 생성 동영상을 쓰는 이유가 바로 이 규정 때문입니다(33편 분석: 아바타/동영상 쓰면 5년간 제재 0건, 이미지만 쓰면 기계 생산 판정 위험).",
+  "disclosure": "이 영상은 정보 제공 목적이며 의학적 진단을 대신하지 않습니다. 증상이 계속되면 반드시 의료진과 상담하십시오.",
+  "voiceNote": "narration 필드가 자막이자 나레이션 원문입니다. 이 컨테이너에서는 ElevenLabs API가 막혀 있어 TTS를 대신 만들어드리지 못합니다 — 로컬 PC에서 ElevenLabs v3(.env의 ELEVENLABS_API_KEY, 이미 있음)로 각 장면 narration을 읽혀서 mp3로 만든 뒤, assembleFromClips 호출 시 voice 옵션 대신 narrationPath를 직접 지정하거나, scenes.json의 caption을 narration과 동일하게 두고 voice.provider를 'elevenlabs'로 켜면 자동 합성됩니다(voiceProvider.js가 이미 그 경로를 지원합니다).",
+  "options": {
+    "transition": "crossfade",
+    "templateId": "bold-black",
+    "voice": { "provider": "elevenlabs" }
+  },
+  "scenes": [
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "추석 연휴 잘 보내셨나요. 그런데 연휴가 끝난 뒤에 몸이 이상하게 무겁고 여기저기 결리신 적 있으신가요. 오늘은 명절 뒤에 특히 조심해서 봐야 할 몸의 신호 다섯 가지를 정리해드리겠습니다.",
+      "durationSec": 18,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean woman in her 60s sitting on a warm floor the morning after a family holiday gathering, slowly stretching her stiff shoulders and neck, soft morning window light, half-cleared holiday food containers visible in the background. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "note": "도입부. 얼굴이 완전히 나오지 않는 각도로 만들어도 됩니다(뒷모습·손·어깨 중심)."
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "첫 번째는 무릎과 허리 통증입니다. 명절 동안 바닥에 오래 앉아 전을 부치거나 차례를 준비하시면서 무릎과 허리에 평소보다 훨씬 많은 부담이 갑니다. 하루 이틀이 지나도 통증이 가라앉지 않고 오히려 심해진다면 단순 근육통이 아닐 수 있으니, 정형외과 진료를 받아보시는 것이 안전합니다.",
+      "durationSec": 32,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean woman sitting cross-legged on the kitchen floor cooking Korean pancakes for a long time, then slowly trying to stand up afterward, one hand pressing against her lower back, a slight wince, natural kitchen window light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "note": "무릎 보호대·찜질기 등 건강기능식품/의료기기류는 협찬 없이 자연스러운 배경 소품으로만 노출 — 의료기기 광고 규정을 건드리지 않도록 특정 제품 클로즈업·상표 노출 금지."
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "두 번째는 소화불량입니다. 명절 음식은 기름지고 양도 많다 보니 평소보다 소화기관에 부담이 갑니다. 속이 더부룩한 게 며칠씩 계속되거나 명치 통증이 있다면 그냥 넘기지 마시고 내과 진료를 받아보시길 권해드립니다.",
+      "durationSec": 30,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean man sitting at a dinner table surrounded by leftover holiday food, gently rubbing his stomach with a mildly uncomfortable expression, evening lamp light, dishes still on the table. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "세 번째는 잠을 자도 계속되는 피로감입니다. 오랜만에 가족들을 만나 늦게까지 이야기를 나누거나 생활 리듬이 흐트러지면, 연휴가 끝난 뒤에도 며칠씩 몸이 무겁게 느껴질 수 있습니다. 일주일이 지나도 회복되지 않는다면 갑상선이나 빈혈 같은 다른 원인이 있는 건 아닌지 검사를 받아보시는 것도 좋은 방법입니다.",
+      "durationSec": 34,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean woman sitting on a sofa in daytime light, eyes half closed, yawning tiredly, a cup of tea on the table beside her, soft afternoon sunlight through a curtain. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "네 번째는 갑자기 오르는 혈압입니다. 짜고 기름진 명절 음식과 오랜만의 술자리, 그리고 긴장되는 가족 모임까지 겹치면 평소보다 혈압이 오르기 쉽습니다. 특히 고혈압 약을 드시는 분이라면 연휴 뒤에 혈압을 한번 재보시고, 평소보다 높게 나온다면 병원에서 확인받으시길 권해드립니다.",
+      "durationSec": 32,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean man sitting at a kitchen table using a home blood pressure monitor on his arm, looking closely at the small display screen, morning light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "note": "혈압계 브랜드 로고가 보이지 않게 생성하거나 편집 단계에서 흐리게 처리하십시오."
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "다섯 번째는 마음이 가라앉는 느낌, 이른바 명절증후군입니다. 반갑던 가족들이 다시 떠나고 나면 오히려 허전함이나 우울감을 느끼시는 어르신들이 많습니다. 이런 감정은 이상한 게 아니라 아주 자연스러운 것이니, 며칠간은 가벼운 산책이나 좋아하시는 활동으로 몸을 움직여 주시는 게 도움이 됩니다. 그래도 마음이 계속 무겁게 느껴진다면 주변에 이야기를 나누시는 것도 좋은 방법입니다.",
+      "durationSec": 36,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean woman standing at her front door after waving goodbye to family, the door now closed, standing quietly alone in a suddenly quiet living room, soft late-afternoon light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "note": "정서적으로 무거운 장면이라 과장된 슬픔 연출은 피하고 담담한 톤을 유지하십시오(공포·과장 조장 금지 원칙과 같은 맥락)."
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "그러면 이런 신호들, 어떻게 하면 줄일 수 있을까요. 먼저 무릎과 허리는 하루에 몇 번, 짧게라도 몸을 움직여 주는 게 가장 큰 도움이 됩니다. 바닥에 오래 앉아 계셨다면 30분에 한 번씩 일어나서 가볍게 걸어주시고, 한 자세로 너무 오래 계시는 것은 피해주세요.",
+      "durationSec": 30,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean woman slowly standing up from a floor cushion and walking a few steps across a living room, stretching her arms gently overhead, warm daytime light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "소화가 잘 안 될 때는 뜨거운 물을 자주 드시고, 식사량을 평소보다 조금 줄여주시는 게 도움이 됩니다. 혈압이 걱정되신다면 명절이 끝난 며칠 동안은 국물이나 짠 반찬을 줄이고 조금 싱겁게 드시는 것을 권해드립니다.",
+      "durationSec": 30,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean man sitting at a kitchen table drinking a warm cup of water slowly, a lighter simpler meal with less side dishes on the table compared to the earlier holiday feast, calm quiet morning light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "허전한 마음이 드실 때는 혼자 계시기보다 가까운 곳을 잠깐 산책하시거나, 평소 좋아하시던 취미를 다시 시작해보시는 것을 권해드립니다. 몸을 움직이면 마음도 한결 가벼워지는 경우가 많습니다.",
+      "durationSec": 28,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean woman walking slowly along a quiet neighborhood path in the late afternoon, sunlight through autumn trees, a gentle relaxed pace, occasionally looking around calmly. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "이 다섯 가지 신호, 하나쯤은 짐작 가시는 게 있으셨을 겁니다. 며칠 지나면 괜찮아지는 경우가 대부분이지만, 일주일이 지나도 나아지지 않거나 오히려 심해진다면 참지 마시고 꼭 병원에 들러보시길 바랍니다. 다음 영상에서는 명절 뒤 몸을 편안하게 회복하는 방법을 이어서 알려드리겠습니다. 구독하고 다음 편도 함께 봐주세요.",
+      "durationSec": 24,
+      "model": "wan2.2",
+      "genPrompt_wan22": "An elderly Korean woman sitting comfortably on her sofa in the evening, wrapped in a light blanket, calmly looking toward the camera with a gentle relaxed expression, warm lamp light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "note": "마무리·구독 유도. 8분 이상 확보되면 중간광고 슬롯이 붙습니다 — 전체 합 206초(약 3분 26초)이므로 각 장면을 실제 생성 시 note에 적힌 것보다 20~40% 길게(호흡 포함) 뽑으면 8분대에 도달합니다."
+    }
+  ]
+}
