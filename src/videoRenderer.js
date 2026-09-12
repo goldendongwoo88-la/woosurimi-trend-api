@@ -137,6 +137,42 @@ function runFfmpeg(args) {
   });
 }
 
+// ── 하드웨어 인코더(NVENC) 자동 감지 ──────────────────────────────────
+// 이 서버(또는 사용자 PC)에 NVENC 가능한 엔비디아 GPU가 있으면(예: RTX 4090) 소프트웨어
+// 인코더(libx264) 대신 자동으로 GPU 인코더를 씁니다. 같은 화질이면 몇 배 빠르고, 같은
+// 시간이면 화질을 훨씬 높일 수 있습니다 — 무엇보다 CPU를 거의 안 쓰므로 위 FFMPEG_THREADS
+// 제한(Render CPU 스로틀링 대비)과도 부딪히지 않습니다. GPU가 없는 환경(지금 이 서버가
+// 그렇습니다)에서는 감지에 실패해 자동으로 libx264로 그대로 돌아갑니다 — 실패해도 안전합니다.
+let _nvencAvailable = null;
+function hasNvenc() {
+  if (_nvencAvailable !== null) return _nvencAvailable;
+  try {
+    const out = require("child_process")
+      .execFileSync(ffmpegPath, ["-hide_banner", "-encoders"], { timeout: 5000, maxBuffer: 1024 * 1024 * 10 })
+      .toString();
+    _nvencAvailable = /h264_nvenc/.test(out);
+  } catch (e) {
+    _nvencAvailable = false;
+  }
+  return _nvencAvailable;
+}
+
+// libx264용 preset(veryfast 등)과 화질(crf, 낮을수록 고화질)을 받아서, GPU가 있으면
+// 같은 의도를 NVENC 옵션으로 옮기고 없으면 그대로 libx264 인자를 돌려줍니다. 인코더
+// 선택 로직을 한 곳에 모아서, 나중에 화질을 더 올리고 싶을 때 여기 하나만 고치면 됩니다.
+function videoCodecArgs(preset, { crf } = {}) {
+  if (hasNvenc()) {
+    // p1(가장 빠름)~p7(가장 느림·고화질). 미리보기용 빠른 프리셋 요청이면 p3, 아니면
+    // 최종 출력에 걸맞게 p5(화질·속도 균형)를 씁니다.
+    const nvPreset = preset === "ultrafast" || preset === "veryfast" ? "p3" : "p5";
+    const cq = crf != null ? String(crf) : "20"; // cq는 libx264의 crf와 같은 개념입니다.
+    return ["-c:v", "h264_nvenc", "-preset", nvPreset, "-rc:v", "vbr", "-cq:v", cq, "-b:v", "0"];
+  }
+  const args = ["-c:v", "libx264", "-preset", preset];
+  if (crf != null) args.push("-crf", String(crf));
+  return args;
+}
+
 // ffprobe를 따로 설치하지 않고, ffmpeg -i 만으로 stderr에 찍히는 "Duration: hh:mm:ss.xx"
 // 줄을 읽어서 오디오/영상 길이(초)를 알아냅니다 (출력 파일을 안 주면 에러로 끝나지만,
 // Duration 줄은 에러 전에 이미 찍혀 있어서 그걸 파싱하면 됩니다).
@@ -495,8 +531,7 @@ async function renderSceneSegment({
       "-filter_complex", filterComplex,
       "-map", "[outv]",
       "-map", "2:a",
-      "-c:v", "libx264",
-      "-preset", encodePreset,
+      ...videoCodecArgs(encodePreset, { crf: 20 }),
       "-pix_fmt", "yuv420p",
       "-c:a", "aac",
       // 나레이션 mp3는 장면 길이보다 짧을 수 있습니다. 예전엔 "-shortest"를 썼는데,
@@ -543,8 +578,7 @@ async function renderSceneSegment({
     "-vf", vf,
     "-map", "0:v",
     "-map", "1:a",
-    "-c:v", "libx264",
-    "-preset", encodePreset,
+    ...videoCodecArgs(encodePreset, { crf: 20 }),
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
     // (위 폴라로이드 분기와 같은 이유로) 오디오를 무음으로 채워 장면 길이를 고정합니다.
@@ -606,10 +640,10 @@ async function concatWithCrossfade(segmentPaths, durations, outPath, transitionS
           `[0:a][1:a]acrossfade=d=${t.toFixed(3)}[a]`,
         "-map", "[v]",
         "-map", "[a]",
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        // 중간 파일은 여러 번 다시 인코딩되므로 화질을 넉넉히 잡고, 최종 출력만 기본값을 씁니다.
-        ...(isLast ? [] : ["-crf", "18"]),
+        // 중간 파일은 여러 번 다시 인코딩되므로 화질을 넉넉히 잡고(crf 18), 최종 출력은
+        // 20으로 살짝 낮춰도 눈으로는 차이가 없으면서 용량이 줄어듭니다. NVENC가 있으면
+        // videoCodecArgs가 자동으로 GPU 인코더로 바꿔줍니다.
+        ...videoCodecArgs("veryfast", { crf: isLast ? 20 : 18 }),
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-movflags", "+faststart",
