@@ -160,7 +160,7 @@ async function main() {
   const html = ebook.toHtml(book, parts);
   const file = path.join(outDir, "AI부업-250개-분석.html");
   fs.writeFileSync(file, html, "utf8");
-  fs.writeFileSync(path.join(__dirname, "..", "ebook2-draft.json"),
+  fs.writeFileSync(path.join(__dirname, "..", "private-assets", "ebook2-draft.json"),
     JSON.stringify({ book, parts }, null, 1), "utf8");
 
   const total = (parts.intro + parts.chapters.join("")).replace(/\s/g, "").length;

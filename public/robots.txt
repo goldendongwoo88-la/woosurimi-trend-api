@@ -32,6 +32,7 @@ Disallow: /setup.html
 Disallow: /toolkit.html
 Disallow: /login.html
 Disallow: /check.html
+Disallow: /all.html
 
 # 결과물·업로드 — 검색에 뜰 이유가 없습니다
 Disallow: /uploads/

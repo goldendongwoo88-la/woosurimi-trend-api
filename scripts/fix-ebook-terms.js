@@ -17,8 +17,8 @@ const path = require("path");
 const ebook = require("../src/ebook");
 
 const BOOKS = [
-  { draft: "ebook-draft.json",  out: "네이버-블로그-상위노출-2026.html", material: "make-ebook.js" },
-  { draft: "ebook2-draft.json", out: "AI부업-250개-분석.html",         material: "make-ebook2.js" },
+  { draft: "private-assets/ebook-draft.json",  out: "네이버-블로그-상위노출-2026.html", material: "make-ebook.js" },
+  { draft: "private-assets/ebook2-draft.json", out: "AI부업-250개-분석.html",         material: "make-ebook2.js" },
 ];
 
 /** 만들 때 쓴 재료를 스크립트에서 그대로 뽑아옵니다. 두 벌로 관리하면 어긋납니다. */

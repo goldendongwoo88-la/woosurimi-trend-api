@@ -39,6 +39,21 @@ async function get(url, { timeoutMs = 10000 } = {}) {
   }
 }
 
+/**
+ * 네이버가 200이 아닌 것을 돌려줬을 때 던지는 오류.
+ *
+ * ⚠️ 이게 왜 필요하냐면 — 전에는 403이나 500이 오면 조용히 빈 목록을 돌려줬습니다.
+ * 그러면 위에서 "블로그를 찾지 못했습니다. 아이디를 다시 확인해 주세요"가 되어,
+ * 멀쩡한 아이디를 넣은 손님이 아이디만 계속 고치게 됩니다.
+ * 네이버는 없는 블로그에도 200을 주므로, 200이 아니면 그건 네이버 쪽 문제입니다.
+ */
+function upstreamError(status, what) {
+  const e = new Error(`네이버가 ${what} 요청에 ${status}로 답했습니다.`);
+  e.upstream = true;
+  e.status = status;
+  return e;
+}
+
 /** 블로그 주소를 어떤 형태로 넣어도 아이디만 뽑아냅니다. */
 function parseBlogId(input) {
   if (!input) return null;
@@ -74,7 +89,10 @@ async function fetchVisitors(blogId) {
   const { status, text } = await get(
     `https://blog.naver.com/NVisitorgp4Ajax.naver?blogId=${encodeURIComponent(blogId)}`
   );
-  if (status !== 200) return [];
+  // 404 는 "그런 블로그가 없다"일 수 있으므로 빈 결과로 둡니다.
+  // 그 밖(403·429·5xx)은 네이버 쪽 문제이므로 조용히 넘기지 않습니다.
+  if (status === 404) return [];
+  if (status !== 200) throw upstreamError(status, "방문자 수");
   const out = [];
   for (const m of text.matchAll(/<visitorcnt\s+id="(\d{8})"\s+cnt="(\d*)"/g)) {
     const d = m[1];
@@ -114,7 +132,8 @@ async function fetchPostList(blogId, { page = 1, countPerPage = 30 } = {}) {
       blogId
     )}&currentPage=${page}&countPerPage=${per}&categoryNo=0`
   );
-  if (status !== 200) return { total: 0, posts: [] };
+  if (status === 404) return { total: 0, posts: [] };
+  if (status !== 200) throw upstreamError(status, "글 목록");
 
   let data;
   try {
@@ -282,6 +301,7 @@ async function findRank(keyword, blogId, logNo, opts = {}) {
 }
 
 module.exports = {
+  upstreamError,
   parseBlogId,
   parsePostUrl,
   fetchVisitors,

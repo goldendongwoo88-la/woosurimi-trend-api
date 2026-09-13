@@ -140,8 +140,18 @@ async function collect() {
     }
   }
 
+  // ⚠️ 세 소스가 전부 죽었는데 ok:true 를 주면, 화면에는 그냥 "오늘 이슈 없음"으로
+  // 보입니다. 실제로는 우리가 못 가져온 것인데 손님은 조용한 날인 줄 압니다.
+  // 하나라도 살아 있어야 ok 입니다.
+  const alive = srcs.filter((x) => x.items.length).length;
+
   const data = {
-    ok: true,
+    ok: alive > 0,
+    degraded: alive > 0 && warnings.length > 0,
+    aliveSources: alive,
+    why: alive === 0
+      ? "소재를 가져오는 곳 " + srcs.length + "군데가 모두 응답하지 않았습니다. 잠시 뒤에 다시 해주세요."
+      : undefined,
     at: Date.now(),
     sources: srcs.map((s) => ({ name: s.name, count: s.items.length })),
     items: all.slice(0, 60),

@@ -170,7 +170,7 @@ async function main() {
   const html = ebook.toHtml(book, parts);
   const file = path.join(outDir, "네이버-블로그-상위노출-2026.html");
   fs.writeFileSync(file, html, "utf8");
-  fs.writeFileSync(path.join(__dirname, "..", "ebook-draft.json"),
+  fs.writeFileSync(path.join(__dirname, "..", "private-assets", "ebook-draft.json"),
     JSON.stringify({ book, parts }, null, 1), "utf8");
 
   const total = (parts.intro + parts.chapters.join("")).replace(/\s/g, "").length;

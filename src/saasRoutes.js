@@ -30,6 +30,9 @@ const thumbStrategy = require("./thumbStrategy");
 // 홈판 상위 블로그가 쓰는 10가지 썸네일 틀 — 글에 맞는 것을 골라줍니다 (AI 안 씀)
 const thumbPatterns = require("./thumbPatterns");
 const emphasis = require("./emphasis");
+const placeRank = require("./placeRank");
+const coupang = require("./coupangPartners");
+const failReason = require("./failReason");
 
 // 썸네일용 사진 받기.
 // ⚠️ 디스크에 안 씁니다(memoryStorage). 만들어서 바로 돌려주면 끝인 사진을
@@ -1124,6 +1127,99 @@ module.exports = function attachSaas(app) {
     res.json({
       rules: spellCheck.RULES.map((r) => ({ id: r.id, why: r.why, sure: !!r.sure })),
     });
+  });
+
+  // ── 플레이스 순위 ──────────────────────────────────────
+  //
+  // ⚠️ src/placeRank.js 는 진작 있었는데 이걸 부를 주소가 없었습니다.
+  // 화면에서도 못 쓰고, 대행 보고서에도 못 넣는 상태였습니다.
+  // 업주가 진짜 묻는 건 "'역삼동 칼국수' 치면 우리가 몇 등이냐"입니다.
+  // AI를 안 쓰므로 원가는 0원이고, 네이버를 두드리므로 횟수만 셉니다.
+
+  app.get("/api/place/rank", usage.gate("keyword"), async (req, res) => {
+    const keyword = String(req.query.keyword || req.query.q || "").trim();
+    const name = String(req.query.name || "").trim();
+    const placeId = String(req.query.placeId || "").trim();
+    if (!keyword) return res.status(400).json({ error: "키워드를 넣어주세요. 예: 역삼동 칼국수" });
+    if (!name && !placeId) return res.status(400).json({ error: "가게 이름이나 플레이스 ID 중 하나는 필요합니다." });
+    try {
+      const r = await placeRank.findRank(keyword, {
+        name, placeId,
+        path: String(req.query.path || "restaurant"),
+      });
+      if (!r.ok) return failReason.fail(res, Object.assign(new Error(r.error || "순위를 읽지 못했습니다."), { upstream: true }), { what: "플레이스 순위" });
+      res.json({ ...r, usage: req.usage });
+    } catch (e) {
+      failReason.fail(res, e, { what: "플레이스 순위" });
+    }
+  });
+
+  // 매장 하나 × 키워드 여러 개. 키워드 사이 800ms 쉬므로 5개면 4초쯤 걸립니다.
+  app.post("/api/place/track", usage.gate("postCheck"), async (req, res) => {
+    const { name = "", placeId = "", keywords = [], path = "restaurant" } = req.body || {};
+    const list = (Array.isArray(keywords) ? keywords : [keywords]).map((k) => String(k || "").trim()).filter(Boolean);
+    if (!list.length) return res.status(400).json({ error: "키워드를 하나 이상 넣어주세요." });
+    if (list.length > 10) return res.status(400).json({ error: "한 번에 10개까지만 됩니다. 네이버가 막으면 전체가 죽습니다." });
+    if (!name && !placeId) return res.status(400).json({ error: "가게 이름이나 플레이스 ID 중 하나는 필요합니다." });
+    try {
+      res.json({ ...(await placeRank.trackStore({ name, placeId, keywords: list, path })), usage: req.usage });
+    } catch (e) {
+      failReason.fail(res, e, { what: "플레이스 순위" });
+    }
+  });
+
+  // ── 쿠팡 파트너스 ──────────────────────────────────────
+  //
+  // ⚠️ src/coupangPartners.js 도 부를 주소가 없었습니다.
+  // 이 기능의 요점은 "영상 만들기 전에 팔 물건이 있는지 먼저 본다" 입니다.
+  // 만들고 나서 없는 걸 알면 하루를 통째로 버립니다.
+  // 키가 없으면 "확인했다"고 넘어가지 않고 못 했다고 말합니다.
+
+  app.get("/api/coupang/status", (req, res) => {
+    const ready = coupang.isConfigured();
+    res.json({
+      ready,
+      why: ready ? undefined : "쿠팡 파트너스 키가 없습니다. .env 에 COUPANG_ACCESS_KEY / COUPANG_SECRET_KEY 를 넣어주세요.",
+    });
+  });
+
+  app.get("/api/coupang/search", async (req, res) => {
+    const keyword = String(req.query.q || req.query.keyword || "").trim();
+    if (!keyword) return res.status(400).json({ error: "찾을 상품 이름을 넣어주세요." });
+    if (!coupang.isConfigured())
+      return res.status(503).json({ error: "no_keys", message: "쿠팡 파트너스 키가 없습니다.", fix: "/setup.html 에서 확인하세요." });
+    try {
+      res.json(await coupang.search(keyword, { limit: Math.min(20, Number(req.query.limit) || 10) }));
+    } catch (e) {
+      failReason.fail(res, e, { what: "쿠팡 상품" });
+    }
+  });
+
+  // 영상 만들기 전 확인용 — 물건이 있는지 + 수수료가 나올 가격대인지.
+  app.post("/api/coupang/check", async (req, res) => {
+    const { keyword, minPrice } = req.body || {};
+    const kw = String(keyword || "").trim();
+    if (!kw) return res.status(400).json({ error: "소재 키워드를 넣어주세요." });
+    if (!coupang.isConfigured())
+      return res.status(503).json({ error: "no_keys", message: "쿠팡 파트너스 키가 없어서 확인하지 못했습니다.", fix: "확인 못 한 채로 영상을 만들면 조회수 수익만 남습니다." });
+    try {
+      res.json(await coupang.checkSellable(kw, { minPrice: Number(minPrice) || 8000 }));
+    } catch (e) {
+      failReason.fail(res, e, { what: "쿠팡 상품" });
+    }
+  });
+
+  app.post("/api/coupang/deeplink", async (req, res) => {
+    const urls = (req.body || {}).urls;
+    const list = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
+    if (!list.length) return res.status(400).json({ error: "바꿀 쿠팡 주소를 넣어주세요." });
+    if (!coupang.isConfigured())
+      return res.status(503).json({ error: "no_keys", message: "쿠팡 파트너스 키가 없습니다." });
+    try {
+      res.json({ ok: true, links: await coupang.deeplink(list) });
+    } catch (e) {
+      failReason.fail(res, e, { what: "쿠팡 링크" });
+    }
   });
 
   // ── 사용량 ─────────────────────────────────────────────

@@ -123,7 +123,7 @@ async function fetchYoutube(url, workDir) {
 // 어디를 자를까
 // ────────────────────────────────────────────────────────────
 async function pickMoments(cues, { count = 10, topic = "" } = {}) {
-  if (!isConfigured()) throw new Error("AI가 연결되지 않았습니다.");
+  if (!isConfigured()) throw Object.assign(new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요."), { noKeys: true, status: 503 });
 
   // 자막을 15초 덩어리로 묶어서 넘깁니다. 한 줄씩 넘기면 너무 잘게 쪼개져서
   // 어디가 하나의 이야기인지 AI가 못 봅니다.

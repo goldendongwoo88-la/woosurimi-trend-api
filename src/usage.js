@@ -156,6 +156,34 @@ function consume(req, feature, n = 1) {
 }
 
 /**
+ * 깎았던 횟수를 되돌립니다.
+ *
+ * ⚠️ 왜 필요하냐면 — gate는 통과하는 순간 바로 깎습니다. 그런데 그 뒤에
+ * 네이버가 안 열리거나 "주소를 확인해 주세요" 같은 400이 나오면 손님은
+ * 아무것도 못 받았는데 무료 3회 중 1회가 사라집니다.
+ * 크레딧 쪽(chargeCredits)에서 같은 실수를 이미 두 번 고쳤습니다. 여기가 세 번째입니다.
+ */
+function refund(req, feature, n = 1) {
+  const who = identityOf(req);
+  const planId = req.user ? req.user.plan : "free";
+  const limit = getPlan(planId).limits[feature];
+  if (!limit) return;
+
+  if (limit.perMinute != null) {
+    const key = `${who}:${feature}`;
+    const log = minuteLog.get(key) || [];
+    for (let i = 0; i < n && log.length; i++) log.pop();
+    minuteLog.set(key, log);
+    return;
+  }
+  if (limit.perDay != null) {
+    const key = `${who}:${feature}:${todayStr()}`;
+    daily[key] = Math.max(0, (daily[key] || 0) - n);
+    save();
+  }
+}
+
+/**
  * 익스프레스 미들웨어. 라우트 앞에 끼워서 씁니다.
  *   app.post("/api/x", gate("diagnose"), handler)
  * 통과하면 req.usage에 남은 횟수가 들어갑니다.
@@ -172,7 +200,13 @@ function gate(feature, { consumeOnPass = true } = {}) {
         upgrade: r.upgrade ? "/pricing.html" : undefined,
       });
     }
-    if (consumeOnPass) consume(req, feature);
+    if (consumeOnPass) {
+      consume(req, feature);
+      // 일이 실패로 끝나면 방금 깎은 걸 되돌립니다. 429(한도)는 여기까지 오지 않습니다.
+      res.on("finish", () => {
+        if (res.statusCode >= 400) refund(req, feature);
+      });
+    }
     req.usage = { feature, used: (r.used || 0) + (consumeOnPass ? 1 : 0), limit: r.limit, unit: r.unit };
     next();
   };
@@ -257,4 +291,5 @@ function summary(req) {
   return out;
 }
 
-module.exports = { gate, creditGate, chargeCredits, check, consume, summary, identityOf, todayStr };
+module.exports = {
+  refund, gate, creditGate, chargeCredits, check, consume, summary, identityOf, todayStr };
