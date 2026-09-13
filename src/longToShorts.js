@@ -247,7 +247,7 @@ async function cutOne(srcPath, moment, destPath, opts = {}) {
  *
  * ⚠️ 본인 영상만 넣으세요. 남의 영상을 자르면 채널이 위험합니다.
  */
-async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = "light", subtitles = true, outpaint = false, autoCaption = false } = {}) {
+async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = "light", subtitles = true, outpaint = false, autoCaption = true } = {}) {
   const jobId = crypto.randomUUID().slice(0, 8);
   const workDir = path.join(os.tmpdir(), "l2s-" + jobId);
   fs.mkdirSync(workDir, { recursive: true });
