@@ -1355,13 +1355,15 @@ app.post("/api/long-to-shorts", (req, res) => {
 
   // outpaint=true면 Wan-VACE(로컬 ComfyUI)로 잘라내지 않고 채워서 세로로 만듭니다.
   // 준비 안 돼 있으면(ComfyUI 꺼짐 등) shortsStudio가 알아서 기존 크롭 방식으로 대체합니다.
-  // autoCaption=true면 잘라낸 쇼츠마다 무료 비전 모델(OpenRouter, openrouterCaption.js)로
-  // 인스타/스레드/유튜브 문구 초안을 함께 만듭니다. OPENROUTER_API_KEY가 없으면 조용히 건너뜁니다.
+  // autoCaption은 기본이 켜짐입니다 — 잘라낸 쇼츠마다 무료 비전 모델(OpenRouter,
+  // openrouterCaption.js)로 인스타/스레드/유튜브 문구 초안을 함께 만듭니다. 매번 켤지
+  // 말지 고를 필요 없게 기본값을 켜둔 것이고, OPENROUTER_API_KEY가 없으면 어차피 조용히
+  // 건너뜁니다. autoCaption:false를 명시적으로 보내면 끌 수 있습니다.
   longToShorts.fromYoutube(url, {
     count: Number(count) || 4,
     topic: topic || "",
     outpaint: outpaint === true || outpaint === "true",
-    autoCaption: autoCaption === true || autoCaption === "true",
+    autoCaption: autoCaption === false || autoCaption === "false" ? false : true,
   })
     .then((r) => l2sJobs.set(jobId, { state: "done", startedAt: Date.now(), result: r }))
     .catch((e) => l2sJobs.set(jobId, { state: "failed", startedAt: Date.now(), message: e.message }));
