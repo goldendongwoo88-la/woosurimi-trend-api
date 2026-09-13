@@ -17,6 +17,7 @@
 | 배경음악 생성 | ACE-Step 1.5 | 기존 자체 제작 배경음 5종 라이브러리 |
 | 자막 자동 받아쓰기 | faster-whisper | 유튜브 자막이 있으면 그걸 쓰고, 없으면 실패(직접 자막 입력) |
 | 영상 편집(아웃페인팅) | Wan-VACE | 기존 크롭 방식(피사체 위치로 잘라내기) |
+| 글로 영상 만들기 | LTX-2.5 / HunyuanVideo 1.5 / Wan 2.2 / MiniMax H3 중 워크플로에 넣은 것 | 이 기능만 빠짐(다른 기능엔 영향 없음) |
 
 지금 무엇이 켜져 있는지는 `GET /api/local-models/status` 하나로 확인할 수 있습니다.
 
@@ -53,6 +54,31 @@
 대신 Wan-VACE로 화면 양옆을 채워서 세로로 만듭니다. 로컬 GPU가 필요하고 크롭 방식보다
 훨씬 느립니다 — 실패하면(ComfyUI 꺼짐, 시간 초과 등) 자동으로 크롭 방식으로 대체됩니다.
 
+### 글로 영상 만들기 — 어디서 켜나 (2026-09 추가)
+
+카드뉴스·캐릭터·아웃페인팅과 별개로, **완전히 새 영상을 텍스트에서 직접 생성**하는
+독립 기능입니다. `workflows/video-generate.json`을 준비하면(LTX-2.5, HunyuanVideo 1.5,
+Wan 2.2, MiniMax H3 중 어느 걸 넣으셨든 상관없습니다) 아래로 씁니다.
+
+영상 생성은 몇 분~몇십 분 걸릴 수 있어 롱폼→쇼츠 자르기처럼 작업 ID를 먼저 받고,
+따로 진행 상태를 확인하는 방식입니다.
+
+```
+POST /api/video-generate
+{ "prompt": "노을 지는 해변, 파도가 잔잔히 밀려온다", "durationSec": 4 }
+→ { "jobId": "a1b2c3d4", "message": "영상을 만들고 있습니다..." }
+
+GET /api/video-generate/a1b2c3d4
+→ { "state": "done", "result": { "publicPath": "/renders/gen-video-xxxx.mp4", ... } }
+```
+
+`state`는 `working` → `done` 또는 `failed`로 바뀝니다. `width`/`height`/`negativePrompt`/
+`seed`도 선택적으로 넣을 수 있습니다.
+
+⚠️ 참조 이미지·오디오까지 함께 넣는 방식(MiniMax H3의 참조 이미지/사운드 중심 고급 컷,
+Wan 2.2의 캐릭터 애니메이션·인물 교체)은 아직 다루지 않습니다 — 필요해지면 별도로
+추가할 수 있습니다.
+
 ## 2) ACE-Step 1.5 — 배경음악 생성
 
 1. 사장님 PC에서 ACE-Step 1.5를 실행합니다(GitHub `ace-step/ACE-Step-1.5`).
@@ -81,7 +107,7 @@ GET /api/local-models/status
 ```
 ```json
 {
-  "comfyui": { "running": true, "workflows": { "cardNewsBackground": true, "characterLora": false, "vaceOutpaint": false } },
+  "comfyui": { "running": true, "workflows": { "cardNewsBackground": true, "characterLora": false, "vaceOutpaint": false, "videoGenerate": true } },
   "aceStep": { "running": false },
   "fasterWhisper": { "running": false }
 }

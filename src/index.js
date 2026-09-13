@@ -16,6 +16,7 @@ const bgmLibrary = require("./bgmLibrary");
 const { recommendBgm, getTrackPath } = bgmLibrary;
 const bgmGenerate = require("./bgmGenerate");
 const localModels = require("./localModels");
+const videoGenerate = require("./videoGenerate");
 const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
@@ -144,6 +145,52 @@ app.get("/api/mate-titles", async (req, res) => {
 // GET /api/local-models/status
 app.get("/api/local-models/status", async (req, res) => {
   res.json(await localModels.getLocalModelStatus({ fresh: req.query.fresh === "true" }));
+});
+
+// ── 글로 영상 만들기 (로컬 ComfyUI, MiniMax H3/LTX-2.5/HunyuanVideo 1.5/Wan 2.2 중
+// workflows/video-generate.json에 넣어둔 모델로 생성) ──────────────────────────
+//
+// ⚠️ 영상 생성은 몇 분~몇십 분 걸릴 수 있어 long-to-shorts와 같은 방식으로 작업 ID를
+// 먼저 돌려주고, 진행 상태는 GET으로 따로 확인합니다.
+const videoGenJobs = new Map();
+
+// POST /api/video-generate  body: { prompt, negativePrompt, durationSec, width, height, seed }
+app.post("/api/video-generate", async (req, res) => {
+  const { prompt, negativePrompt, durationSec, width, height, seed } = req.body || {};
+  if (!String(prompt || "").trim()) {
+    return res.status(400).json({ message: "영상 내용을 설명하는 prompt가 필요합니다." });
+  }
+  if (!(await videoGenerate.isAvailable())) {
+    return res.status(503).json({
+      message: "ComfyUI가 꺼져 있거나 workflows/video-generate.json이 없습니다. " +
+        "workflows/README.md를 참고해 워크플로를 준비해 주세요.",
+    });
+  }
+
+  const jobId = crypto.randomUUID().slice(0, 8);
+  videoGenJobs.set(jobId, { state: "working", startedAt: Date.now() });
+  for (const [k, v] of videoGenJobs) {
+    if (Date.now() - v.startedAt > 2 * 3600 * 1000) videoGenJobs.delete(k);
+  }
+
+  videoGenerate.generate({
+    prompt,
+    negativePrompt: negativePrompt || "",
+    durationSec: Number(durationSec) || 4,
+    width: Number(width) || 768,
+    height: Number(height) || 1024,
+    seed: seed !== undefined && seed !== null && seed !== "" ? Number(seed) : undefined,
+  })
+    .then((r) => videoGenJobs.set(jobId, { state: "done", startedAt: Date.now(), result: r }))
+    .catch((e) => videoGenJobs.set(jobId, { state: "failed", startedAt: Date.now(), message: e.message }));
+
+  res.json({ jobId, message: "영상을 만들고 있습니다. 모델과 길이에 따라 몇 분에서 몇십 분 걸릴 수 있습니다." });
+});
+
+app.get("/api/video-generate/:jobId", (req, res) => {
+  const j = videoGenJobs.get(req.params.jobId);
+  if (!j) return res.status(404).json({ message: "그 작업을 찾을 수 없습니다." });
+  res.json({ ...j, elapsed: Math.round((Date.now() - j.startedAt) / 1000) });
 });
 
 app.get("/api/trends", (req, res) => {
