@@ -68,6 +68,7 @@ async function getLocalModelStatus({ fresh = false } = {}) {
         cardNewsBackground: comfyClient.hasWorkflow("zimage-cardnews"),
         characterLora: comfyClient.hasWorkflow("character-lora"),
         vaceOutpaint: comfyClient.hasWorkflow("vace-outpaint"),
+        videoGenerate: comfyClient.hasWorkflow("video-generate"),
       },
     },
     aceStep: {
