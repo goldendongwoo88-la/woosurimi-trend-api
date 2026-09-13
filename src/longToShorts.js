@@ -23,6 +23,8 @@ const { execFile } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 const { callClaude, isConfigured, extractJson } = require("./claudeClient");
 const shortsStudio = require("./shortsStudio");
+const autoTranscribe = require("./autoTranscribe");
+const openrouterCaption = require("./openrouterCaption");
 
 const OUT_DIR = path.join(__dirname, "..", "public", "renders");
 
@@ -73,6 +75,17 @@ function parseVtt(raw) {
   return out;
 }
 
+/** yt-dlp로 원본 영상을 받습니다(자막 유무와 무관하게 결국 필요한 단계라 따로 뺐습니다). */
+async function downloadVideo(url, workDir) {
+  await run("yt-dlp", [
+    "-f", "bv*[height<=1080]+ba/b[height<=1080]", "--merge-output-format", "mp4",
+    "--no-warnings", "-o", path.join(workDir, "src.%(ext)s"), url,
+  ], { timeout: 900000 });
+  const f = fs.readdirSync(workDir).find((x) => /^src\./.test(x));
+  if (!f) throw new Error("영상을 내려받지 못했습니다.");
+  return path.join(workDir, f);
+}
+
 async function fetchYoutube(url, workDir) {
   // 자막 먼저 — 자막이 없으면 어디를 자를지 고를 수가 없습니다.
   //
@@ -98,25 +111,37 @@ async function fetchYoutube(url, workDir) {
   }
 
   const vtt = fs.readdirSync(workDir).find((f) => f.endsWith(".vtt"));
-  if (!vtt) {
+  if (vtt) {
+    const cues = parseVtt(fs.readFileSync(path.join(workDir, vtt), "utf8"));
+    if (cues.length < 5) throw new Error("자막이 너무 짧습니다.");
+    // 영상은 자막을 보고 자를 곳을 정한 뒤에 받습니다. 미리 받으면 시간만 낭비합니다.
+    return { cues, download: () => downloadVideo(url, workDir) };
+  }
+
+  // ⚠️ 2026-09 추가 — 자막이 아예 없는 영상(자동자막도 없는 경우)은 예전엔 여기서
+  // 그냥 실패했습니다. 이제 faster-whisper(로컬)가 켜져 있으면 영상을 직접 받아써서
+  // 자막 없는 영상도 쓸 수 있습니다. 이 단계에서는 어차피 영상을 받아야 하니, 나중에
+  // 자르기 단계에서 또 받지 않도록 다운로드 결과를 그대로 재사용합니다.
+  let srcPath;
+  try {
+    srcPath = await downloadVideo(url, workDir);
+  } catch (e) {
     throw new Error(
-      "자막을 찾지 못했습니다. 자막이 있는 영상이어야 어디를 자를지 고를 수 있습니다." +
-      (lastErr ? `\n(${lastErr.message.slice(0, 120)})` : "")
+      "자막을 찾지 못했고 영상도 받지 못했습니다." + (lastErr ? ` (${lastErr.message.slice(0, 120)})` : ` (${e.message.slice(0, 120)})`)
     );
   }
-  const cues = parseVtt(fs.readFileSync(path.join(workDir, vtt), "utf8"));
-  if (cues.length < 5) throw new Error("자막이 너무 짧습니다.");
-
-  // 영상은 자막을 보고 자를 곳을 정한 뒤에 받습니다. 미리 받으면 시간만 낭비합니다.
-  return { cues, download: async () => {
-    await run("yt-dlp", [
-      "-f", "bv*[height<=1080]+ba/b[height<=1080]", "--merge-output-format", "mp4",
-      "--no-warnings", "-o", path.join(workDir, "src.%(ext)s"), url,
-    ], { timeout: 900000 });
-    const f = fs.readdirSync(workDir).find((x) => /^src\./.test(x));
-    if (!f) throw new Error("영상을 내려받지 못했습니다.");
-    return path.join(workDir, f);
-  } };
+  let cues;
+  try {
+    cues = await autoTranscribe.transcribe(srcPath, { language: "ko" });
+  } catch (e) {
+    throw new Error(
+      "자막이 없는 영상입니다. 로컬 자동 받아쓰기(faster-whisper)도 실패했습니다: " + e.message +
+      "\n이 컴퓨터에서 faster-whisper 서버를 켜두면 자막 없는 영상도 자를 수 있습니다 " +
+      "(오픈소스-AI-모델-다운로드-가이드.md 참고)."
+    );
+  }
+  if (cues.length < 5) throw new Error("자동 받아쓰기 결과가 너무 짧습니다.");
+  return { cues, download: async () => srcPath }; // 이미 받아둔 파일을 그대로 씁니다.
 }
 
 // ────────────────────────────────────────────────────────────
@@ -215,12 +240,14 @@ async function cutOne(srcPath, moment, destPath, opts = {}) {
   return shortsStudio.renderShort(srcPath, moment, destPath, opts);
 }
 
+/** 이번 배치 전체에 아웃페인팅을 쓸지 — cutOne을 그대로 두고 opts로만 흘려보냅니다. */
+
 /**
  * 유튜브 주소 하나로 쇼츠 여러 개.
  *
  * ⚠️ 본인 영상만 넣으세요. 남의 영상을 자르면 채널이 위험합니다.
  */
-async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = "light", subtitles = true } = {}) {
+async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = "light", subtitles = true, outpaint = false, autoCaption = false } = {}) {
   const jobId = crypto.randomUUID().slice(0, 8);
   const workDir = path.join(os.tmpdir(), "l2s-" + jobId);
   fs.mkdirSync(workDir, { recursive: true });
@@ -238,15 +265,27 @@ async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = 
       const name = `short-${jobId}-${i + 1}.mp4`;
       const dest = path.join(OUT_DIR, name);
       try {
-        await cutOne(src, moments[i], dest, { cues, channel, theme, subtitles });
+        await cutOne(src, moments[i], dest, { cues, channel, theme, subtitles, outpaint });
         const size = fs.statSync(dest).size;
-        shorts.push({
+        const short = {
           ...moments[i],
           fileName: name,
           publicPath: `/renders/${name}`,
           seconds: Math.round(moments[i].end - moments[i].start),
           sizeMb: +(size / 1048576).toFixed(1),
-        });
+        };
+        // ⚠️ 선택 사항입니다. OPENROUTER_API_KEY가 없으면 조용히 건너뛰고, 있으면
+        // 방금 자른 쇼츠를 무료 비전 모델(Gemma 4)로 직접 보고 인스타/스레드/유튜브
+        // 문구 초안을 만들어 붙입니다(openrouterCaption.js 참고).
+        if (autoCaption && openrouterCaption.isConfigured()) {
+          try {
+            const cap = await openrouterCaption.describeClip({ videoPath: dest, topic });
+            if (cap.ok) short.caption = cap;
+          } catch {
+            // 문구 생성 실패는 쇼츠 자체를 실패시키지 않습니다.
+          }
+        }
+        shorts.push(short);
       } catch (e) {
         // ⚠️ 하나가 실패해도 나머지는 살립니다.
         shorts.push({ ...moments[i], failed: e.message.slice(0, 160) });
