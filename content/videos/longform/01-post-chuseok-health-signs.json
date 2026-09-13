@@ -10,7 +10,9 @@
   "options": {
     "transition": "crossfade",
     "templateId": "bold-black",
-    "voice": { "provider": "elevenlabs" }
+    "voice": {
+      "provider": "elevenlabs"
+    }
   },
   "scenes": [
     {
@@ -21,7 +23,9 @@
       "genPrompt_wan22": "An elderly Korean woman in her 60s sitting on a warm floor the morning after a family holiday gathering, slowly stretching her stiff shoulders and neck, soft morning window light, half-cleared holiday food containers visible in the background. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
       "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
-      "note": "도입부. 얼굴이 완전히 나오지 않는 각도로 만들어도 됩니다(뒷모습·손·어깨 중심)."
+      "note": "도입부. 얼굴이 완전히 나오지 않는 각도로 만들어도 됩니다(뒷모습·손·어깨 중심).",
+      "genPrompt_hunyuan15": "An elderly Korean woman in her 60s sitting on a warm floor the morning after a family holiday gathering, slowly stretching her stiff shoulders and neck, soft morning window light, half-cleared holiday food containers visible in the background. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean woman in her 60s sitting on a warm floor the morning after a family holiday gathering, slowly stretching her stiff shoulders and neck, soft morning window light, half-cleared holiday food containers visible in the background. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -31,7 +35,9 @@
       "genPrompt_wan22": "An elderly Korean woman sitting cross-legged on the kitchen floor cooking Korean pancakes for a long time, then slowly trying to stand up afterward, one hand pressing against her lower back, a slight wince, natural kitchen window light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
       "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
-      "note": "무릎 보호대·찜질기 등 건강기능식품/의료기기류는 협찬 없이 자연스러운 배경 소품으로만 노출 — 의료기기 광고 규정을 건드리지 않도록 특정 제품 클로즈업·상표 노출 금지."
+      "note": "무릎 보호대·찜질기 등 건강기능식품/의료기기류는 협찬 없이 자연스러운 배경 소품으로만 노출 — 의료기기 광고 규정을 건드리지 않도록 특정 제품 클로즈업·상표 노출 금지.",
+      "genPrompt_hunyuan15": "An elderly Korean woman sitting cross-legged on the kitchen floor cooking Korean pancakes for a long time, then slowly trying to stand up afterward, one hand pressing against her lower back, a slight wince, natural kitchen window light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean woman sitting cross-legged on the kitchen floor cooking Korean pancakes for a long time, then slowly trying to stand up afterward, one hand pressing against her lower back, a slight wince, natural kitchen window light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -40,7 +46,9 @@
       "model": "wan2.2",
       "genPrompt_wan22": "An elderly Korean man sitting at a dinner table surrounded by leftover holiday food, gently rubbing his stomach with a mildly uncomfortable expression, evening lamp light, dishes still on the table. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
-      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "genPrompt_hunyuan15": "An elderly Korean man sitting at a dinner table surrounded by leftover holiday food, gently rubbing his stomach with a mildly uncomfortable expression, evening lamp light, dishes still on the table. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean man sitting at a dinner table surrounded by leftover holiday food, gently rubbing his stomach with a mildly uncomfortable expression, evening lamp light, dishes still on the table. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -49,7 +57,9 @@
       "model": "wan2.2",
       "genPrompt_wan22": "An elderly Korean woman sitting on a sofa in daytime light, eyes half closed, yawning tiredly, a cup of tea on the table beside her, soft afternoon sunlight through a curtain. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
-      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "genPrompt_hunyuan15": "An elderly Korean woman sitting on a sofa in daytime light, eyes half closed, yawning tiredly, a cup of tea on the table beside her, soft afternoon sunlight through a curtain. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean woman sitting on a sofa in daytime light, eyes half closed, yawning tiredly, a cup of tea on the table beside her, soft afternoon sunlight through a curtain. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -59,7 +69,9 @@
       "genPrompt_wan22": "An elderly Korean man sitting at a kitchen table using a home blood pressure monitor on his arm, looking closely at the small display screen, morning light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
       "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
-      "note": "혈압계 브랜드 로고가 보이지 않게 생성하거나 편집 단계에서 흐리게 처리하십시오."
+      "note": "혈압계 브랜드 로고가 보이지 않게 생성하거나 편집 단계에서 흐리게 처리하십시오.",
+      "genPrompt_hunyuan15": "An elderly Korean man sitting at a kitchen table using a home blood pressure monitor on his arm, looking closely at the small display screen, morning light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean man sitting at a kitchen table using a home blood pressure monitor on his arm, looking closely at the small display screen, morning light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -69,7 +81,9 @@
       "genPrompt_wan22": "An elderly Korean woman standing at her front door after waving goodbye to family, the door now closed, standing quietly alone in a suddenly quiet living room, soft late-afternoon light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
       "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
-      "note": "정서적으로 무거운 장면이라 과장된 슬픔 연출은 피하고 담담한 톤을 유지하십시오(공포·과장 조장 금지 원칙과 같은 맥락)."
+      "note": "정서적으로 무거운 장면이라 과장된 슬픔 연출은 피하고 담담한 톤을 유지하십시오(공포·과장 조장 금지 원칙과 같은 맥락).",
+      "genPrompt_hunyuan15": "An elderly Korean woman standing at her front door after waving goodbye to family, the door now closed, standing quietly alone in a suddenly quiet living room, soft late-afternoon light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean woman standing at her front door after waving goodbye to family, the door now closed, standing quietly alone in a suddenly quiet living room, soft late-afternoon light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -78,7 +92,9 @@
       "model": "wan2.2",
       "genPrompt_wan22": "An elderly Korean woman slowly standing up from a floor cushion and walking a few steps across a living room, stretching her arms gently overhead, warm daytime light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
-      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "genPrompt_hunyuan15": "An elderly Korean woman slowly standing up from a floor cushion and walking a few steps across a living room, stretching her arms gently overhead, warm daytime light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean woman slowly standing up from a floor cushion and walking a few steps across a living room, stretching her arms gently overhead, warm daytime light through a window. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -87,7 +103,9 @@
       "model": "wan2.2",
       "genPrompt_wan22": "An elderly Korean man sitting at a kitchen table drinking a warm cup of water slowly, a lighter simpler meal with less side dishes on the table compared to the earlier holiday feast, calm quiet morning light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
-      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "genPrompt_hunyuan15": "An elderly Korean man sitting at a kitchen table drinking a warm cup of water slowly, a lighter simpler meal with less side dishes on the table compared to the earlier holiday feast, calm quiet morning light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean man sitting at a kitchen table drinking a warm cup of water slowly, a lighter simpler meal with less side dishes on the table compared to the earlier holiday feast, calm quiet morning light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -96,7 +114,9 @@
       "model": "wan2.2",
       "genPrompt_wan22": "An elderly Korean woman walking slowly along a quiet neighborhood path in the late afternoon, sunlight through autumn trees, a gentle relaxed pace, occasionally looking around calmly. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
-      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render"
+      "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
+      "genPrompt_hunyuan15": "An elderly Korean woman walking slowly along a quiet neighborhood path in the late afternoon, sunlight through autumn trees, a gentle relaxed pace, occasionally looking around calmly. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean woman walking slowly along a quiet neighborhood path in the late afternoon, sunlight through autumn trees, a gentle relaxed pace, occasionally looking around calmly. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     },
     {
       "clip": "PASTE_CLIP_PATH_HERE.mp4",
@@ -106,7 +126,10 @@
       "genPrompt_wan22": "An elderly Korean woman sitting comfortably on her sofa in the evening, wrapped in a light blanket, calmly looking toward the camera with a gentle relaxed expression, warm lamp light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched.",
       "genPrompt_ltx25": "Same scene and style as genPrompt_wan22.",
       "negativePrompt": "advertisement, commercial, studio lighting, glossy skin, airbrushed, beauty filter, over-saturated colors, staged, stock footage look, perfectly stable gimbal shot, professional cinematic grade, text overlay, watermark, CGI, 3d render",
-      "note": "마무리·구독 유도. 8분 이상 확보되면 중간광고 슬롯이 붙습니다 — 전체 합 206초(약 3분 26초)이므로 각 장면을 실제 생성 시 note에 적힌 것보다 20~40% 길게(호흡 포함) 뽑으면 8분대에 도달합니다."
+      "note": "마무리·구독 유도. 8분 이상 확보되면 중간광고 슬롯이 붙습니다 — 전체 합 206초(약 3분 26초)이므로 각 장면을 실제 생성 시 note에 적힌 것보다 20~40% 길게(호흡 포함) 뽑으면 8분대에 도달합니다.",
+      "genPrompt_hunyuan15": "An elderly Korean woman sitting comfortably on her sofa in the evening, wrapped in a light blanket, calmly looking toward the camera with a gentle relaxed expression, warm lamp light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "An elderly Korean woman sitting comfortably on her sofa in the evening, wrapped in a light blanket, calmly looking toward the camera with a gentle relaxed expression, warm lamp light. observational handheld camera footage, documentary vlog style, natural available light, realistic skin texture, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
     }
-  ]
+  ],
+  "priorityModels": "전부 사용(Wan 2.2 / LTX-2.5 / HunyuanVideo 1.5 / MiniMax H3) — 사용자 승인 확인 완료. 단 Hunyuan 1.5·MiniMax H3 커뮤니티 라이선스에는 대한민국을 포함한 지역 제외 조항이 있습니다(사실 정보로만 남겨둡니다)."
 }
