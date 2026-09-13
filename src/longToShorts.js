@@ -24,6 +24,7 @@ const ffmpegPath = require("ffmpeg-static");
 const { callClaude, isConfigured, extractJson } = require("./claudeClient");
 const shortsStudio = require("./shortsStudio");
 const autoTranscribe = require("./autoTranscribe");
+const openrouterCaption = require("./openrouterCaption");
 
 const OUT_DIR = path.join(__dirname, "..", "public", "renders");
 
@@ -246,7 +247,7 @@ async function cutOne(srcPath, moment, destPath, opts = {}) {
  *
  * ⚠️ 본인 영상만 넣으세요. 남의 영상을 자르면 채널이 위험합니다.
  */
-async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = "light", subtitles = true, outpaint = false } = {}) {
+async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = "light", subtitles = true, outpaint = false, autoCaption = false } = {}) {
   const jobId = crypto.randomUUID().slice(0, 8);
   const workDir = path.join(os.tmpdir(), "l2s-" + jobId);
   fs.mkdirSync(workDir, { recursive: true });
@@ -266,13 +267,25 @@ async function fromYoutube(url, { count = 10, topic = "", channel = "", theme = 
       try {
         await cutOne(src, moments[i], dest, { cues, channel, theme, subtitles, outpaint });
         const size = fs.statSync(dest).size;
-        shorts.push({
+        const short = {
           ...moments[i],
           fileName: name,
           publicPath: `/renders/${name}`,
           seconds: Math.round(moments[i].end - moments[i].start),
           sizeMb: +(size / 1048576).toFixed(1),
-        });
+        };
+        // ⚠️ 선택 사항입니다. OPENROUTER_API_KEY가 없으면 조용히 건너뛰고, 있으면
+        // 방금 자른 쇼츠를 무료 비전 모델(Gemma 4)로 직접 보고 인스타/스레드/유튜브
+        // 문구 초안을 만들어 붙입니다(openrouterCaption.js 참고).
+        if (autoCaption && openrouterCaption.isConfigured()) {
+          try {
+            const cap = await openrouterCaption.describeClip({ videoPath: dest, topic });
+            if (cap.ok) short.caption = cap;
+          } catch {
+            // 문구 생성 실패는 쇼츠 자체를 실패시키지 않습니다.
+          }
+        }
+        shorts.push(short);
       } catch (e) {
         // ⚠️ 하나가 실패해도 나머지는 살립니다.
         shorts.push({ ...moments[i], failed: e.message.slice(0, 160) });

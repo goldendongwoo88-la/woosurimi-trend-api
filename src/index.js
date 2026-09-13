@@ -44,6 +44,8 @@ const sharp = require("sharp");
 const multer = require("multer");
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 15 * 1024 * 1024 } }); // BGM 업로드용, 최대 15MB
 
+const PUBLIC_DIR = path.join(__dirname, "..", "public");
+
 // "자동컷" 모드용 — 사용자가 직접 고른 사진들을 public/uploads/shortform/<잡ID>/ 에
 // 저장해서, 렌더링 때 정적 파일 경로(/uploads/...)로 바로 접근할 수 있게 합니다.
 const PHOTO_UPLOADS_DIR = path.join(__dirname, "..", "public", "uploads", "shortform");
@@ -1335,10 +1337,11 @@ app.post("/api/naver-blog/prepare", async (req, res) => {
 // ⚠️ 오래 걸립니다(내려받기 + 자르기). 그래서 작업을 접수하고 나중에 확인하게 합니다.
 // 요청을 붙잡고 있으면 프록시가 먼저 끊어버립니다.
 const longToShorts = require("./longToShorts");
+const openrouterCaption = require("./openrouterCaption");
 const l2sJobs = new Map();
 
 app.post("/api/long-to-shorts", (req, res) => {
-  const { url, count, topic, outpaint } = req.body || {};
+  const { url, count, topic, outpaint, autoCaption } = req.body || {};
   if (!/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)/.test(String(url || ""))) {
     return res.status(400).json({ message: "유튜브 주소를 넣어주세요." });
   }
@@ -1352,11 +1355,48 @@ app.post("/api/long-to-shorts", (req, res) => {
 
   // outpaint=true면 Wan-VACE(로컬 ComfyUI)로 잘라내지 않고 채워서 세로로 만듭니다.
   // 준비 안 돼 있으면(ComfyUI 꺼짐 등) shortsStudio가 알아서 기존 크롭 방식으로 대체합니다.
-  longToShorts.fromYoutube(url, { count: Number(count) || 4, topic: topic || "", outpaint: outpaint === true || outpaint === "true" })
+  // autoCaption=true면 잘라낸 쇼츠마다 무료 비전 모델(OpenRouter, openrouterCaption.js)로
+  // 인스타/스레드/유튜브 문구 초안을 함께 만듭니다. OPENROUTER_API_KEY가 없으면 조용히 건너뜁니다.
+  longToShorts.fromYoutube(url, {
+    count: Number(count) || 4,
+    topic: topic || "",
+    outpaint: outpaint === true || outpaint === "true",
+    autoCaption: autoCaption === true || autoCaption === "true",
+  })
     .then((r) => l2sJobs.set(jobId, { state: "done", startedAt: Date.now(), result: r }))
     .catch((e) => l2sJobs.set(jobId, { state: "failed", startedAt: Date.now(), message: e.message }));
 
   res.json({ jobId, message: "만들고 있습니다. 몇 분 걸립니다." });
+});
+
+// POST /api/shortform/auto-caption  body: { "path": "/renders/short-xxx.mp4", "topic": "..." }
+//
+// ⚠️ 새 파일을 올리는 게 아니라, 이 서버가 이미 만들어 둔 영상/사진(public/ 아래)을
+// "다시 보고" 문구만 뽑는 용도입니다. path는 반드시 public/ 폴더 안의 경로여야 합니다
+// (다른 위치의 파일을 읽지 못하도록 막습니다).
+app.post("/api/shortform/auto-caption", async (req, res) => {
+  const { path: relPath, topic } = req.body || {};
+  if (!relPath) {
+    return res.status(400).json({ ok: false, why: "path(예: /renders/short-xxx.mp4)를 알려주세요." });
+  }
+  const abs = path.join(PUBLIC_DIR, path.normalize(String(relPath)).replace(/^(\.\.[/\\])+/, ""));
+  if (!abs.startsWith(PUBLIC_DIR) || !fs.existsSync(abs)) {
+    return res.status(400).json({ ok: false, why: "그 파일을 찾을 수 없습니다." });
+  }
+  try {
+    const isImage = /\.(jpg|jpeg|png|webp)$/i.test(abs);
+    const result = await openrouterCaption.describeClip(
+      isImage ? { imagePaths: [abs], topic: topic || "" } : { videoPath: abs, topic: topic || "" }
+    );
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, why: e.message });
+  }
+});
+
+// GET /api/shortform/auto-caption-status — 프론트에서 키 등록 여부만 가볍게 확인할 때 씁니다.
+app.get("/api/shortform/auto-caption-status", (req, res) => {
+  res.json({ configured: openrouterCaption.isConfigured(), model: openrouterCaption.MODEL });
 });
 
 app.get("/api/long-to-shorts/:jobId", (req, res) => {
