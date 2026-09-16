@@ -17,6 +17,8 @@ const { recommendBgm, getTrackPath } = bgmLibrary;
 const bgmGenerate = require("./bgmGenerate");
 const localModels = require("./localModels");
 const videoGenerate = require("./videoGenerate");
+const talkingFace = require("./talkingFace");
+const foleySound = require("./foleySound");
 const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
@@ -189,6 +191,106 @@ app.post("/api/video-generate", async (req, res) => {
 
 app.get("/api/video-generate/:jobId", (req, res) => {
   const j = videoGenJobs.get(req.params.jobId);
+  if (!j) return res.status(404).json({ message: "그 작업을 찾을 수 없습니다." });
+  res.json({ ...j, elapsed: Math.round((Date.now() - j.startedAt) / 1000) });
+});
+
+// ── 말하는 얼굴 (InfiniteTalk/MultiTalk, 로컬 ComfyUI) ──────────────────────────
+//
+// ⚠️ 사진+오디오는 서버에 저장된 파일이 아니라 그때그때 올리는 파일이라 업로드를 받습니다.
+const talkingFaceStorage = multer.diskStorage({
+  destination: os.tmpdir(),
+  filename: (req, file, cb) => cb(null, `tf-${crypto.randomUUID().slice(0, 8)}${path.extname(file.originalname) || ""}`),
+});
+const talkingFaceUpload = multer({ storage: talkingFaceStorage, limits: { fileSize: 30 * 1024 * 1024 } });
+const talkingFaceJobs = new Map();
+
+// POST /api/talking-face  multipart: image(사진), audio(목소리) + body: width, height
+app.post(
+  "/api/talking-face",
+  talkingFaceUpload.fields([{ name: "image", maxCount: 1 }, { name: "audio", maxCount: 1 }]),
+  async (req, res) => {
+    const imageFile = req.files?.image?.[0];
+    const audioFile = req.files?.audio?.[0];
+    if (!imageFile || !audioFile) {
+      return res.status(400).json({ message: "얼굴 사진(image)과 목소리 오디오(audio)를 함께 올려주세요." });
+    }
+    if (!(await talkingFace.isAvailable())) {
+      try { fs.unlinkSync(imageFile.path); } catch {}
+      try { fs.unlinkSync(audioFile.path); } catch {}
+      return res.status(503).json({
+        message: "ComfyUI가 꺼져 있거나 workflows/talking-face.json이 없습니다. " +
+          "workflows/README.md를 참고해 워크플로를 준비해 주세요.",
+      });
+    }
+
+    const jobId = crypto.randomUUID().slice(0, 8);
+    talkingFaceJobs.set(jobId, { state: "working", startedAt: Date.now() });
+    for (const [k, v] of talkingFaceJobs) {
+      if (Date.now() - v.startedAt > 2 * 3600 * 1000) talkingFaceJobs.delete(k);
+    }
+
+    talkingFace.generate({
+      imagePath: imageFile.path,
+      audioPath: audioFile.path,
+      width: Number(req.body.width) || 768,
+      height: Number(req.body.height) || 1024,
+    })
+      .then((r) => talkingFaceJobs.set(jobId, { state: "done", startedAt: Date.now(), result: r }))
+      .catch((e) => talkingFaceJobs.set(jobId, { state: "failed", startedAt: Date.now(), message: e.message }))
+      .finally(() => {
+        try { fs.unlinkSync(imageFile.path); } catch {}
+        try { fs.unlinkSync(audioFile.path); } catch {}
+      });
+
+    res.json({ jobId, message: "말하는 얼굴 영상을 만들고 있습니다. 몇 분에서 몇십 분 걸릴 수 있습니다." });
+  }
+);
+
+app.get("/api/talking-face/:jobId", (req, res) => {
+  const j = talkingFaceJobs.get(req.params.jobId);
+  if (!j) return res.status(404).json({ message: "그 작업을 찾을 수 없습니다." });
+  res.json({ ...j, elapsed: Math.round((Date.now() - j.startedAt) / 1000) });
+});
+
+// ── 영상에 효과음 입히기 (HunyuanVideo-Foley, 로컬 ComfyUI) ────────────────────
+//
+// ⚠️ 이미 이 서버가 만들어 둔 영상(public/ 아래)에 바로 씁니다 — auto-caption과 같은
+// 방식으로 path를 받고, public/ 밖의 파일은 못 읽게 막습니다.
+const foleyJobs = new Map();
+
+// POST /api/foley-sound  body: { path, prompt }
+app.post("/api/foley-sound", async (req, res) => {
+  const { path: relPath, prompt } = req.body || {};
+  if (!relPath) {
+    return res.status(400).json({ message: "path(예: /renders/short-xxx.mp4)를 알려주세요." });
+  }
+  const abs = path.join(PUBLIC_DIR, path.normalize(String(relPath)).replace(/^(\.\.[/\\])+/, ""));
+  if (!abs.startsWith(PUBLIC_DIR) || !fs.existsSync(abs)) {
+    return res.status(400).json({ message: "그 파일을 찾을 수 없습니다." });
+  }
+  if (!(await foleySound.isAvailable())) {
+    return res.status(503).json({
+      message: "ComfyUI가 꺼져 있거나 workflows/foley-sound.json이 없습니다. " +
+        "workflows/README.md를 참고해 워크플로를 준비해 주세요.",
+    });
+  }
+
+  const jobId = crypto.randomUUID().slice(0, 8);
+  foleyJobs.set(jobId, { state: "working", startedAt: Date.now() });
+  for (const [k, v] of foleyJobs) {
+    if (Date.now() - v.startedAt > 2 * 3600 * 1000) foleyJobs.delete(k);
+  }
+
+  foleySound.generate({ videoPath: abs, prompt: prompt || "" })
+    .then((r) => foleyJobs.set(jobId, { state: "done", startedAt: Date.now(), result: r }))
+    .catch((e) => foleyJobs.set(jobId, { state: "failed", startedAt: Date.now(), message: e.message }));
+
+  res.json({ jobId, message: "효과음을 입히고 있습니다. 몇 분 걸릴 수 있습니다." });
+});
+
+app.get("/api/foley-sound/:jobId", (req, res) => {
+  const j = foleyJobs.get(req.params.jobId);
   if (!j) return res.status(404).json({ message: "그 작업을 찾을 수 없습니다." });
   res.json({ ...j, elapsed: Math.round((Date.now() - j.startedAt) / 1000) });
 });

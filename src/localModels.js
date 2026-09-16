@@ -69,6 +69,8 @@ async function getLocalModelStatus({ fresh = false } = {}) {
         characterLora: comfyClient.hasWorkflow("character-lora"),
         vaceOutpaint: comfyClient.hasWorkflow("vace-outpaint"),
         videoGenerate: comfyClient.hasWorkflow("video-generate"),
+        talkingFace: comfyClient.hasWorkflow("talking-face"),
+        foleySound: comfyClient.hasWorkflow("foley-sound"),
       },
     },
     aceStep: {
