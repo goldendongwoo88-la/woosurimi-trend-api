@@ -18,6 +18,8 @@
 | 자막 자동 받아쓰기 | faster-whisper | 유튜브 자막이 있으면 그걸 쓰고, 없으면 실패(직접 자막 입력) |
 | 영상 편집(아웃페인팅) | Wan-VACE | 기존 크롭 방식(피사체 위치로 잘라내기) |
 | 글로 영상 만들기 | LTX-2.5 / HunyuanVideo 1.5 / Wan 2.2 / MiniMax H3 중 워크플로에 넣은 것 | 이 기능만 빠짐(다른 기능엔 영향 없음) |
+| 말하는 얼굴 | InfiniteTalk/MultiTalk (Wan2.1-I2V-14B-480P 베이스) | 이 기능만 빠짐 |
+| 영상에 효과음 입히기 | HunyuanVideo-Foley | 이 기능만 빠짐(무음 영상 그대로 씀) |
 
 지금 무엇이 켜져 있는지는 `GET /api/local-models/status` 하나로 확인할 수 있습니다.
 
@@ -79,6 +81,43 @@ GET /api/video-generate/a1b2c3d4
 Wan 2.2의 캐릭터 애니메이션·인물 교체)은 아직 다루지 않습니다 — 필요해지면 별도로
 추가할 수 있습니다.
 
+### 말하는 얼굴 — 어디서 켜나 (2026-09 추가)
+
+`workflows/talking-face.json`을 준비하면(InfiniteTalk/MultiTalk, Wan2.1-I2V-14B-480P
+베이스 필요), 사진 한 장 + 목소리 오디오로 립싱크 영상을 만듭니다. 캐릭터 그림
+(characterImage.js로 만든 것 포함)에 나레이션을 입혀 진행자처럼 쓸 수 있습니다.
+
+```
+POST /api/talking-face   (multipart: image, audio, width, height)
+→ { "jobId": "..." }
+
+GET /api/talking-face/a1b2c3d4
+→ { "state": "done", "result": { "publicPath": "/renders/gen-talk-xxxx.mp4", ... } }
+```
+
+화면은 `/talking-face.html`에서 바로 쓸 수 있습니다. Apache 2.0이라 지역 제한 없이
+상업적으로 쓸 수 있습니다.
+
+### 영상에 효과음 입히기 — 어디서 켜나 (2026-09 추가)
+
+`workflows/foley-sound.json`을 준비하면(HunyuanVideo-Foley), 이미 만든 무음 영상에
+발소리·파도 소리 같은 효과음·배경 앰비언스를 자동으로 입힙니다. 목소리 나레이션이
+아니라 효과음 전용입니다.
+
+```
+POST /api/foley-sound
+{ "path": "/renders/gen-video-xxxx.mp4", "prompt": "파도 소리, 갈매기 울음소리" }
+→ { "jobId": "..." }
+
+GET /api/foley-sound/a1b2c3d4
+→ { "state": "done", "result": { "publicPath": "/renders/gen-foley-xxxx.mp4", ... } }
+```
+
+화면은 `/foley-sound.html`에서 바로 쓸 수 있습니다.
+
+⚠️ HunyuanVideo-Foley는 Tencent 커뮤니티 라이선스입니다 — HunyuanVideo 1.5와 같은
+계열이라, 사용 전 라이선스 원문(지역 제한 조항 포함)을 직접 확인해 보시는 걸 권합니다.
+
 ## 2) ACE-Step 1.5 — 배경음악 생성
 
 1. 사장님 PC에서 ACE-Step 1.5를 실행합니다(GitHub `ace-step/ACE-Step-1.5`).
@@ -107,7 +146,7 @@ GET /api/local-models/status
 ```
 ```json
 {
-  "comfyui": { "running": true, "workflows": { "cardNewsBackground": true, "characterLora": false, "vaceOutpaint": false, "videoGenerate": true } },
+  "comfyui": { "running": true, "workflows": { "cardNewsBackground": true, "characterLora": false, "vaceOutpaint": false, "videoGenerate": true, "talkingFace": false, "foleySound": false } },
   "aceStep": { "running": false },
   "fasterWhisper": { "running": false }
 }

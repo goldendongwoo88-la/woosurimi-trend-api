@@ -203,3 +203,47 @@ powershell -ExecutionPolicy Bypass -File scripts\check-local-models.ps1
 powershell -ExecutionPolicy Bypass -File scripts\check-local-models.ps1 -Base "실제경로\models"
 ```
 
+---
+
+## 9. 애니메이션·만화 영상 제작 추가 5종 (2026-09 리서치, 지금 4개 세트엔 없음)
+
+기존 8개(영상 생성 HunyuanVideo1.5/MiniMax H3/LTX-2.5/Wan2.2 등)는 전부 사실적(포토리얼)
+영상용입니다. 아래는 **정지된 캐릭터 그림을 움직이거나, 카툰/애니 화풍을 내는** 용도로
+새로 조사한 것들 — 지금 안 받아져 있습니다.
+
+| 모델 | 용도 | 라이선스 | 용량/VRAM |
+|---|---|---|---|
+| **LivePortrait** | 정지된 얼굴(웹툰 캐릭터 포함) 1장으로 표정·시선·고개짓 애니메이션 | MIT (얼굴 검출용 InsightFace는 비상업 전용 — 상업 이용 시 교체 필요) | 4~8GB |
+| **Wan2.2-Animate-14B** | 정지 캐릭터를 레퍼런스 영상의 전신 동작으로 구동(얼굴 아니라 전신) | Apache-2.0 | 4090에서 480p 커뮤니티 워크플로 확인됨 |
+| **Index-AniSora V3** (Bilibili) | Wan 기반, 애니메이션 데이터로 재학습한 사실상 유일한 오픈 "애니 전용" 영상모델(단, 화풍이 일·중 애니에 가까움) | Apache-2.0 | V1은 4090 확인, V3.1 경량판 12GB |
+| **ToonCrafter** (Tencent ARC Lab) | 일러스트 키프레임 2장 사이를 자동 보간(진짜 셀애니 인비트윈 워크플로) | Apache-2.0 | 공식 24~27GB(빠듯), 커뮤니티 저VRAM판 ~10GB |
+| Wan2.2 카툰/애니 LoRA | 이미 받은 Wan2.2에 그대로 얹어 화풍만 카툰으로 전환 | Civitai 개별 모델마다 다름(건별 확인) | 베이스와 동일 |
+
+⚠️ 위 다섯 중 어느 것도 라이선스에 대한민국 제외 조항은 없습니다(HunyuanVideo 1.5·
+MiniMax H3와 다름). 다만 "한국 웹툰 셀화풍"을 그대로 뽑아주는 모델은 없어서, AniSora나
+Wan LoRA도 화풍은 일·중 애니에 가깝습니다 — 정확한 화풍을 내려면 결국 사장님 캐릭터
+그림으로 musubi-tuner LoRA를 직접 학습시켜야 합니다.
+
+```bash
+# LivePortrait
+git clone https://github.com/KwaiVGI/LivePortrait.git
+cd LivePortrait && pip install -r requirements.txt
+# 가중치 받기 명령은 저장소 README의 "Download pretrained weights" 절을 그대로 따르세요
+
+# ToonCrafter
+git clone https://github.com/Doubiiu/ToonCrafter.git
+cd ToonCrafter && pip install -r requirements.txt
+# 체크포인트는 저장소 README의 Hugging Face 링크에서 받으세요
+
+# Index-AniSora V3
+git clone https://github.com/bilibili/Index-anisora.git
+# 가중치 받기 명령은 저장소 README를 따르세요
+
+# Wan2.2-Animate-14B — 정확한 Hugging Face 저장소 경로는 README(github.com/Wan-Video/Wan2.2)에서
+# "Animate" 항목을 확인해 그 경로로 hf download를 실행하세요
+```
+
+Wan2.2 카툰 LoRA는 civitai.com에서 "Wan 2.2" + "anime"/"cartoon" 태그로 검색해서
+받으시면 됩니다(개별 파일이라 특정 URL을 드리지 않습니다 — 마음에 드는 화풍 골라서
+받으시고 상업 이용 조건만 그 페이지에서 확인하세요).
+
