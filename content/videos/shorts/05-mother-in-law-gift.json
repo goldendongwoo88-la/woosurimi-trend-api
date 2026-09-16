@@ -1,0 +1,64 @@
+{
+  "title": "시어머니가 진짜 좋아하는 선물이 뭔지 아세요",
+  "uploadDate": "2026-09-16",
+  "hookType": "질문형",
+  "whyNow": "객단가가 선물세트 중 가장 높습니다. 수수료율 2%라도 요율 × 객단가에서 앞섭니다",
+  "affiliateItems": [
+    "건강기능식품",
+    "홍삼",
+    "온열 찜질기",
+    "무릎 보호대"
+  ],
+  "disclosure": "이 영상은 쿠팡 파트너스 활동의 일환으로 일정액의 수수료를 제공받습니다.",
+  "priorityModels": "전부 사용(Wan 2.2 / LTX-2.5 / HunyuanVideo 1.5 / MiniMax H3) — 사용자 승인 확인 완료. 단 Hunyuan 1.5·MiniMax H3 커뮤니티 라이선스에는 대한민국을 포함한 지역 제외 조항이 있습니다(사실 정보로만 남겨둡니다).",
+  "options": {
+    "transition": "crossfade",
+    "templateId": "bold-black"
+  },
+  "scenes": [
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "십 년 동안 틀린 걸 사 갔습니다",
+      "durationSec": 3,
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "첫 3초 — 컷 없이 이 한 장면으로만 버팁니다. 훅 문구는 자막으로만 넣고 음성 없음.",
+      "genPrompt_wan22": "Extreme close-up establishing shot: an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "Extreme close-up establishing shot: an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_hunyuan15": "Extreme close-up establishing shot: an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "Extreme close-up establishing shot: an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "",
+      "durationSec": 5,
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "문제를 대사 없이 눈으로만 보여줍니다.",
+      "genPrompt_wan22": "an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table, looking mildly unimpressed, family members glancing at each other. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table, looking mildly unimpressed, family members glancing at each other. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_hunyuan15": "an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table, looking mildly unimpressed, family members glancing at each other. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "an elderly woman's hands slowly unwrapping a small ginseng box gift at a dinner table, looking mildly unimpressed, family members glancing at each other. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "건강기능식품",
+      "durationSec": 7,
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "같은 장면을 3초 넘게 쓰지 않도록 2~3개 앵글로 나눠 생성해도 됩니다.",
+      "genPrompt_wan22": "hands holding a warm electric heating pad and a knee support brace, placing them gently on an older woman's knee, she smiles slightly. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "hands holding a warm electric heating pad and a knee support brace, placing them gently on an older woman's knee, she smiles slightly. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_hunyuan15": "hands holding a warm electric heating pad and a knee support brace, placing them gently on an older woman's knee, she smiles slightly. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "hands holding a warm electric heating pad and a knee support brace, placing them gently on an older woman's knee, she smiles slightly. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
+    },
+    {
+      "clip": "PASTE_CLIP_PATH_HERE.mp4",
+      "caption": "",
+      "durationSec": 5,
+      "negativePrompt": "advertisement, commercial, studio lighting, ring light, glossy skin, airbrushed, beauty filter, over-saturated colors, staged product photography, stock footage look, perfectly stable gimbal shot, professional cinematic color grade, text overlay, watermark, logo, plastic look, CGI, 3d render, symmetrical composition, model-like posing, studio backdrop",
+      "note": "⚠️ 화살표·가격 표시는 이 클립에 생성하지 말고, 편집 단계에서 캡컷/After Effects로 얹으십시오 — 생성 모델은 화면 속 그래픽 오버레이를 안정적으로 못 그립니다.",
+      "genPrompt_wan22": "a hand naturally picking up and holding 건강기능식품 at a comfortable angle, calm relaxed motion, product visible but not posed like an advertisement. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_ltx25": "a hand naturally picking up and holding 건강기능식품 at a comfortable angle, calm relaxed motion, product visible but not posed like an advertisement. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched.",
+      "genPrompt_hunyuan15": "a hand naturally picking up and holding 건강기능식품 at a comfortable angle, calm relaxed motion, product visible but not posed like an advertisement. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)",
+      "genPrompt_minimaxH3": "a hand naturally picking up and holding 건강기능식품 at a comfortable angle, calm relaxed motion, product visible but not posed like an advertisement. observational handheld camera footage, documentary vlog style, natural available light (window light or overcast daylight, no artificial studio light), realistic skin texture with visible pores and natural imperfections, amateur unstaged home-video aesthetic, subtle natural handheld camera shake, candid unposed moment, shot on smartphone camera look, warm true-to-life color grading, not glamorous, not retouched. (참고: 대한민국 사업자는 이 모델 라이선스에 지역 제외 조항이 있습니다 — 사용자 확인 후 진행)"
+    }
+  ]
+}

@@ -23,6 +23,7 @@ const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
 const claudeClient = require("./claudeClient");
+const failReason = require("./failReason");
 const spend = require("./spend");   // 오늘 AI에 얼마 썼는지
 const naverBlogExport = require("./naverBlogExport");
 const postAudit = require("./postAudit");
@@ -128,8 +129,11 @@ require("./saasRoutes")(app);
 // 지금 뜨는 연예 소재 — 네이트 랭킹·뉴스1·구글트렌드. 제목·링크만, AI 0원.
 const hotIssues = require("./hotIssues");
 app.get("/api/hot-issues", async (req, res) => {
-  try { res.json(await hotIssues.collect()); }
-  catch (e) { res.status(502).json({ error: "hot_failed", message: e.message }); }
+  try {
+    const r = await hotIssues.collect();
+    // 전부 죽었으면 200 으로 성공인 척하지 않습니다.
+    res.status(r.ok ? 200 : 502).json(r);
+  } catch (e) { res.status(502).json({ error: "hot_failed", message: e.message }); }
 });
 
 // 메이트식 제목 추천 — 실측 1,281개 제목의 문법 + 키워드 은행 + 오늘 소재.
@@ -341,7 +345,7 @@ app.get("/api/opportunity", async (req, res) => {
     opportunityCache.set(cacheKey, { data: items, generatedAt, expiresAt: Date.now() + OPPORTUNITY_TTL_MS });
     res.json({ category, mode, generatedAt, cached: false, items });
   } catch (err) {
-    res.status(500).json({ error: "fetch_failed", message: err.message });
+    failReason.fail(res, err, { what: "기회 키워드" });
   }
 });
 
@@ -389,7 +393,7 @@ app.get("/api/entertainment/news", async (req, res) => {
       items,
     });
   } catch (err) {
-    res.status(500).json({ error: "fetch_failed", message: err.message });
+    failReason.fail(res, err, { what: "뉴스" });
   }
 });
 
@@ -413,7 +417,7 @@ app.get("/api/entertainment/ranking", async (req, res) => {
       items,
     });
   } catch (err) {
-    res.status(500).json({ error: "fetch_failed", message: err.message });
+    failReason.fail(res, err, { what: "연예 랭킹" });
   }
 });
 
@@ -433,7 +437,7 @@ app.post("/api/shortform/plan", async (req, res) => {
     const plan = await planShortform(url, normalizedSource);
     res.json(plan);
   } catch (err) {
-    res.status(500).json({ error: "fetch_failed", message: err.message });
+    failReason.fail(res, err, { what: "숏폼 기획 자료" });
   }
 });
 
@@ -1999,7 +2003,7 @@ app.post("/api/post-improve", async (req, res) => {
   try {
     res.json(await postImprove.improve({ title, body, tags, keyword, images }));
   } catch (err) {
-    res.status(400).json({ error: "improve_failed", message: err.message });
+    failReason.fail(res, err, { what: "고칠 곳" });
   }
 });
 
@@ -2021,7 +2025,7 @@ app.post("/api/title-lab", async (req, res) => {
     }
     res.json(await titleLab.suggest({ body, keyword, currentTitle, patterns, count }));
   } catch (err) {
-    res.status(400).json({ error: "title_failed", message: err.message });
+    failReason.fail(res, err, { what: "제목 후보" });
   }
 });
 

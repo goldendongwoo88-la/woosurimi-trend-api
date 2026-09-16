@@ -227,7 +227,7 @@ async function makeGradientBackground(z, index, dest) {
 // 대본
 // ────────────────────────────────────────────────────────────
 async function writeScript(z, topic, character) {
-  if (!isConfigured()) throw new Error("AI가 연결되지 않았습니다.");
+  if (!isConfigured()) throw Object.assign(new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요."), { noKeys: true, status: 503 });
 
   // ⚠️ 채널마다 말투가 확실히 달라야 합니다.
   // 세 계정이 같은 말투로 올리면 한 사람이 돌리는 게 티가 납니다.

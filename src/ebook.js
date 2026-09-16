@@ -40,7 +40,7 @@ const VOICE = `
  */
 async function outline({ topic, audience, material = "", chapters = 8 } = {}) {
   if (!isConfigured()) {
-    const e = new Error("AI가 연결되지 않았습니다."); e.status = 503; throw e;
+    const e = new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요."); e.noKeys = true; e.status = 503; throw e;
   }
   if (!String(topic || "").trim()) {
     const e = new Error("무엇에 대한 책인지 알려주세요."); e.status = 400; throw e;
@@ -255,7 +255,7 @@ async function stripUnsourcedNumbers(text, suspects, material) {
 /** 한 장을 씁니다. */
 async function writeChapter(book, index, { material = "", words = 1800 } = {}) {
   if (!isConfigured()) {
-    const e = new Error("AI가 연결되지 않았습니다."); e.status = 503; throw e;
+    const e = new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요."); e.noKeys = true; e.status = 503; throw e;
   }
   const ch = book.chapters[index];
   if (!ch) throw new Error("그런 장이 없습니다.");

@@ -60,7 +60,7 @@ const STYLE = `
  */
 async function fromPhotos(imagePaths, { note = "", product = "", affiliate = true } = {}) {
   if (!isConfigured()) {
-    const e = new Error("AI가 연결되지 않았습니다.");
+    const e = new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요."); e.noKeys = true;
     e.status = 503;
     throw e;
   }
@@ -132,7 +132,7 @@ async function fromPhotos(imagePaths, { note = "", product = "", affiliate = tru
  */
 async function fromProduct({ product, note = "", affiliate = true } = {}) {
   if (!isConfigured()) {
-    const e = new Error("AI가 연결되지 않았습니다.");
+    const e = new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요."); e.noKeys = true;
     e.status = 503;
     throw e;
   }

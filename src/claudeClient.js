@@ -203,7 +203,15 @@ function getLastUsage() { return lastUsage; }
 
 async function callClaude({ system, messages, maxTokens = 2000, temperature = 0.8, timeoutMs, cache, feature } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("서버에 ANTHROPIC_API_KEY가 설정되어 있지 않습니다.");
+  if (!apiKey) {
+    // ⚠️ 여기가 AI 기능 전체의 입구입니다. 라우트마다 다른 문구·다른 상태코드로
+    // 흩어져 있으면 화면에서 "무슨 일이 난 건지" 안내를 통일할 수 없습니다.
+    const e = new Error("AI가 연결되지 않았습니다. 서버 .env 에 ANTHROPIC_API_KEY 를 넣어주세요.");
+    e.noKeys = true;
+    e.status = 503;
+    e.fix = "/setup.html 에서 어떤 키가 비어 있는지 볼 수 있습니다.";
+    throw e;
+  }
   if (!Array.isArray(messages) || !messages.length) throw new Error("messages가 비어 있습니다.");
 
   const res = await fetchWithTimeout(ANTHROPIC_API_URL, {
