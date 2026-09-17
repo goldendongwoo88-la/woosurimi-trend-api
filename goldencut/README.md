@@ -1,0 +1,148 @@
+# 골든컷 — 자동컷 · 자동 캡션 엔진
+
+캡컷의 **자동컷**과 **자동 캡션**을 로컬에서 돌리는 파이썬 엔진입니다.
+pip 설치 없이 **ffmpeg/ffprobe만** 있으면 돌아갑니다(자동 캡션의 받아쓰기만 예외).
+
+> 이 폴더는 사장님 PC의 골든컷(`C:\...\outputs\GoldenCut`)에 그대로 복사해서 쓰라고
+> 만든 것입니다. 이 저장소의 Node 쇼츠생성기와 같은 규격이지만, 골든컷이 파이썬이라
+> 파이썬으로 옮겨 담았습니다.
+
+---
+
+## 1. 자동컷 — `goldencut_effects.py`
+
+사진/영상을 넣으면 효과·전환·컷 속도를 자동으로 입혀 숏폼을 만듭니다.
+
+```bash
+# 먼저 이것부터 — 샘플을 만들어 효과팩 6종을 전부 렌더합니다
+python goldencut_effects.py --selftest --out-dir ./_test
+
+# 효과팩 목록
+python goldencut_effects.py --list
+
+# 실제 사용
+python goldencut_effects.py --scenes-json scenes.json --out out.mp4 \
+  --effect whitecard-pop --hook "여름 신발 추천" --seconds 15 --intro scatter
+```
+
+`scenes.json` — **사진과 영상을 섞어서** 넣을 수 있습니다:
+
+```json
+[
+  {"image": "clip1.mp4", "caption": "영상은 *좋은 구간*을 알아서 골라요"},
+  {"image": "photo.jpg", "caption": "사진과 *섞어* 써도 됩니다"}
+]
+```
+
+파이썬에서 직접:
+
+```python
+from goldencut_effects import render, EFFECTS
+render(scenes, "out.mp4", effect="whitecard-pop", hook="제목", target_seconds=15)
+```
+
+### 효과팩 6종
+
+| id | 액자 | 컷 간격 | 전환 | 어울리는 소재 |
+|---|---|---|---|---|
+| `clean-zoom` | 꽉 채우기 | 3.2초 | 하드컷 | 기본값 |
+| `photocard-drift` | 흰 카드 + 흐린 배경 | 2.8초 | fade/dissolve | 감성·매장 |
+| `whitecard-pop` | 흰 카드 + 밝은 배경 | 1.9초 | 좌우 슬라이드 | 제품컷 |
+| `vivid-punch` | 꽉 채우기 | 2.2초 | 흐림·번쩍·줌 | 세일·후킹 |
+| `film-strip` | 시네마 레터박스 | 3.6초 | 검은 디졸브 | 사주·스토리 |
+| `soft-bloom` | 꽉 채우기 | 3.0초 | 원형 | 뷰티·웨딩 |
+
+숫자는 캡컷 자동컷 영상 3편을 프레임 단위로 실측해서 뽑은 값입니다
+(신발 편 컷 간격 **1.29초**, 카드 기울기 **±1.6°** 등).
+
+**영상 소재를 넣으면** 장면 변화 점수를 재서 *움직임이 가장 많은 구간*을 자동으로
+골라냅니다 — 이게 "자동"컷의 핵심입니다.
+
+⚠️ 영상 소재의 **원래 소리는 빼고 무음**으로 깝니다. 자동컷은 배경음악을 새로 까는
+편집이라 클립마다 원래 소리가 튀면 음악과 부딪힙니다(캡컷도 기본이 이렇습니다).
+원본 소리를 살리려면 그 클립 오디오를 따로 뽑아 `narration`으로 넣으세요.
+
+---
+
+## 2. 자동 캡션 — `goldencut_caption.py`
+
+영상의 말소리를 받아써서 자막을 자동으로 넣습니다. **단어별 강조**(지금 말하는 단어만
+색이 바뀌는 캡컷 효과)가 기본으로 켜져 있습니다.
+
+```bash
+# 자동으로 받아써서 자막 굽기
+python goldencut_caption.py --video in.mp4 --out out.mp4
+
+# 받아쓴 걸 먼저 고치고 싶을 때 (고유명사·브랜드명이 자주 틀립니다)
+python goldencut_caption.py --video in.mp4 --export-srt cap.srt
+#   cap.srt를 메모장에서 고친 뒤
+python goldencut_caption.py --video in.mp4 --srt cap.srt --out out.mp4
+
+# 단어별 강조 끄기 / 자막 색 바꾸기
+python goldencut_caption.py --video in.mp4 --out out.mp4 --no-karaoke --template vivid-yellow
+```
+
+받아쓰기 엔진은 **로컬·무료인 것부터** 순서대로 찾습니다:
+
+1. `faster-whisper` 파이썬 패키지 ← **권장**. `pip install faster-whisper`
+2. whisper-asr-webservice HTTP 서버 (`FASTER_WHISPER_URL`)
+3. 둘 다 없으면 → `--srt`로 직접 쓴 자막만 사용
+
+4090이면 처음 한 번 모델(large-v3, 약 3GB)을 받고 나서는 GPU로 빠르게 돕니다.
+
+---
+
+## 3. 조사 결과 — 받을 수 있는 것 / 없는 것 (2026-09-18)
+
+### Seedance 2.0 → ❌ **받을 수 없습니다**
+
+ByteDance 공식 GitHub·Hugging Face에 **가중치가 공개되지 않았습니다.** Volcano Engine /
+BytePlus **API 전용 상용 모델**입니다. 공개된 건 논문과 API 클라이언트뿐입니다.
+
+⚠️ Hugging Face에 `seedance2ai/...`, `wsda/Seedance-2-0` 같은 게 검색되는데 **전부
+제3자가 만든 홍보용 더미**입니다. 진짜 가중치가 아니니 받지 마세요.
+
+→ 대안은 없습니다. **이미 받아두신 Wan 2.2(Apache 2.0)와 LTX-2.5가 현재 오픈웨이트
+최상급**입니다. 텍스트→영상 쪽은 새로 받을 게 없습니다.
+
+### build.nvidia.com (NVIDIA NIM) → ⚠️ **대부분 다운로드가 아닙니다**
+
+NIM 카탈로그는 **호스팅 API 엔드포인트**이고, 자가호스팅용 NIM 컨테이너는 NVIDIA AI
+Enterprise 라이선스가 필요합니다. "카탈로그에서 전부 다운로드"는 불가능합니다.
+
+그중 **따로 오픈웨이트로 풀려 있고 쓸모 있는 것**만:
+
+| 용도 | 저장소 | 라이선스 | 4090 |
+|---|---|---|---|
+| 자막(한국어 O) | `nvidia/nemotron-3.5-asr-streaming-0.6b` | OpenMDW-1.1, 상업 OK, 한국 제외 없음 | 여유 (~1.2GB) |
+| 썸네일 | Qwen-Image | Apache 2.0 | 가능 |
+
+**받지 마세요:**
+- `nvidia/parakeet-tdt-0.6b-v3`, `nvidia/canary-1b-v2` — **한국어를 지원하지 않습니다**(유럽 25개어 전용)
+- FLUX.1-dev — **비상업 라이선스**(NoobAI-XL과 같은 이유로 탈락)
+
+영상 자동 편집용 모델은 NIM 카탈로그에 없습니다.
+
+### 자동 자막 모델 선택 → **현행 faster-whisper large-v3 유지 권장**
+
+- Parakeet/Canary는 한국어 미지원이라 후보에서 탈락
+- faster-whisper와 Nemotron 3.5 ASR 둘 다 **단어 단위 타임스탬프 지원**(캡컷식 단어 강조 가능)
+- 한국어 정확도 공식 비교치는 확인되지 않았습니다 — 바꿀 이유가 뚜렷하지 않으면 현행 유지가 안전
+- 단어 싱크를 더 정밀하게 하고 싶다면 **모델 교체보다 WhisperX 정렬을 붙이는 게 효과가 큽니다**
+
+⚠️ 위 조사는 이 세션에서 `huggingface.co`·`build.nvidia.com` 직접 접속이 막힌 상태에서
+검색 결과와 GitHub API로 교차확인한 것입니다. **실제로 받기 전에 모델 카드의 라이선스를
+한 번 더 직접 확인**해 보세요.
+
+---
+
+## 4. 검증 기록
+
+| 항목 | 결과 |
+|---|---|
+| 효과팩 6종 렌더 | ✅ 6/6 성공 (`--selftest`) |
+| 영상+사진 섞어서 | ✅ 성공 — 영상에서 움직임 많은 구간 자동 선택 확인 |
+| 길이 맞추기 | ✅ 15초 요청 → 14.21초 / 28초 요청 → 26.58초 |
+| 자막 단어별 강조 | ✅ 프레임으로 확인 (1.3초 "이" → 2.2초 "선크림"으로 강조 이동) |
+| .srt 내보내기/불러오기 | ✅ 왕복 확인 |
+| 받아쓰기(ASR) | ⚠️ **미검증** — 이 환경에 whisper가 없어서 못 돌려봤습니다. 사장님 PC에서 확인 필요 |
