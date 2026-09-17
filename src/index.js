@@ -20,6 +20,7 @@ const videoGenerate = require("./videoGenerate");
 const talkingFace = require("./talkingFace");
 const foleySound = require("./foleySound");
 const { recommendTemplates, TEMPLATES } = require("./videoTemplates");
+const { recommendEffects, EFFECTS, DEFAULT_EFFECT_ID } = require("./videoEffects");
 const { getProviderStatus } = require("./voiceProvider");
 const { CATEGORIES: BLOG_CATEGORIES, getTrendTopics, generateDraft, getWriterStatus } = require("./blogWriter");
 const claudeClient = require("./claudeClient");
@@ -541,6 +542,32 @@ app.get("/api/shortform/frame-styles", (req, res) => {
   res.json({ frameStyles: FRAME_STYLES });
 });
 
+// 화면 효과팩 목록 — 자막 디자인(templateId)과 별개로 "화면"을 정하는 값입니다.
+// 캡컷 자동컷 영상을 분석해서 만든 6종이며, /api/shortform/render에 effectId로 넘깁니다.
+app.get("/api/shortform/effects", (req, res) => {
+  res.json({
+    note: "자막 디자인(template)과 화면 효과(effect)는 따로 고릅니다. 효과팩은 사진 액자·움직임·색보정·장면 전환·컷 속도를 한 번에 정합니다.",
+    effects: EFFECTS.map((e) => ({
+      id: e.id,
+      label: e.label,
+      description: e.description,
+      frame: e.frame,
+      paceSec: e.paceSec,
+      transitions: e.transitions,
+    })),
+  });
+});
+
+// 대본을 보고 어울리는 효과팩 순서를 돌려줍니다(자막 템플릿 추천과 같은 방식).
+// POST /api/shortform/effect-suggestions  body: { "scenes": [...] }
+app.post("/api/shortform/effect-suggestions", (req, res) => {
+  const scenes = Array.isArray(req.body?.scenes) ? req.body.scenes : [];
+  res.json({
+    note: "대본 내용을 보고 어울리는 화면 효과 순서로 정렬했어요.",
+    effects: recommendEffects(scenes),
+  });
+});
+
 // 캡컷 "자동컷"처럼, 대본(scenes) 하나로 "템플릿 + 배경음악 + 성우 목소리" 조합
 // 여러 개를 AI가 알아서 짜서, 각각 짧은 미리보기 영상으로 만들어 보여줍니다. 사용자는
 // 그중 마음에 드는 걸 골라서 /api/shortform/render 를 그 조합(templateId/bgmId/
@@ -561,6 +588,7 @@ app.post("/api/shortform/recommend", async (req, res) => {
   }
 
   const templates = recommendTemplates(scenes); // 이미 어울리는 순서로 정렬됨
+  const effects = recommendEffects(scenes); // 화면 효과팩도 같은 방식으로 정렬됨
   const bgmTracks = recommendBgm(scenes); // 이미 어울리는 순서로 정렬됨
   const providerStatus = getProviderStatus();
   const readyProviders = Object.entries(providerStatus)
@@ -568,13 +596,17 @@ app.post("/api/shortform/recommend", async (req, res) => {
     .map(([key, v]) => ({ provider: key, label: v.label }));
 
   const previewScenes = scenes.slice(0, 2); // 미리보기는 앞부분 최대 2장면만
-  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "full";
+  // ⚠️ 화면 구성을 사용자가 콕 집어 고르지 않았으면 "auto"로 둬서 효과팩이 정한 화면을
+  // 쓰게 합니다. 그래야 추천 6개가 자막 색만 다른 게 아니라 화면 자체가 달라 보입니다.
+  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "auto";
   const hookText = (req.body.hookText || "").trim();
-  const RECIPE_COUNT = 5;
+  // 효과팩이 6종이라 추천도 6개입니다(조합마다 화면 효과가 하나씩 다릅니다).
+  const RECIPE_COUNT = EFFECTS.length;
 
   // 조합 하나를 만드는 공통 함수 — recipeIndex 방식과 예전 방식이 같이 씁니다.
   async function buildRecipe(i) {
     const template = templates[i % templates.length];
+    const effect = effects[i % effects.length];
     const bgm = bgmTracks[i % bgmTracks.length];
     const voiceChoice = readyProviders.length ? readyProviders[i % readyProviders.length] : null;
 
@@ -587,6 +619,7 @@ app.post("/api/shortform/recommend", async (req, res) => {
         animate: false, // 켄번즈(zoompan)는 CPU를 많이 먹어서 미리보기에선 끕니다
         voice: null, // 미리보기는 속도를 위해 나레이션 없이 만듭니다
         templateId: template.id,
+        effectId: effect.id,
         frameStyle,
         hookText,
         fastConcat: true, // 미리보기는 크로스페이드 없이 하드컷으로(훨씬 빠름)
@@ -601,6 +634,9 @@ app.post("/api/shortform/recommend", async (req, res) => {
       recipeId: `recipe-${i + 1}`,
       templateId: template.id,
       templateLabel: template.label,
+      effectId: effect.id,
+      effectLabel: effect.label,
+      effectDescription: effect.description,
       bgmId: bgm.id,
       bgmLabel: bgm.label,
       voiceProvider: voiceChoice ? voiceChoice.provider : null,
@@ -669,7 +705,18 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   if (!Array.isArray(scenes) || !scenes.length) {
     return res.status(400).json({ error: "missing_scenes", message: "scenes 배열이 비어 있습니다. 먼저 /api/shortform/plan을 호출해 주세요." });
   }
-  const durationPerScene = Number(req.body.durationPerScene) > 0 ? Number(req.body.durationPerScene) : 3;
+  // targetSeconds(예: 15 또는 28)를 주면 "영상 전체를 그 길이에 맞춰" 장면당 길이를
+  // 자동으로 나눕니다.
+  //
+  // ⚠️ 정확히 그 초가 나오지는 않습니다. 자막이 길면 읽을 시간이 필요하고(장면 최소
+  // 길이), 나레이션이 있으면 말이 끝날 때까지 기다려야 해서 계산값보다 길어질 수
+  // 있습니다. "대략 그 길이"로 이해하시는 게 맞습니다.
+  const targetSeconds = Number(req.body.targetSeconds) > 0 ? Number(req.body.targetSeconds) : null;
+  const durationPerScene = targetSeconds
+    ? Math.max(targetSeconds / Math.max(scenes.length, 1), 1.2)
+    : Number(req.body.durationPerScene) > 0
+      ? Number(req.body.durationPerScene)
+      : null; // null이면 효과팩이 정한 컷 속도를 씁니다
   if (scenes.length > 12) {
     return res.status(400).json({ error: "too_many_scenes", message: "장면은 최대 12개까지만 지원합니다." });
   }
@@ -682,11 +729,17 @@ app.post("/api/shortform/render", upload.single("bgm"), async (req, res) => {
   const voiceProvider = ["clova", "typecast", "elevenlabs", "azure"].includes(req.body.voiceProvider) ? req.body.voiceProvider : null;
   const voice = voiceProvider ? { provider: voiceProvider, voiceId: req.body.voiceId || null } : null;
   const templateId = TEMPLATES.some((t) => t.id === req.body.templateId) ? req.body.templateId : "bold-black";
-  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "full";
+  const effectId = EFFECTS.some((e) => e.id === req.body.effectId) ? req.body.effectId : DEFAULT_EFFECT_ID;
+  // ⚠️ 사용자가 액자 모양을 콕 집어 고르지 않았는데 효과팩은 골랐다면, 효과팩이 정한
+  // 화면을 써야 합니다("auto"). 예전처럼 "full"로 못박으면 포토카드·레터박스 효과를
+  // 골라도 화면이 안 바뀌어서 "효과가 안 먹는다"는 말이 나옵니다.
+  const frameStyle = FRAME_STYLES.some((f) => f.id === req.body.frameStyle) ? req.body.frameStyle : "auto";
   const hookText = (req.body.hookText || "").trim();
 
   try {
-    const result = await renderShortformVideo(scenes, { durationPerScene, bgmPath, animate, voice, templateId, frameStyle, hookText });
+    const result = await renderShortformVideo(scenes, {
+      durationPerScene, bgmPath, animate, voice, templateId, effectId, frameStyle, hookText,
+    });
 
     // 방금 만든 영상의 "진짜 인터넷 주소"를 QR 코드로 만들어서, 휴대폰 카메라로
     // 바로 찍어 다운로드 페이지로 이동할 수 있게 해줍니다.

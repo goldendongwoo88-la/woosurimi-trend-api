@@ -560,9 +560,9 @@
       <div class="note">${escapeHtml(plan.note)}</div>
 
       <div class="panel">
-        <div class="section-title" style="margin-top:0;">🤖 AI 추천 5개 영상 (템플릿+음악+목소리 조합)</div>
+        <div class="section-title" style="margin-top:0;">🤖 AI 추천 6개 영상 (화면효과+자막+음악+목소리 조합)</div>
         <div class="note" style="margin:0 0 10px 0;">캡컷 자동컷처럼, AI가 자막 디자인·배경음악·성우 목소리를 알아서 5가지로 조합해서 짧게 미리보기를 만들어줘요. 서버에서 실제로 영상을 만드는 과정이라 30초~2분 정도 걸릴 수 있어요.</div>
-        <button class="primary" id="recommendBtn">AI 추천 5개 만들기</button>
+        <button class="primary" id="recommendBtn">AI 추천 6개 만들기</button>
         <div id="recommendResult" style="margin-top:14px;"></div>
       </div>
 
@@ -601,6 +601,15 @@
           <input type="file" id="bgmInput" accept="audio/*" style="margin-bottom:10px;" />
           <label class="field-label">장면당 길이(초) — AI 나레이션이 더 길면 자동으로 늘어나요</label>
           <input type="number" id="durationInput" value="3" min="1.5" max="6" step="0.1" style="margin-bottom:10px;" />
+          <label class="field-label">영상 전체 길이 맞추기</label>
+          <select id="targetSecondsSelect" style="margin-bottom:10px;">
+            <option value="">장면당 길이 그대로 쓰기</option>
+            <option value="15">15초 안팎 (핵심만 짧게)</option>
+            <option value="28">28초 안팎 (자세히)</option>
+          </select>
+          <label class="field-label">화면 효과 (캡컷 자동컷 스타일)</label>
+          <select id="effectSelect" style="margin-bottom:6px;"></select>
+          <div id="effectNote" class="note" style="margin:0 0 10px 0;"></div>
           <label class="field-label">사진 프레임 스타일</label>
           <select id="frameStyleSelect" style="margin-bottom:6px;"></select>
           <div id="frameStyleNote" class="note" style="margin:0 0 10px 0;"></div>
@@ -621,6 +630,7 @@
     loadBgmSuggestions();
     loadVoiceProviderStatus();
     loadFrameStyleOptions();
+    loadEffectOptions();
     // 링크컷 기획안은 사진 수에 맞춰 장면 수를 자동으로 늘리는데, 장면이 많아지면
     // 장면당 길이를 짧게 잡아야 숏폼다운 15~20초 안팎에 맞습니다.
     if (plan.recommendedDurationPerScene) {
@@ -742,7 +752,8 @@
 
   let selectedBgmId = null;
   let selectedTemplateId = null;
-  let selectedFrameStyle = "polaroid";
+  let selectedEffectId = null;
+  let selectedFrameStyle = "auto";
   let currentPreviewAudio = null;
 
   async function loadFrameStyleOptions() {
@@ -751,11 +762,14 @@
     try {
       const res = await fetch("/api/shortform/frame-styles");
       const data = await res.json();
-      const styles = data.frameStyles || [];
+      // ⚠️ 맨 앞에 "자동"을 둡니다. 여기서 액자를 콕 집어 고르면 화면 효과팩이 정한
+      // 화면(포토카드·레터박스 등)을 덮어써 버려서 "효과를 골라도 안 바뀐다"가 됩니다.
+      const AUTO = { id: "auto", label: "화면 효과에 맡기기 (추천)", description: "위에서 고른 화면 효과가 정한 액자를 그대로 씁니다." };
+      const styles = [AUTO].concat(data.frameStyles || []);
       selectEl.innerHTML = styles.map((s) => `<option value="${s.id}">${escapeHtml(s.label)}</option>`).join("");
-      selectedFrameStyle = styles[0]?.id || "polaroid";
+      selectedFrameStyle = "auto";
       selectEl.value = selectedFrameStyle;
-      noteEl.textContent = styles[0]?.description || "";
+      noteEl.textContent = AUTO.description;
       selectEl.onchange = () => {
         selectedFrameStyle = selectEl.value;
         const found = styles.find((s) => s.id === selectedFrameStyle);
@@ -763,6 +777,28 @@
       };
     } catch (err) {
       noteEl.textContent = "프레임 스타일 목록을 불러오지 못했어요 — 기본값(포토카드)으로 만들어져요.";
+    }
+  }
+
+  async function loadEffectOptions() {
+    const selectEl = document.getElementById("effectSelect");
+    const noteEl = document.getElementById("effectNote");
+    if (!selectEl) return;
+    try {
+      const res = await fetch("/api/shortform/effects");
+      const data = await res.json();
+      const effects = data.effects || [];
+      selectEl.innerHTML = effects.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join("");
+      selectedEffectId = effects[0]?.id || null;
+      selectEl.value = selectedEffectId || "";
+      noteEl.textContent = effects[0]?.description || "";
+      selectEl.onchange = () => {
+        selectedEffectId = selectEl.value;
+        const found = effects.find((e) => e.id === selectedEffectId);
+        noteEl.textContent = found ? found.description : "";
+      };
+    } catch (err) {
+      noteEl.textContent = "화면 효과 목록을 불러오지 못했어요 — 기본 효과로 만들어져요.";
     }
   }
 
@@ -863,7 +899,7 @@
   // 먼저 연결을 끊어버렸습니다(브라우저엔 빈 응답이 와서 "Unexpected end of JSON input"
   // 오류). 그래서 조합을 1개씩 따로 요청하고, 완성되는 대로 바로 화면에 붙입니다 —
   // 오류도 안 나고, 첫 번째 미리보기를 훨씬 빨리 볼 수 있습니다.
-  const RECIPE_TOTAL = 5;
+  const RECIPE_TOTAL = 6;
 
   async function loadRecommendations() {
     const recommendBtn = document.getElementById("recommendBtn");
@@ -906,7 +942,7 @@
         }. 마음에 드는 걸 고르면 그 설정 그대로 최종 영상을 만들 수 있어요. 미리보기는 속도를 위해 앞부분 2장면·짧은 길이·나레이션 없이 만들어졌어요 — 성우 목소리는 최종 영상에서 들어갑니다.</div>`
       : `<div class="status error">미리보기를 만들지 못했어요. 아래 "직접 설정해서 만들기"에서 템플릿·음악을 직접 골라 최종 영상을 만들어 보세요.</div>`;
     recommendBtn.disabled = false;
-    recommendBtn.textContent = "AI 추천 5개 만들기";
+    recommendBtn.textContent = "AI 추천 6개 만들기";
   }
 
   function appendRecipeCard(gridEl, r, i) {
@@ -915,7 +951,8 @@
     card.innerHTML = `
       ${r.previewUrl ? `<video controls muted src="${r.previewUrl}"></video>` : `<div class="status error">미리보기 생성 실패: ${escapeHtml(r.previewError || "")}</div>`}
       <div class="recipe-meta">
-        <b>조합 ${i + 1}</b> · 자막 ${escapeHtml(r.templateLabel)} · 음악 ${escapeHtml(r.bgmLabel)} · 목소리 ${escapeHtml(r.voiceLabel)}
+        <b>조합 ${i + 1}</b> · 화면 <b>${escapeHtml(r.effectLabel || "기본")}</b> · 자막 ${escapeHtml(r.templateLabel)} · 음악 ${escapeHtml(r.bgmLabel)} · 목소리 ${escapeHtml(r.voiceLabel)}
+        ${r.effectDescription ? `<div class="note" style="margin:6px 0 0 0;">${escapeHtml(r.effectDescription)}</div>` : ""}
       </div>
     `;
     const btn = document.createElement("button");
@@ -928,7 +965,13 @@
 
   function useRecipe(recipe) {
     selectedTemplateId = recipe.templateId;
+    selectedEffectId = recipe.effectId || null;
     selectedBgmId = recipe.bgmId;
+    const effectSelectEl = document.getElementById("effectSelect");
+    if (effectSelectEl && selectedEffectId) {
+      effectSelectEl.value = selectedEffectId;
+      effectSelectEl.dispatchEvent(new Event("change"));
+    }
     document.querySelectorAll(".tpl-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === recipe.templateId));
     document.querySelectorAll(".bgm-card").forEach((el) => el.classList.toggle("selected", el.dataset.id === recipe.bgmId));
     const voiceSelect = document.getElementById("voiceProviderSelect");
@@ -955,7 +998,14 @@
 
     const form = new FormData();
     form.append("scenes", JSON.stringify(currentScenes));
-    form.append("durationPerScene", durationInput.value || "3");
+    const targetSecondsEl = document.getElementById("targetSecondsSelect");
+    if (targetSecondsEl && targetSecondsEl.value) {
+      // 전체 길이를 맞추는 모드에서는 장면당 길이를 서버가 알아서 나눕니다.
+      form.append("targetSeconds", targetSecondsEl.value);
+    } else {
+      form.append("durationPerScene", durationInput.value || "3");
+    }
+    if (selectedEffectId) form.append("effectId", selectedEffectId);
     form.append("animate", animateInput.checked ? "true" : "false");
     form.append("frameStyle", selectedFrameStyle || "full");
     form.append("hookText", currentHookText || "");
