@@ -85,6 +85,47 @@ VOICEBOX_PROFILE_CHASURIMI=차수리미_프로필ID
 ⚠️ 자막의 `*별표*` 강조 표시는 읽지 않도록 빼고 넘깁니다.
 ⚠️ 한 장면 더빙이 실패해도 나머지는 계속 갑니다 — 그 장면만 자막으로 나갑니다.
 
+### 기존 골든컷 코드에 붙이는 방법
+
+`goldencut_effects.py`는 **전처리 단계가 아니라 렌더 경로 전체를 대신하는 모듈**입니다.
+장면 필터 → 자막 굽기 → 이어붙이기 → 오디오 믹싱까지 한 번에 합니다.
+그래서 붙이는 방식이 두 가지입니다.
+
+**① 통째로 갈아끼우기 (권장)**
+
+`render_autocut()` / `autocut_titles.render()` 자리에 `goldencut_effects.render()`를
+그대로 넣습니다. 자막·전환·믹싱을 이쪽이 다 하므로 `template_filter()`,
+`motion_templates.py`, `ass_document` 경로는 쓰이지 않습니다.
+
+```python
+from goldencut_effects import render
+render(scenes, out_path, effect="whitecard-pop", hook=title,
+       target_seconds=15, voice="golden")
+```
+
+**② 화면 연출만 가져다 쓰기 (기존 자막 파이프라인 유지)**
+
+기존 ASS 자막(`autocut_titles.py`)을 계속 쓰고 싶으면 아래 3개만 떼어 갑니다.
+
+| 가져갈 것 | 대응되는 기존 코드 |
+|---|---|
+| `EFFECTS` 딕셔너리 (액자·색보정·줌·컷속도) | `template_filter(look, ...)` / `motion_templates.py` |
+| `layer()` + `kenburns()` + `tilt_filters()` | `template_filter`의 필터 문자열 조립부 |
+| `transition_at()` + `concat_xfade()` | 장면 이어붙이는 부분 |
+
+이때 `render_scene()`은 쓰지 마세요 — 그 안에 자막 굽기가 들어있어서 기존 자막과 두 번
+겹칩니다.
+
+**장면 길이 계산은 서로 같습니다.** 이쪽도 내레이션이 있으면 그 길이를 따라갑니다:
+
+```
+장면 길이 = max(기준 길이, 자막 읽는 최소 시간, 내레이션 길이 + 0.4초)
+```
+
+기준 길이는 `target_seconds / 장면수`(15초·28초 모드) 또는 효과팩의 `pace`입니다.
+`SPEECH_CPS` 같은 글자수 기준으로 원고를 이미 맞춰두셨다면, `target_seconds`를 주지 말고
+내레이션만 넣으면 그 길이를 그대로 따라갑니다.
+
 ---
 
 ## 2. 자동 캡션 — `goldencut_caption.py`
