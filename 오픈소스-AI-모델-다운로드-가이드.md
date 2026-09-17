@@ -247,3 +247,54 @@ Wan2.2 카툰 LoRA는 civitai.com에서 "Wan 2.2" + "anime"/"cartoon" 태그로 
 받으시면 됩니다(개별 파일이라 특정 URL을 드리지 않습니다 — 마음에 드는 화풍 골라서
 받으시고 상업 이용 조건만 그 페이지에서 확인하세요).
 
+---
+
+## 10. 일본 애니메·망가 그림체 (2026-09 리서치)
+
+### 정지 이미지 체크포인트 — SDXL 기반, ComfyUI 표준 체크포인트 로더로 바로 구동, 6~8GB
+
+| 체크포인트 | 라이선스 | 상업 이용 |
+|---|---|---|
+| **WAI-illustrious-SDXL** ⭐ 추천 | FAIPL 1.0-SD 상속 | 생성물 상업 이용 제한 없음. Civitai 최다운로드(140만+), 계속 갱신 중 |
+| Illustrious-XL | CreativeML OpenRAIL-M | 생성물 상업 이용 제한 없음 |
+| NoobAI-XL | FAIPL + 자체 추가조항 | ⚠️ **모델·파생물·생성물 전부 상업적 이용/수익화 금지** — 라인아트 품질은 최고 평가지만 수익 채널엔 쓰면 안 됨(전 세계 대상 전면 금지, 지역 제한 아님) |
+
+**받는 법 — Civitai 체크포인트는 Hugging Face와 달리 정해진 명령어가 없습니다:**
+1. civitai.com 접속 → 검색창에 정확한 이름(예: "WAI-illustrious-SDXL") 입력
+2. 모델 페이지에서 원하는 버전(최신 버전 권장) 선택 → **Download** 버튼
+3. 로그인 요구하면 무료 계정 가입(다운로드에 필요). 명령줄로 받고 싶으면 계정의 **API 키**를 발급받아
+   `wget "https://civitai.com/api/download/models/버전ID?token=API키" -O 파일명.safetensors` 형태로 받을 수 있습니다
+   (버전ID는 다운로드 버튼 우클릭 → 링크 주소 복사로 확인)
+4. 받은 `.safetensors` 파일을 ComfyUI의 `models/checkpoints/` 폴더에 넣으면 끝
+
+⚠️ 버전이 자주 올라와서(예: WAI-illustrious-SDXL은 2026년 2월 기준 v17) 특정 URL을 여기
+적어두지 않았습니다 — 매번 이름으로 검색해서 그 시점의 최신 버전을 받으세요.
+
+### 망가(흑백 스크린톤) — 전용 모델 아니라 후처리 기법
+
+전용 "망가 모델"은 없습니다. 위 체크포인트로 그림을 만든 뒤 스크린톤으로 변환하는 방식이
+표준입니다.
+
+```bash
+# sketch2manga — 컬러/선화를 스크린톤 망가로 변환하는 ComfyUI 네이티브 커스텀노드
+cd ComfyUI/custom_nodes
+git clone https://github.com/dmMaze/sketch2manga.git
+# 필요한 모델(Mangatone)은 저장소 README의 안내를 따라 받으세요
+```
+
+### 망가 페이지 레이아웃(칸 나누기) — AI 모델이 아니라 합성 작업
+
+자동으로 칸을 배치해주는 AI는 없습니다 — 그림은 체크포인트로 각각 만들고, 아래 노드로
+격자에 맞춰 합치는 방식입니다.
+
+```bash
+# ComfyUI Manager에서 검색 설치가 가장 쉽습니다: "Comfyroll" 검색 → CR Comic Panel Templates 설치
+# 또는 직접:
+cd ComfyUI/custom_nodes
+git clone https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes.git
+```
+
+⚠️ 이 조사는 huggingface.co/civitai.com 직접 접속이 막힌 환경에서 검색엔진 캐시로
+교차검증한 것입니다 — 실제 다운로드 전 Civitai 카드의 라이선스 문구를 한 번 더 직접
+확인해 보세요(특히 NoobAI-XL은 상업 이용 금지 조항이 원문에서 확인됐습니다).
+
