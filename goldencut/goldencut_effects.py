@@ -47,6 +47,11 @@ import subprocess
 import sys
 import tempfile
 
+
+def _log(msg):
+    """진행 상황은 stderr로 — stdout은 --json 결과 전용으로 비워둡니다."""
+    print(msg, file=sys.stderr)
+
 # ───────────────────────────────────────────────────────────────
 # 기본 규격
 # ───────────────────────────────────────────────────────────────
@@ -585,9 +590,20 @@ def concat_xfade(segments, durations, out_path, effect, workdir):
         offset = max(cum - t, 0)
         last = i == len(segments) - 1
         step = out_path if last else os.path.join(workdir, "x%d.mp4" % i)
+        # ⚠️ settb/asettb로 타임베이스를 맞춘 뒤에 xfade를 겁니다.
+        #
+        # 사진에서 만든 장면과 영상 클립에서 만든 장면은 타임베이스가 다릅니다(영상은 원본
+        # 것을 물려받습니다). 그대로 xfade에 넣으면 이렇게 통째로 실패합니다:
+        #   "First input link main timebase (1/12288) do not match ... (1/15360)"
+        # 실제로 영상+사진을 섞은 렌더에서 터졌던 오류라, 양쪽을 같은 기준으로 맞춰줍니다.
         run(["-y", "-i", cur, "-i", segments[i], "-filter_complex",
-             "[0:v][1:v]xfade=transition=%s:duration=%.3f:offset=%.3f[v];"
-             "[0:a][1:a]acrossfade=d=%.3f[a]" % (transition_at(effect, i - 1), t, offset, t),
+             "[0:v]settb=AVTB,fps=%d,format=yuv420p[v0];"
+             "[1:v]settb=AVTB,fps=%d,format=yuv420p[v1];"
+             "[0:a]asettb=AVTB,aresample=async=1:first_pts=0[a0];"
+             "[1:a]asettb=AVTB,aresample=async=1:first_pts=0[a1];"
+             "[v0][v1]xfade=transition=%s:duration=%.3f:offset=%.3f[v];"
+             "[a0][a1]acrossfade=d=%.3f[a]"
+             % (FPS, FPS, transition_at(effect, i - 1), t, offset, t),
              "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast"]
             + ([] if last else ["-crf", "18"])
             + ["-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", step])
@@ -648,10 +664,10 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
             if not ok:
                 raise RuntimeError("더빙을 할 수 없습니다 — %s" % why)
             if verbose:
-                print("  더빙: %s" % voice_label)
+                _log("  더빙: %s" % voice_label)
             scenes, failed = narrate_scenes(scenes, workdir, profile_id, verbose=verbose)
             if failed and verbose:
-                print("  (%d개 장면은 더빙 실패 — 자막만 나갑니다)" % failed)
+                _log("  (%d개 장면은 더빙 실패 — 자막만 나갑니다)" % failed)
 
         segments, durations = [], []
 
@@ -666,7 +682,7 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
                              preset=preset, workdir=workdir)
                 segments.append(seg); durations.append(1.6)
                 if verbose:
-                    print("  인트로(흩뿌린 사진) 완료")
+                    _log("  인트로(흩뿌린 사진) 완료")
 
         for i, sc in enumerate(scenes):
             dur = max(base, min_duration_for(sc.get("caption", "")))
@@ -685,7 +701,7 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
                          preset=preset, workdir=workdir)
             segments.append(seg); durations.append(dur)
             if verbose:
-                print("  장면 %d/%d 완료 (%.1f초)" % (i + 1, len(scenes), dur))
+                _log("  장면 %d/%d 완료 (%.1f초)" % (i + 1, len(scenes), dur))
 
         joined = os.path.join(workdir, "joined.mp4")
         if eff["use_transition"] and len(segments) > 1:
@@ -701,7 +717,7 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
 
         actual = probe_duration(out_path) or total
         if verbose:
-            print("완성: %s (%.2f초)" % (out_path, actual))
+            _log("완성: %s (%.2f초)" % (out_path, actual))
         return {"path": out_path, "duration": actual, "effect": effect,
                 "label": eff["label"], "scenes": len(scenes), "voice": voice_label}
     finally:
@@ -760,13 +776,24 @@ def main():
     ap.add_argument("--bgm")
     ap.add_argument("--voice", default=None,
                     help="더빙 목소리: golden / chasurimi / none (또는 Voicebox 프로필 ID)")
+    # ⚠️ 다른 프로그램(작업실 등)이 이 스크립트를 불러 쓸 때를 위한 출력 모드입니다.
+    # 사람이 읽는 진행 문구는 stderr로 보내고, stdout에는 결과 JSON 한 줄만 남깁니다.
+    # 그래야 호출한 쪽이 stdout만 파싱하면 됩니다.
+    ap.add_argument("--json", action="store_true", help="결과를 JSON 한 줄로 출력(프로그램 연동용)")
     ap.add_argument("--list", action="store_true", help="효과팩 목록만 보기")
     a = ap.parse_args()
 
     if a.list:
-        for k, v in EFFECTS.items():
-            print("%-16s %-14s 액자=%-10s 컷%.1f초 전환=%s"
-                  % (k, v["label"], v["frame"], v["pace"], "/".join(v["transitions"])))
+        if a.json:
+            print(json.dumps([
+                {"id": k, "label": v["label"], "frame": v["frame"],
+                 "pace": v["pace"], "transitions": v["transitions"]}
+                for k, v in EFFECTS.items()
+            ], ensure_ascii=False))
+        else:
+            for k, v in EFFECTS.items():
+                print("%-16s %-14s 액자=%-10s 컷%.1f초 전환=%s"
+                      % (k, v["label"], v["frame"], v["pace"], "/".join(v["transitions"])))
         return 0
     if a.selftest:
         return 0 if selftest(a.out_dir) else 1
@@ -774,8 +801,17 @@ def main():
         ap.error("--scenes-json 또는 --selftest 가 필요합니다.")
     with open(a.scenes_json, encoding="utf-8") as f:
         scenes = json.load(f)
-    render(scenes, a.out, effect=a.effect, template=a.template, hook=a.hook,
-           target_seconds=a.seconds, intro=a.intro, bgm=a.bgm, voice=a.voice)
+    try:
+        result = render(scenes, a.out, effect=a.effect, template=a.template, hook=a.hook,
+                        target_seconds=a.seconds, intro=a.intro, bgm=a.bgm, voice=a.voice,
+                        verbose=not a.json)
+    except Exception as e:
+        if a.json:
+            print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+            return 1
+        raise
+    if a.json:
+        print(json.dumps({"ok": True, **result}, ensure_ascii=False))
     return 0
 
 
