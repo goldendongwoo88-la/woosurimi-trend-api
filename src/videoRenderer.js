@@ -31,6 +31,7 @@ const { execFile } = require("child_process");
 const ffmpegPath = require("ffmpeg-static");
 const { getTemplate } = require("./videoTemplates");
 const { buildAss } = require("./assSubtitle");
+const { getEffect, transitionAt, tiltAt, DEFAULT_EFFECT_ID } = require("./videoEffects");
 
 const WIDTH = 720;
 const HEIGHT = 1280;
@@ -101,7 +102,25 @@ const FRAME_STYLES = [
     label: "포토카드(폴라로이드)",
     description: "사진을 하얀 테두리 카드로 두고, 배경은 같은 사진을 흐리게 확대해서 채워요 — 감성 브이로그 느낌을 낼 때 써보세요.",
   },
+  {
+    id: "whitecard",
+    label: "화이트카드",
+    description: "밝은 회백색 배경 위에 하얀 카드를 그림자와 함께 올려요 — 제품컷을 깔끔하게 넘길 때 써보세요.",
+  },
+  {
+    id: "letterbox",
+    label: "시네마 레터박스",
+    description: "위아래에 검은 띠를 넣고 사진을 가운데 띠에만 보여줘요 — 진중한 이야기나 사주 콘텐츠에 어울려요.",
+  },
 ];
+
+// 화이트카드 스타일의 배경색 — 순백(#FFFFFF)으로 두면 하얀 카드가 배경에 묻혀서
+// 경계가 안 보입니다. 아주 살짝 회색을 섞어야 카드가 떠 보입니다.
+const WHITECARD_BG = "0xF2F2F4";
+
+// 레터박스에서 사진이 보이는 가운데 띠 높이입니다. 참고 영상에서 사진이 화면 높이의
+// 대략 60%를 차지했습니다(1280 × 0.6 ≈ 768).
+const LETTERBOX_BAND_H = 768;
 
 // execFile은 기본적으로 시간 제한이 없어서, ffmpeg가 어떤 이유로든(예: 손상된 입력
 // 파일, 예상 못한 인코더 문제) 멈춰버리면 이 Promise가 영영 끝나지 않고 그 위의
@@ -353,16 +372,32 @@ function buildKenBurnsFilter(index, duration, { width, height, maxZoom = 1.18, d
 
 // 사진 한 장을 targetW x targetH로 채운 뒤, animate가 true면 켄번즈 애니메이션까지
 // 적용하는 필터 체인(배열)을 만듭니다. 배경 레이어/카드 레이어에 공통으로 씁니다.
-function buildLayerFilters({ animate, sceneIndex, duration, targetW, targetH, maxZoom, driftRatio }) {
-  if (animate) {
-    const bigW = Math.round(targetW * 1.3);
-    const bigH = Math.round(targetH * 1.3);
-    return [
-      buildCoverCropFilter(bigW, bigH),
-      buildKenBurnsFilter(sceneIndex, duration, { width: targetW, height: targetH, maxZoom, driftRatio }),
-    ];
-  }
-  return [buildCoverCropFilter(targetW, targetH)];
+// grade: 효과팩이 지정한 색보정 필터 문자열(예: "eq=contrast=1.16:saturation=1.34").
+// 켄번즈로 확대한 "뒤"에 걸어야 합니다 — 앞에 걸면 확대 전 큰 이미지 전체를 보정하느라
+// 쓸데없이 느려집니다.
+function buildLayerFilters({ animate, sceneIndex, duration, targetW, targetH, maxZoom, driftRatio, grade = null }) {
+  const base = animate
+    ? [
+        buildCoverCropFilter(Math.round(targetW * 1.3), Math.round(targetH * 1.3)),
+        buildKenBurnsFilter(sceneIndex, duration, { width: targetW, height: targetH, maxZoom, driftRatio }),
+      ]
+    : [buildCoverCropFilter(targetW, targetH)];
+  return grade ? [...base, grade] : base;
+}
+
+/**
+ * 카드를 살짝 기울입니다(캡컷 포토카드 효과의 핵심 — 반듯하면 손으로 놓은 느낌이 안 납니다).
+ *
+ * ⚠️ rotate 필터는 회전하면서 생긴 네 귀퉁이를 채울 색이 필요한데, 기본값이 검정입니다.
+ * 그대로 두면 하얀 카드 주변에 검은 삼각형이 생깁니다. c=none(투명)으로 두고 그 전에
+ * format=rgba로 알파 채널을 만들어 줘야 배경이 비칩니다.
+ * ow/oh도 키워주지 않으면 회전한 모서리가 잘려 나갑니다.
+ */
+function buildTiltFilters(deg) {
+  if (!deg) return [];
+  const rad = (deg * Math.PI) / 180;
+  const a = rad.toFixed(5);
+  return ["format=rgba", `rotate=${a}:c=none:ow=rotw(${a}):oh=roth(${a})`];
 }
 
 // ⚠️ 이 static ffmpeg 빌드에는 drawtext 필터가 빠져 있어서(라이선스 이유로 종종 제외됨),
@@ -387,6 +422,7 @@ async function renderSceneSegment({
   narrationPath = null,
   templateId = "bold-black",
   frameStyle = "full",
+  effectId = DEFAULT_EFFECT_ID,
   hookText = "",
   encodePreset = "veryfast",
   fadeIn = true,
@@ -437,14 +473,39 @@ async function renderSceneSegment({
   if (fadeIn) fadeSteps.push(`fade=t=in:st=0:d=${FADE_SEC}`);
   if (fadeOut) fadeSteps.push(`fade=t=out:st=${Math.max(duration - FADE_SEC, 0)}:d=${FADE_SEC}`);
 
-  const usePolaroid = Boolean(imagePath) && frameStyle === "polaroid";
+  // ⚠️ 화면 구성을 정하는 순서 — 호출부가 frameStyle을 콕 집어 주면 그게 이깁니다.
+  // 비워두거나 "auto"로 주면 효과팩이 정한 구성을 씁니다. 예전 호출부는 전부
+  // frameStyle을 명시하고 있으니 동작이 바뀌지 않습니다.
+  const effect = getEffect(effectId);
+  const motion = effect.motion || {};
+  const grade = effect.grade || null;
+  const tiltDeg = tiltAt(effect, sceneIndex);
+  const style = !frameStyle || frameStyle === "auto" ? effect.frame : frameStyle;
+
+  // polaroid는 예전 이름, photocard는 효과팩에서 쓰는 이름 — 같은 화면입니다.
+  const isCard = Boolean(imagePath) && ["polaroid", "photocard", "whitecard"].includes(style);
+  const isLetterbox = Boolean(imagePath) && style === "letterbox";
 
   const audioArgs = narrationPath
     ? ["-i", narrationPath]
     : ["-f", "lavfi", "-t", String(duration), "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"];
 
-  if (usePolaroid) {
-    // === 포토카드(폴라로이드) 스타일: 배경(흐리게 확대) + 하얀 테두리 카드(원본 사진) ===
+  const finalSteps = [subtitles, ...fadeSteps, "format=yuv420p"].join(",");
+
+  if (isCard) {
+    // === 카드 스타일: 하얀 테두리 카드(원본 사진) + 배경 ===
+    // 배경이 두 가지입니다.
+    //   · photocard — 같은 사진을 흐리게 확대해서 깔기(감성)
+    //   · whitecard — 밝은 회백색 단색(제품컷을 깔끔하게)
+    const flatBg = style === "whitecard";
+
+    // 단색 배경은 여백이 넓어야 카드가 떠 보입니다. 사진 배경일 때보다 카드를 줄입니다.
+    const contentW = flatBg ? 580 : CARD_CONTENT_W;
+    const contentH = flatBg ? 880 : CARD_CONTENT_H;
+    const border = flatBg ? 24 : CARD_BORDER;
+    const cardW = contentW + border * 2;
+    const cardH = contentH + border * 2;
+
     const bgFilters = buildLayerFilters({
       animate,
       sceneIndex,
@@ -461,38 +522,50 @@ async function renderSceneSegment({
       animate,
       sceneIndex,
       duration,
-      targetW: CARD_CONTENT_W,
-      targetH: CARD_CONTENT_H,
-      maxZoom: 1.06,
-      driftRatio: 0.03,
+      targetW: contentW,
+      targetH: contentH,
+      maxZoom: motion.maxZoom ?? 1.06,
+      driftRatio: motion.driftRatio ?? 0.03,
+      grade,
     })
-      .concat([`pad=w=${CARD_W}:h=${CARD_H}:x=${CARD_BORDER}:y=${CARD_BORDER}:color=white`])
+      .concat([`pad=w=${cardW}:h=${cardH}:x=${border}:y=${border}:color=white`])
+      .concat(buildTiltFilters(tiltDeg))
       .join(",");
 
-    const shadowFilters = "boxblur=16:2,format=yuva420p,colorchannelmixer=aa=0.4";
+    // 그림자도 카드와 같은 각도로 기울여야 따로 놀지 않습니다.
+    const shadowFilters = [
+      flatBg ? "boxblur=12:2" : "boxblur=16:2",
+      "format=yuva420p",
+      `colorchannelmixer=aa=${flatBg ? "0.26" : "0.4"}`,
+    ]
+      .concat(buildTiltFilters(tiltDeg))
+      .join(",");
 
     const overlayY = `(H-h)/2-${CARD_Y_OFFSET}`;
     const shadowY = `(H-h)/2-${CARD_Y_OFFSET}+14`;
     const shadowX = `(W-w)/2+10`;
 
-    const finalSteps = [subtitles, ...fadeSteps, "format=yuv420p"].join(",");
-
-    const filterComplex = [
-      `[0:v]split=2[fgsrc][bgsrc]`,
-      `[bgsrc]${bgFilters}[bglayer]`,
-      `[1:v]${shadowFilters}[shadow]`,
-      `[bglayer][shadow]overlay=x=${shadowX}:y=${shadowY}:format=auto[withshadow]`,
-      `[fgsrc]${fgFilters}[card]`,
-      `[withshadow][card]overlay=x=(W-w)/2:y=${overlayY}[merged]`,
-      `[merged]${finalSteps}[outv]`,
-    ].join(";");
+    const parts = [];
+    if (flatBg) {
+      // 사진을 배경으로 안 쓰니 split이 필요 없습니다 — 그만큼 디코딩도 한 번 덜 합니다.
+      parts.push(`color=c=${WHITECARD_BG}:s=${WIDTH}x${HEIGHT}:r=${FPS}:d=${duration}[bglayer]`);
+      parts.push(`[0:v]${fgFilters}[card]`);
+    } else {
+      parts.push(`[0:v]split=2[fgsrc][bgsrc]`);
+      parts.push(`[bgsrc]${bgFilters}[bglayer]`);
+      parts.push(`[fgsrc]${fgFilters}[card]`);
+    }
+    parts.push(`[1:v]${shadowFilters}[shadow]`);
+    parts.push(`[bglayer][shadow]overlay=x=${shadowX}:y=${shadowY}:format=auto[withshadow]`);
+    parts.push(`[withshadow][card]overlay=x=(W-w)/2:y=${overlayY}:format=auto[merged]`);
+    parts.push(`[merged]${finalSteps}[outv]`);
 
     const args = [
       "-y",
       "-loop", "1", "-t", String(duration), "-i", imagePath,
-      "-f", "lavfi", "-t", String(duration), "-i", `color=c=black:s=${CARD_W}x${CARD_H}:r=${FPS}`,
+      "-f", "lavfi", "-t", String(duration), "-i", `color=c=black:s=${cardW}x${cardH}:r=${FPS}`,
       ...audioArgs,
-      "-filter_complex", filterComplex,
+      "-filter_complex", parts.join(";"),
       "-map", "[outv]",
       "-map", "2:a",
       "-c:v", "libx264",
@@ -512,6 +585,47 @@ async function renderSceneSegment({
     return;
   }
 
+  if (isLetterbox) {
+    // === 시네마 레터박스: 검은 화면 가운데 띠에만 사진 ===
+    // ⚠️ 자막(MarginV 기준 아래에서 약 300px)이 아래쪽 검은 띠에 얹힙니다. 사진을 가리지
+    // 않으면서 글자가 가장 잘 읽히는 배치라, 이 스타일에서는 오히려 장점입니다.
+    const bandFilters = buildLayerFilters({
+      animate,
+      sceneIndex,
+      duration,
+      targetW: WIDTH,
+      targetH: LETTERBOX_BAND_H,
+      maxZoom: motion.maxZoom ?? 1.12,
+      driftRatio: motion.driftRatio ?? 0.05,
+      grade,
+    }).join(",");
+
+    const args = [
+      "-y",
+      "-loop", "1", "-t", String(duration), "-i", imagePath,
+      ...audioArgs,
+      "-filter_complex",
+      [
+        `color=c=black:s=${WIDTH}x${HEIGHT}:r=${FPS}:d=${duration}[bg]`,
+        `[0:v]${bandFilters}[band]`,
+        `[bg][band]overlay=x=0:y=(H-h)/2[merged]`,
+        `[merged]${finalSteps}[outv]`,
+      ].join(";"),
+      "-map", "[outv]",
+      "-map", "1:a",
+      "-c:v", "libx264",
+      "-preset", encodePreset,
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-af", "apad",
+      "-t", String(duration),
+      outPath,
+    ];
+    await runFfmpeg(args);
+    tempFiles.forEach((f) => fs.existsSync(f) && fs.unlinkSync(f));
+    return;
+  }
+
   // === 예전 스타일("full"): 사진(또는 색상 배경)을 화면 전체에 꽉 채움 ===
   const fade = fadeSteps.join(",");
   let vf;
@@ -522,12 +636,13 @@ async function renderSceneSegment({
       duration,
       targetW: WIDTH,
       targetH: HEIGHT,
-      maxZoom: 1.18,
-      driftRatio: 0.07,
+      maxZoom: motion.maxZoom ?? 1.18,
+      driftRatio: motion.driftRatio ?? 0.07,
+      grade,
     });
     vf = [...layerFilters, subtitles, fade, "format=yuv420p"].filter(Boolean).join(",");
   } else if (imagePath) {
-    vf = [buildCoverCropFilter(WIDTH, HEIGHT), subtitles, fade, `fps=${FPS}`, "format=yuv420p"].filter(Boolean).join(",");
+    vf = [buildCoverCropFilter(WIDTH, HEIGHT), grade, subtitles, fade, `fps=${FPS}`, "format=yuv420p"].filter(Boolean).join(",");
   } else {
     vf = [subtitles, fade, `fps=${FPS}`, "format=yuv420p"].filter(Boolean).join(",");
   }
@@ -576,7 +691,9 @@ async function concatSegments(segmentPaths, outPath) {
 // 그래서 지금은 "두 개씩 차례로" 합칩니다. 한 번에 열리는 파일이 항상 2개뿐이라 장면이
 // 몇 개든 메모리 사용량이 일정합니다. 대신 중간 결과가 여러 번 재인코딩되므로, 중간
 // 파일만 crf 18(눈으로는 차이를 못 느끼는 수준)로 떠서 화질 손실을 막습니다.
-async function concatWithCrossfade(segmentPaths, durations, outPath, transitionSec = TRANSITION_SEC) {
+// effect: 효과팩(videoEffects)을 주면 장면 경계마다 전환 효과를 번갈아 씁니다.
+// 안 주면 예전처럼 전부 fade — 기존 호출부의 결과가 바뀌지 않습니다.
+async function concatWithCrossfade(segmentPaths, durations, outPath, transitionSec = TRANSITION_SEC, effect = null) {
   if (segmentPaths.length === 1) {
     fs.copyFileSync(segmentPaths[0], outPath);
     return durations[0];
@@ -597,12 +714,16 @@ async function concatWithCrossfade(segmentPaths, durations, outPath, transitionS
       const stepOut = isLast ? outPath : path.join(tmpDir, `xfade-step-${i}.mp4`);
       if (!isLast) tempFiles.push(stepOut);
 
+      // ⚠️ 여기서 쓰는 전환 이름이 이 ffmpeg 빌드에 없으면 렌더가 통째로 실패합니다.
+      // videoEffects의 transitionAt이 목록에 없는 이름을 fade로 떨궈주므로 안전합니다.
+      const transitionName = effect ? transitionAt(effect, i - 1) : "fade";
+
       await runFfmpeg([
         "-y",
         "-i", currentPath,
         "-i", segmentPaths[i],
         "-filter_complex",
-        `[0:v][1:v]xfade=transition=fade:duration=${t.toFixed(3)}:offset=${offset.toFixed(3)}[v];` +
+        `[0:v][1:v]xfade=transition=${transitionName}:duration=${t.toFixed(3)}:offset=${offset.toFixed(3)}[v];` +
           `[0:a][1:a]acrossfade=d=${t.toFixed(3)}[a]`,
         "-map", "[v]",
         "-map", "[a]",
@@ -687,11 +808,15 @@ function detectGenderVoice(scenes) {
 async function renderShortformVideo(
   scenes,
   {
-    durationPerScene = 3,
+    // ⚠️ 기본값을 숫자로 박지 않고 비워둡니다. 안 주면 효과팩이 정한 컷 속도(paceSec)를
+    // 씁니다 — 캡컷 자동컷처럼 스타일마다 컷 리듬이 달라야 느낌이 살기 때문입니다.
+    // 숫자를 직접 주면 예전처럼 그 값이 그대로 쓰입니다.
+    durationPerScene = null,
     bgmPath = null,
     animate = true,
     voice = null,
     templateId = "bold-black",
+    effectId = DEFAULT_EFFECT_ID, // 화면 효과팩(videoEffects) — 자막 템플릿과 별개입니다
     frameStyle = "full", // 숏폼은 세로 화면을 꽉 채우는 게 기본(폴라로이드 카드는 선택 옵션)
     hookText = "", // 영상 내내 상단에 고정으로 붙는 후킹 문구
     // 장면 전환 방식: "cut"(하드컷, 기본) | "crossfade"(부드럽게 겹치기)
@@ -701,7 +826,11 @@ async function renderShortformVideo(
     //  2) 크로스페이드는 전 구간을 다시 인코딩해야 해서 ffmpeg 메모리를 크게 먹는데,
     //     Render는 컨테이너 전체가 512MB라 장면이 5개만 돼도 서버가 통째로 재시작됐습니다.
     //     하드컷은 `-c copy`라 디코딩·인코딩이 아예 없어서 메모리를 거의 안 쓰고 훨씬 빠릅니다.
-    transition = "cut",
+    //
+    // ⚠️ 기본값을 null로 둡니다. 호출부가 "cut"/"crossfade"를 콕 집어 주면 그게 이기고,
+    // 안 주면 효과팩이 정한 방식(useTransition)을 따릅니다. 기본 효과(clean-zoom)는
+    // useTransition=false라 예전과 똑같이 하드컷으로 나옵니다.
+    transition = null,
     fastConcat = false, // (구버전 호환) true면 transition을 무시하고 하드컷
     encodePreset = "veryfast", // 미리보기는 "ultrafast"로 더 빠르게
     onPhase = null, // (phase, memMb) — 어디까지 진행됐는지 호출부에 알려줍니다
@@ -709,6 +838,10 @@ async function renderShortformVideo(
 ) {
   if (!scenes || !scenes.length) throw new Error("장면(scene)이 없습니다.");
   if (!fs.existsSync(RENDERS_DIR)) fs.mkdirSync(RENDERS_DIR, { recursive: true });
+
+  const effect = getEffect(effectId);
+  const sceneSeconds = durationPerScene == null ? effect.paceSec || 3 : durationPerScene;
+  const resolvedTransition = transition != null ? transition : effect.useTransition ? "crossfade" : "cut";
 
   // ⚠️ 만든 영상이 쌓이기만 하고 아무도 안 지웠습니다.
   // 하루에 몇 편씩 만들면 며칠 만에 디스크가 찹니다(Render 무료는 용량이 작습니다).
@@ -763,7 +896,7 @@ async function renderShortformVideo(
       let narrationPath = null;
       // 자막 글자 수에 비례해 "2줄씩 읽기에 최소 필요한 시간"을 계산해서, 장면당
       // 기본 길이(durationPerScene)가 너무 짧아 자막이 빠르게 지나가버리지 않게 합니다.
-      let sceneDuration = Math.max(durationPerScene, estimateMinDurationForCaption(scene.caption));
+      let sceneDuration = Math.max(sceneSeconds, estimateMinDurationForCaption(scene.caption));
       if (synthesizeVoice) {
         const narrCandidate = path.join(workDir, `narr${i}.mp3`);
         try {
@@ -789,6 +922,7 @@ async function renderShortformVideo(
         narrationPath,
         templateId,
         frameStyle,
+        effectId,
         hookText,
         encodePreset,
         fadeIn: i === 0,
@@ -808,13 +942,15 @@ async function renderShortformVideo(
     const concatenatedPath = path.join(workDir, "concat.mp4");
     let totalDuration;
     reportPhase("장면 합치기 시작");
-    if (fastConcat || transition !== "crossfade") {
+    if (fastConcat || resolvedTransition !== "crossfade") {
       // 하드컷 — `-c copy`라 디코딩·인코딩이 없어서 사실상 순식간이고 메모리도 안 씁니다.
       totalDuration = durations.reduce((a, b) => a + b, 0);
       await concatSegments(segmentPaths, concatenatedPath);
     } else {
       try {
-        totalDuration = await concatWithCrossfade(segmentPaths, durations, concatenatedPath, TRANSITION_SEC);
+        totalDuration = await concatWithCrossfade(
+          segmentPaths, durations, concatenatedPath, effect.transitionSec || TRANSITION_SEC, effect
+        );
       } catch (err) {
         // 크로스페이드 합성이 실패하면(예: ffmpeg 빌드 문제) 영상 자체가 안 만들어지는 것보다는
         // 낫다고 보고, 예전처럼 하드컷으로 이어붙이는 방식으로 안전하게 대체합니다.
