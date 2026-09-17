@@ -118,6 +118,90 @@ def synthesize(text, out_path, profile_id=None, base_url=None, engine=None, time
     return out_path
 
 
+def list_profiles(base_url=None, timeout=10):
+    """Voicebox에 등록된 목소리 목록을 그대로 받아옵니다(형식은 버전마다 다를 수 있음)."""
+    url = (base_url or os.environ.get("VOICEBOX_URL") or DEFAULT_URL).rstrip("/")
+    with urllib.request.urlopen(url + "/profiles", timeout=timeout) as res:
+        raw = res.read().decode("utf-8", "ignore")
+    try:
+        return json.loads(raw)
+    except Exception:
+        return raw
+
+
+def _walk_profiles(data):
+    """버전마다 응답 모양이 달라서, id/name 비슷한 키를 가진 것만 훑어 뽑습니다."""
+    found = []
+
+    def visit(node):
+        if isinstance(node, dict):
+            keys = {k.lower(): k for k in node}
+            idk = next((keys[k] for k in ("id", "profile_id", "uuid", "profileid") if k in keys), None)
+            namek = next((keys[k] for k in ("name", "title", "label", "display_name") if k in keys), None)
+            if idk or namek:
+                found.append({
+                    "id": node.get(idk) if idk else None,
+                    "name": node.get(namek) if namek else None,
+                })
+            for v in node.values():
+                visit(v)
+        elif isinstance(node, list):
+            for v in node:
+                visit(v)
+
+    visit(data)
+    return [f for f in found if f.get("id") or f.get("name")]
+
+
+def check(base_url=None, engine=None, say=None, out_path=None):
+    """
+    Voicebox가 제대로 붙는지 한 번에 확인합니다.
+
+    이 스크립트를 **사장님 PC에서** 돌려야 합니다 — 127.0.0.1은 그 PC 안의 주소라
+    다른 컴퓨터(클라우드 포함)에서는 닿지 않습니다.
+    """
+    url = (base_url or os.environ.get("VOICEBOX_URL") or DEFAULT_URL).rstrip("/")
+    print("Voicebox 주소: %s" % url)
+
+    try:
+        data = list_profiles(url)
+    except Exception as e:
+        print("\n❌ 연결 실패: %s" % e)
+        print("   · Voicebox 앱이 켜져 있는지 확인해 주세요.")
+        print("   · 포트가 다르면 VOICEBOX_URL 환경변수로 알려주세요.")
+        return 1
+
+    print("✅ 연결됨\n")
+    profiles = _walk_profiles(data)
+    if profiles:
+        print("등록된 목소리:")
+        for p in profiles:
+            print("  · 이름=%s  id=%s" % (p.get("name"), p.get("id")))
+        print("\n환경변수에 이렇게 넣으시면 됩니다(이름을 보고 맞는 id를 골라 넣으세요):")
+        print("  set VOICEBOX_PROFILE_GOLDEN=<골든 보이스의 id>")
+        print("  set VOICEBOX_PROFILE_CHASURIMI=<차수리미 보이스의 id>")
+    else:
+        print("목소리 목록을 해석하지 못했습니다. 아래 원본을 그대로 보고 id를 찾아주세요:\n")
+        print(json.dumps(data, ensure_ascii=False, indent=2)[:2000]
+              if not isinstance(data, str) else data[:2000])
+
+    if say:
+        pid = os.environ.get("VOICEBOX_PROFILE_GOLDEN") or os.environ.get("VOICEBOX_PROFILE_ID")
+        if profiles and not pid:
+            pid = profiles[0].get("id") or profiles[0].get("name")
+        dest = out_path or "voicebox_test.mp3"
+        print("\n시험 삼아 한 줄 읽어봅니다 (profile_id=%s)" % pid)
+        try:
+            synthesize(say, dest, pid, url, engine)
+            print("✅ 저장됨: %s — 들어보시고 소리가 나오면 성공입니다." % dest)
+        except Exception as e:
+            print("❌ 실패: %s" % e)
+            print("   엔진 이름이 다를 수 있습니다. 화면에 'Qwen3-TTS 1.7B'로 보인다면:")
+            print("   python goldencut_voice.py --check --say \"테스트\" --engine qwen3-tts-1.7b")
+            return 1
+    return 0
+
+
 def narrate_scenes(scenes, workdir, profile_id=None, base_url=None, engine=None, verbose=True):
     """
     장면마다 대사를 읽어 mp3를 만들고, scene["narration"]에 경로를 채워 돌려줍니다.
@@ -144,3 +228,22 @@ def narrate_scenes(scenes, workdir, profile_id=None, base_url=None, engine=None,
                 print("  더빙 %d/%d 실패(자막만 나갑니다): %s" % (i + 1, len(scenes), e))
         out.append(sc)
     return out, failed
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description="골든컷 더빙(Voicebox) 점검·테스트")
+    ap.add_argument("--check", action="store_true", help="연결·목소리 목록 확인")
+    ap.add_argument("--say", help="이 문장을 실제로 읽혀서 mp3로 저장(소리 확인용)")
+    ap.add_argument("--out", help="--say 결과 저장 경로 (기본 voicebox_test.mp3)")
+    ap.add_argument("--url", help="Voicebox 주소 (기본 http://127.0.0.1:17493)")
+    ap.add_argument("--engine", help="엔진 이름 (기본 qwen_custom_voice)")
+    a = ap.parse_args()
+    if not a.check and not a.say:
+        ap.error("--check 또는 --say 가 필요합니다.")
+    return check(a.url, a.engine, a.say, a.out)
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
