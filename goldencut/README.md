@@ -62,6 +62,29 @@ render(scenes, "out.mp4", effect="whitecard-pop", hook="제목", target_seconds=
 편집이라 클립마다 원래 소리가 튀면 음악과 부딪힙니다(캡컷도 기본이 이렇습니다).
 원본 소리를 살리려면 그 클립 오디오를 따로 뽑아 `narration`으로 넣으세요.
 
+### 더빙 목소리 (Voicebox, 로컬·무료)
+
+```bash
+python goldencut_effects.py --scenes-json scenes.json --out out.mp4 --voice golden
+python goldencut_effects.py --scenes-json scenes.json --out out.mp4 --voice chasurimi
+python goldencut_effects.py --scenes-json scenes.json --out out.mp4 --voice none   # 자막만
+```
+
+프로필 ID는 PC마다 달라서 **환경변수로** 받습니다(코드에 박으면 아내분 PC에서 안 맞습니다):
+
+```
+VOICEBOX_URL=http://127.0.0.1:17493
+VOICEBOX_PROFILE_GOLDEN=골든_프로필ID
+VOICEBOX_PROFILE_CHASURIMI=차수리미_프로필ID
+```
+
+프로필 ID는 Voicebox 앱 화면 또는 `GET {VOICEBOX_URL}/profiles`에서 확인합니다.
+
+⚠️ 더빙은 **장면 렌더보다 먼저** 만듭니다. 장면 길이가 "말이 끝나는 시간"에 맞춰
+늘어나야 해서, 음성 길이를 미리 알아야 하기 때문입니다.
+⚠️ 자막의 `*별표*` 강조 표시는 읽지 않도록 빼고 넘깁니다.
+⚠️ 한 장면 더빙이 실패해도 나머지는 계속 갑니다 — 그 장면만 자막으로 나갑니다.
+
 ---
 
 ## 2. 자동 캡션 — `goldencut_caption.py`
@@ -146,3 +169,4 @@ Enterprise 라이선스가 필요합니다. "카탈로그에서 전부 다운로
 | 자막 단어별 강조 | ✅ 프레임으로 확인 (1.3초 "이" → 2.2초 "선크림"으로 강조 이동) |
 | .srt 내보내기/불러오기 | ✅ 왕복 확인 |
 | 받아쓰기(ASR) | ⚠️ **미검증** — 이 환경에 whisper가 없어서 못 돌려봤습니다. 사장님 PC에서 확인 필요 |
+| 목소리 선택(골든/차수리미) | ⚠️ **이름 해석만 검증** — 이 환경에 Voicebox가 없어 실제 더빙은 사장님 PC에서 확인 필요 |

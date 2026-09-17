@@ -609,11 +609,14 @@ def mux_bgm(video, bgm, total, out_path):
 # ───────────────────────────────────────────────────────────────
 def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook="",
            target_seconds=None, duration_per_scene=None, intro=None, bgm=None,
-           animate=True, font_dir=None, font_name=None, preset="veryfast", verbose=True):
+           voice=None, animate=True, font_dir=None, font_name=None,
+           preset="veryfast", verbose=True):
     """
     scenes: [{"image": 경로, "caption": "문구", "narration": mp3경로(선택)}, ...]
     target_seconds: 15 / 28 등 — 영상 전체 길이를 맞춥니다(대략).
     intro: "scatter"면 사진들이 흩뿌려진 인트로를 맨 앞에 붙입니다.
+    voice: "golden" / "chasurimi" / "none" — Voicebox로 장면 대사를 더빙합니다.
+           (프로필 ID를 직접 넣어도 됩니다. None이면 더빙 없이 자막만.)
     """
     if not scenes:
         raise ValueError("장면이 없습니다.")
@@ -635,6 +638,21 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
 
     workdir = tempfile.mkdtemp(prefix="goldencut-")
     try:
+        # ⚠️ 더빙을 먼저 만듭니다. 장면 길이가 "말이 끝나는 시간"에 맞춰 늘어나야 해서,
+        # 렌더를 시작하기 전에 음성 길이를 알고 있어야 합니다.
+        voice_label = "음성 없이 자막만"
+        if voice and str(voice).lower() != "none":
+            from goldencut_voice import resolve_voice, narrate_scenes, is_ready
+            profile_id, voice_label = resolve_voice(voice)
+            ok, why = is_ready(profile_id=profile_id)
+            if not ok:
+                raise RuntimeError("더빙을 할 수 없습니다 — %s" % why)
+            if verbose:
+                print("  더빙: %s" % voice_label)
+            scenes, failed = narrate_scenes(scenes, workdir, profile_id, verbose=verbose)
+            if failed and verbose:
+                print("  (%d개 장면은 더빙 실패 — 자막만 나갑니다)" % failed)
+
         segments, durations = [], []
 
         if intro == "scatter":
@@ -685,7 +703,7 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
         if verbose:
             print("완성: %s (%.2f초)" % (out_path, actual))
         return {"path": out_path, "duration": actual, "effect": effect,
-                "label": eff["label"], "scenes": len(scenes)}
+                "label": eff["label"], "scenes": len(scenes), "voice": voice_label}
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
@@ -740,6 +758,8 @@ def main():
     ap.add_argument("--seconds", type=float, help="영상 전체 길이 (15 / 28 등)")
     ap.add_argument("--intro", choices=["scatter"], help="흩뿌린 사진 인트로")
     ap.add_argument("--bgm")
+    ap.add_argument("--voice", default=None,
+                    help="더빙 목소리: golden / chasurimi / none (또는 Voicebox 프로필 ID)")
     ap.add_argument("--list", action="store_true", help="효과팩 목록만 보기")
     a = ap.parse_args()
 
@@ -755,7 +775,7 @@ def main():
     with open(a.scenes_json, encoding="utf-8") as f:
         scenes = json.load(f)
     render(scenes, a.out, effect=a.effect, template=a.template, hook=a.hook,
-           target_seconds=a.seconds, intro=a.intro, bgm=a.bgm)
+           target_seconds=a.seconds, intro=a.intro, bgm=a.bgm, voice=a.voice)
     return 0
 
 
