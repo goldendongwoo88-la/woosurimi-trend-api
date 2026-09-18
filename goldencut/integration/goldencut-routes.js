@@ -26,11 +26,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 // 엔진 파이썬 파일들이 있는 폴더. 이 파일이 goldencut/integration/ 안에 있으니 한 단계 위입니다.
-const ENGINE_DIR = process.env.GOLDENCUT_DIR || path.join(__dirname, "..");
-// 윈도우는 'python', 맥·리눅스는 'python3'이 기본입니다. 다르면 GOLDENCUT_PYTHON으로 바꾸세요.
-const PYTHON = process.env.GOLDENCUT_PYTHON || (process.platform === "win32" ? "python" : "python3");
-// 렌더 결과물을 모아두는 곳.
-const WORK_DIR = process.env.GOLDENCUT_WORK_DIR || path.join(os.tmpdir(), "goldencut-jobs");
+const { ENGINE_DIR, WORK_DIR, PYTHON, runEngine } = require("./engine");
 // 폴더 열어보기를 이 경로 아래로만 제한하고 싶을 때 씁니다(비워두면 제한 없음 = 내 PC 전체).
 const BROWSE_ROOT = process.env.GOLDENCUT_ROOT || "";
 
@@ -61,64 +57,8 @@ function localOnly(req, res, next) {
   });
 }
 
-/**
- * 파이썬 오류에서 사람이 읽을 부분만 남깁니다.
- *
- * 엔진이 죽으면 stderr에 traceback이 통째로 쏟아집니다("File ...", "^^^^", "raise ...").
- * 그걸 그대로 화면에 띄우면 뭘 해야 하는지 알 수가 없습니다. 파이썬은 진짜 이유를
- * 맨 끝의 "XxxError: 설명" 줄에 적으므로, 그 줄부터 뒤만 보여줍니다.
- */
-function cleanError(lines) {
-  const idx = lines.map((l) => /^\s*\w*(Error|Exception):/.test(l)).lastIndexOf(true);
-  const picked = idx >= 0 ? lines.slice(idx) : lines.slice(-6);
-  return picked
-    .map((l) => l.replace(/^\s*\w*(Error|Exception):\s*/, ""))
-    .filter((l) => l.trim() && !/^\s*(\^+|File "|Traceback|raise |\.\.\.)/.test(l))
-    .join("\n")
-    .trim();
-}
-
-/** 엔진을 한 번 돌립니다. stdout=결과 JSON, stderr=진행 문구. */
-function runEngine(script, args, { onProgress } = {}) {
-  return new Promise((resolve) => {
-    const scriptPath = path.join(ENGINE_DIR, script);
-    if (!fs.existsSync(scriptPath)) {
-      return resolve({ ok: false, error: `엔진 파일이 없습니다: ${scriptPath}` });
-    }
-    let child;
-    try {
-      child = spawn(PYTHON, [scriptPath, ...args], { cwd: ENGINE_DIR });
-    } catch (e) {
-      return resolve({ ok: false, error: `파이썬을 실행하지 못했습니다(${PYTHON}): ${e.message}` });
-    }
-
-    let stdout = "";
-    let stderrTail = [];
-    child.stdout.on("data", (b) => { stdout += b.toString(); });
-    child.stderr.on("data", (b) => {
-      const lines = b.toString().split(/\r?\n/).filter((l) => l.trim());
-      for (const line of lines) {
-        stderrTail.push(line);
-        if (stderrTail.length > 60) stderrTail.shift();
-        if (onProgress) onProgress(line);
-      }
-    });
-    child.on("error", (e) => {
-      resolve({ ok: false, error: `파이썬을 실행하지 못했습니다(${PYTHON}): ${e.message}` });
-    });
-    child.on("close", (code) => {
-      // stdout의 마지막 JSON 한 줄만 결과입니다.
-      const line = stdout.trim().split(/\r?\n/).filter((l) => l.trim()).pop();
-      if (line) {
-        try { return resolve(JSON.parse(line)); } catch { /* 아래로 */ }
-      }
-      resolve({
-        ok: false,
-        error: cleanError(stderrTail) || `엔진이 ${code}번으로 끝났습니다.`,
-      });
-    });
-  });
-}
+// 엔진 실행·결과파싱·오류정리는 engine.js에 모아뒀습니다(위에서 함께 가져옵니다).
+// URL 자동 제작(autocut.js)도 같은 걸 쓰기 때문에, 여기서 또 만들면 두 벌이 되어 어긋납니다.
 
 /** 오래된 작업 폴더를 치웁니다. */
 function sweepOldJobs() {
@@ -297,9 +237,17 @@ module.exports = function mountGoldenCut(app, options = {}) {
       status: job.status,
       kind: job.kind,
       elapsed: Math.round((Date.now() - job.startedAt) / 1000),
-      latest: job.progress[job.progress.length - 1] || "",
+      latest: job.latest || job.progress[job.progress.length - 1] || "",
       progress: job.progress,
       result: job.result,
+      // ↓ URL 자동 제작(kind: "from-url")일 때만 채워집니다.
+      stage: job.stage || null,
+      source: job.source || null,
+      plan: job.plan || null,
+      videos: job.videos || null,
+      imagesDownloaded: job.imagesDownloaded ?? null,
+      imagesFailed: job.imagesFailed ?? null,
+      voiceNote: job.voiceNote || "",
     });
   });
 
@@ -321,6 +269,53 @@ module.exports = function mountGoldenCut(app, options = {}) {
       c.on("close", () => resolve(all.trim()));
     });
     res.json({ ok: true, report: out });
+  });
+
+  // ── 9. 스타일 프리셋 10종 ─────────────────────────────────
+  // 화면효과+자막디자인+배경음악+목소리+길이를 한 묶음으로 미리 짜둔 것입니다.
+  app.get(`${base}/styles`, localOnly, (req, res) => {
+    const { STYLES, CATEGORIES } = require("./styles");
+    res.json({ ok: true, categories: CATEGORIES, styles: STYLES });
+  });
+
+  // ── 10. 링크 하나로 추천 영상 6개 ─────────────────────────
+  // 블로그 / 뉴스 / 상품 URL을 넣으면 글에서 사진·문장을 뽑아 6개를 만듭니다.
+  // 오래 걸리는 일이라 여기서도 작업번호를 먼저 돌려주고 뒤에서 돕니다.
+  app.post(`${base}/from-url`, localOnly, (req, res) => {
+    const b = req.body || {};
+    const url = String(b.url || "").trim();
+    if (!/^https?:\/\//i.test(url)) {
+      return res.status(400).json({ ok: false, error: "http로 시작하는 주소를 넣어주세요." });
+    }
+
+    const job = newJob("from-url");
+    job.base = base;       // 결과 재생 주소를 만들 때 씁니다
+    job.stage = "시작";
+    job.latest = "";
+    job.videos = [];
+    res.json({ ok: true, jobId: job.id });
+
+    const { buildFromUrl } = require("./autocut");
+    buildFromUrl(job, { url, source: b.source, styleIds: b.styleIds })
+      .then(() => {
+        job.status = "done";
+        const ok = (job.videos || []).filter((v) => v.status === "완료").length;
+        job.result = { ok: true, made: ok, of: (job.videos || []).length };
+      })
+      .catch((e) => {
+        job.status = "failed";
+        job.stage = "실패";
+        job.result = { ok: false, error: e.message };
+      });
+  });
+
+  // ── 11. 추천 영상 하나 재생 ───────────────────────────────
+  app.get(`${base}/video/:jobId/:styleId`, localOnly, (req, res) => {
+    const job = jobs.get(req.params.jobId);
+    if (!job || !Array.isArray(job.videos)) return res.status(404).send("그런 작업이 없습니다.");
+    const v = job.videos.find((x) => x.styleId === req.params.styleId);
+    if (!v || !v.path || !fs.existsSync(v.path)) return res.status(404).send("아직 결과가 없습니다.");
+    res.sendFile(v.path);
   });
 
   console.log(`[goldencut] 자동컷·자동캡션 라우트를 붙였습니다 — ${base} (엔진: ${ENGINE_DIR})`);

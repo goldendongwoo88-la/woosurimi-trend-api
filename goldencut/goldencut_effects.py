@@ -209,6 +209,24 @@ def run(args, timeout=300):
     return p
 
 
+def probe_video_duration(path):
+    """**영상 스트림**의 길이만 잽니다.
+
+    ⚠️ probe_duration(컨테이너 길이)은 영상과 소리 중 긴 쪽을 돌려줍니다. 그래서 그림이
+    잘려나가도 소리가 멀쩡하면 정상으로 보입니다. 실제로 -loop 1에 -framerate를 빠뜨려
+    모든 사진 장면의 그림이 5/6로 짧아진 적이 있는데, 컨테이너 길이만 보다가 한참
+    못 잡았습니다. 그래서 그림 길이는 따로 잽니다.
+    """
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=duration", "-of", "default=nw=1:nk=1", path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30).stdout
+        return float(out.decode().strip())
+    except Exception:
+        return None
+
+
 def probe_duration(path):
     try:
         out = subprocess.run(
@@ -447,7 +465,13 @@ def render_scene(image, caption, duration, out_path, index, effect, template,
         # 영상은 이미 움직입니다. 거기에 켄번즈까지 겹치면 어지럽고 인코딩만 느려집니다.
         animate = False
     elif image:
-        source_in = ["-loop", "1", "-t", str(duration), "-i", image]
+        # ⚠️ -framerate를 반드시 같이 줘야 합니다. -loop 1로 사진을 읽을 때 ffmpeg는
+        # 기본 25fps로 디코딩하는데, 출력은 30fps라서 프레임 수가 모자랍니다. 그러면
+        # 같은 장면의 "소리는 2.5초, 그림은 2.08초"가 되어 25/30 = 5/6로 짧아집니다.
+        # 한 장면만 보면 살짝 짧은 정도지만, 이어붙일 때 xfade offset은 의도한 길이로
+        # 계산되므로 실제 그림 길이를 넘어서고, 결국 영상이 마지막 장면 하나로 무너집니다.
+        # (컨테이너 길이는 긴 쪽인 '소리'를 따라가서 겉보기엔 정상으로 보였습니다.)
+        source_in = ["-loop", "1", "-framerate", str(FPS), "-t", str(duration), "-i", image]
     else:
         source_in = None
 
@@ -716,8 +740,17 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
             shutil.copyfile(joined, out_path)
 
         actual = probe_duration(out_path) or total
+        # 그림이 의도한 길이대로 들어갔는지 확인합니다. 어긋나면 조용히 넘기지 않고
+        # 바로 실패시킵니다 — 짧아진 영상을 "성공"이라고 내주면 그대로 올라갑니다.
+        vdur = probe_video_duration(out_path)
+        if vdur and total and vdur < total * 0.85:
+            raise RuntimeError(
+                "영상이 잘렸습니다 — 그림 %.2f초 / 목표 %.2f초.\n"
+                "  장면은 다 만들어졌지만 이어붙이는 과정에서 짧아졌습니다.\n"
+                "  (ffmpeg 버전에 따라 사진 입력 프레임레이트 문제일 수 있습니다)"
+                % (vdur, total))
         if verbose:
-            _log("완성: %s (%.2f초)" % (out_path, actual))
+            _log("완성: %s (%.2f초, 그림 %.2f초)" % (out_path, actual, vdur or actual))
         return {"path": out_path, "duration": actual, "effect": effect,
                 "label": eff["label"], "scenes": len(scenes), "voice": voice_label}
     finally:
