@@ -7,9 +7,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/video-guard.sh\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/video-guard.py\"",
             "timeout": 10,
             "statusMessage": "영상 검증 규칙 확인 중"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/no-silent-failure.py\"",
+            "timeout": 10,
+            "statusMessage": "실패를 덮지 않는지 확인 중"
           }
         ]
       }
