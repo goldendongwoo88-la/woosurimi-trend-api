@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>자동컷 · 자동캡션 — 골든컷</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+    font-size: 15px;
+  }
+  header {
+    background: #fff;
+    padding: 16px;
+    border-bottom: 1px solid #e5e5e5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 18px; margin: 0; }
+  h1 small { font-weight: normal; color: #888; font-size: 13px; margin-left: 8px; }
+  main { padding: 16px; max-width: 1080px; margin: 0 auto 80px auto; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+  @media (min-width: 940px) { .grid { grid-template-columns: 1fr 360px; } .col-right { position: sticky; top: 16px; } }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 4px 0; }
+  .card .sub { color: #888; font-size: 13px; margin: 0 0 14px 0; line-height: 1.5; }
+
+  label { display: block; font-size: 13px; font-weight: bold; margin: 12px 0 6px 0; }
+  input[type=text], select, textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; font-family: inherit; background: #fff; color: #222;
+  }
+  input[type=text]:focus, select:focus, textarea:focus { outline: 2px solid #2b7fff; outline-offset: -1px; border-color: #2b7fff; }
+
+  button {
+    padding: 10px 16px; border-radius: 8px; border: 1px solid #ddd; background: #fff;
+    font-size: 14px; font-family: inherit; color: #222; cursor: pointer; font-weight: bold;
+  }
+  button:hover:not(:disabled) { background: #f0f2f5; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: #2b7fff; border-color: #2b7fff; color: #fff; }
+  button.primary:hover:not(:disabled) { background: #1c6ae6; }
+  button.big { width: 100%; padding: 15px; font-size: 16px; }
+  button.tiny { padding: 4px 9px; font-size: 13px; font-weight: normal; }
+
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    padding: 9px 15px; border: 1px solid #ddd; border-radius: 999px; background: #fff;
+    cursor: pointer; font-size: 14px;
+  }
+  .chip.on { background: #222; border-color: #222; color: #fff; font-weight: bold; }
+
+  .banner { padding: 11px 14px; border-radius: 8px; font-size: 13.5px; line-height: 1.55; margin-bottom: 14px; }
+  .banner.ok   { background: #eaf7ee; border: 1px solid #b8e3c4; color: #1b5e2a; }
+  .banner.warn { background: #fff6e5; border: 1px solid #f0d9a8; color: #7a5300; }
+  .banner.err  { background: #fdeaea; border: 1px solid #f3bcbc; color: #8c1c1c; }
+  .banner.info { background: #eef4ff; border: 1px solid #c5d9ff; color: #1c4a91; }
+
+  /* 장면 목록 */
+  .scene {
+    display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: start;
+    padding: 11px; border: 1px solid #e8e8e8; border-radius: 8px; margin-bottom: 8px; background: #fafbfc;
+  }
+  .scene .no {
+    width: 26px; height: 26px; border-radius: 50%; background: #222; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;
+  }
+  .scene .fname { font-size: 13px; font-weight: bold; word-break: break-all; margin-bottom: 6px; }
+  .scene .fname .tag {
+    display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px;
+    background: #e8ecf2; color: #556; margin-right: 6px; font-weight: normal; vertical-align: 1px;
+  }
+  .scene .tools { display: flex; flex-direction: column; gap: 4px; }
+  .empty { color: #999; font-size: 13.5px; text-align: center; padding: 26px 10px; line-height: 1.6; }
+
+  /* 파일 고르기 */
+  .picker { max-height: 280px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; margin-top: 10px; }
+  .picker div.item {
+    padding: 9px 12px; border-bottom: 1px solid #f2f2f2; cursor: pointer; font-size: 13.5px;
+    display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  }
+  .picker div.item:last-child { border-bottom: 0; }
+  .picker div.item:hover { background: #f5f8ff; }
+  .picker .meta { color: #999; font-size: 12px; white-space: nowrap; }
+
+  #log {
+    font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #1e2128; color: #c8d0dc;
+    padding: 12px; border-radius: 8px; max-height: 190px; overflow-y: auto; white-space: pre-wrap;
+    line-height: 1.55; word-break: break-all;
+  }
+  video { width: 100%; border-radius: 8px; background: #000; margin-top: 10px; }
+  .hint { font-size: 12.5px; color: #999; margin-top: 6px; line-height: 1.5; }
+  code { background: #eef0f3; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>자동컷 · 자동캡션 <small>골든컷 엔진</small></h1>
+  <button class="tiny" onclick="checkStatus()">상태 다시 확인</button>
+</header>
+
+<main>
+  <div id="status"></div>
+
+  <div class="grid">
+    <!-- 왼쪽: 장면 고르기 -->
+    <div>
+      <div class="card">
+        <h2>1. 쓸 영상·사진 고르기</h2>
+        <p class="sub">파일이 있는 폴더 경로를 넣으면 목록이 뜹니다. 영상과 사진을 섞어도 됩니다 —
+          영상은 좋은 구간을 알아서 골라냅니다.</p>
+
+        <div class="row">
+          <input type="text" id="dir" placeholder="예: C:\Users\Admin\Videos\소재  또는  /home/user/영상"
+                 onkeydown="if(event.key==='Enter')browse()" style="flex:1; min-width:240px;" />
+          <button onclick="browse()">열기</button>
+        </div>
+        <div id="picker"></div>
+      </div>
+
+      <div class="card">
+        <h2>2. 순서와 자막 정하기 <span id="sceneCount" style="color:#888;font-weight:normal;"></span></h2>
+        <p class="sub">자막에서 <code>*별표*</code>로 감싼 부분만 강조색으로 나옵니다.
+          한 줄을 통째로 칠하지 않는 게 요즘 숏폼 기본입니다.</p>
+        <div id="scenes"><div class="empty">위에서 파일을 눌러 담아주세요.</div></div>
+      </div>
+
+      <div class="card">
+        <h2>자동 캡션 — 이미 만든 영상에 자막만 넣기</h2>
+        <p class="sub">말소리를 받아쓰고 단어별 강조 자막을 입힙니다.</p>
+        <div class="row">
+          <input type="text" id="capVideo" placeholder="자막을 넣을 영상 파일 경로" style="flex:1; min-width:240px;" />
+          <button onclick="runCaption()" id="capBtn">자막 넣기</button>
+        </div>
+        <p class="hint">받아쓰기가 안 되면 <code>pip install faster-whisper</code> 한 번만 해주세요.</p>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 설정 + 만들기 -->
+    <div class="col-right">
+      <div class="card">
+        <h2>3. 어떻게 만들까요</h2>
+
+        <label>화면 효과</label>
+        <select id="effect"><option>불러오는 중…</option></select>
+
+        <label>길이</label>
+        <div class="chips" id="lenChips">
+          <div class="chip on" data-v="">자동</div>
+          <div class="chip" data-v="15">15초</div>
+          <div class="chip" data-v="28">28초</div>
+        </div>
+
+        <label>목소리</label>
+        <div class="chips" id="voiceChips">
+          <div class="chip on" data-v="none">자막만</div>
+          <div class="chip" data-v="golden">골든</div>
+          <div class="chip" data-v="chasurimi">차수리미</div>
+        </div>
+
+        <label>인트로</label>
+        <div class="chips" id="introChips">
+          <div class="chip on" data-v="">없이 바로</div>
+          <div class="chip" data-v="1">흩뿌린 사진</div>
+        </div>
+
+        <label>맨 위 큰 문구 <span style="font-weight:normal;color:#aaa;">(선택)</span></label>
+        <input type="text" id="hook" placeholder="예: 이거 모르면 손해봅니다" />
+
+        <div style="margin-top:18px;">
+          <button class="primary big" id="goBtn" onclick="runRender()">영상 만들기</button>
+        </div>
+        <p class="hint">1080×1920 / 30fps로 나옵니다. 장면 수에 따라 30초~몇 분 걸립니다.</p>
+      </div>
+
+      <div class="card" id="resultCard" style="display:none;">
+        <h2>진행 상황</h2>
+        <div id="resultBanner"></div>
+        <div id="log"></div>
+        <div id="player"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = "/api/goldencut";
+let scenes = [];
+let polling = null;
+
+// ── 상태 확인 ──────────────────────────────────────────────
+async function checkStatus() {
+  const box = document.getElementById("status");
+  box.innerHTML = '<div class="banner info">확인하는 중…</div>';
+  try {
+    const r = await fetch(API + "/status");
+    const d = await r.json();
+    if (d.ok) {
+      box.innerHTML = '<div class="banner ok"><b>준비 완료</b> — ' +
+        (d.python || "") + " · ffmpeg 확인됨</div>";
+    } else {
+      box.innerHTML = '<div class="banner warn"><b>아직 못 씁니다</b><br>' + (d.hint || "") + "</div>";
+    }
+  } catch (e) {
+    box.innerHTML = '<div class="banner err">서버에 연결하지 못했습니다. 서버가 켜져 있나요?</div>';
+  }
+}
+
+// ── 효과 목록 ──────────────────────────────────────────────
+async function loadEffects() {
+  const sel = document.getElementById("effect");
+  try {
+    const r = await fetch(API + "/effects");
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    sel.innerHTML = d.effects.map(e =>
+      `<option value="${e.id}">${e.label} — 컷 ${e.pace}초</option>`).join("");
+    // 기본값은 화이트카드 팝(가장 많이 쓰는 숏폼 형태)입니다.
+    if (d.effects.some(e => e.id === "whitecard-pop")) sel.value = "whitecard-pop";
+  } catch (e) {
+    sel.innerHTML = '<option value="whitecard-pop">화이트카드 팝</option>';
+  }
+}
+
+// ── 폴더 열어보기 ──────────────────────────────────────────
+async function browse(dir) {
+  const input = document.getElementById("dir");
+  if (dir) input.value = dir;
+  const box = document.getElementById("picker");
+  const target = input.value.trim();
+  if (!target) return;
+  box.innerHTML = '<div class="empty">읽는 중…</div>';
+  try {
+    const r = await fetch(API + "/browse?dir=" + encodeURIComponent(target));
+    const d = await r.json();
+    if (!d.ok) { box.innerHTML = '<div class="banner err">' + esc(d.error) + "</div>"; return; }
+    let html = '<div class="picker">';
+    html += `<div class="item" onclick="browse('${js(d.parent)}')"><span>📁 .. (상위 폴더)</span></div>`;
+    for (const f of d.folders)
+      html += `<div class="item" onclick="browse('${js(f.path)}')"><span>📁 ${esc(f.name)}</span></div>`;
+    for (const f of d.files)
+      html += `<div class="item" onclick="addScene('${js(f.path)}','${js(f.name)}','${f.kind}')">
+        <span>${f.kind === "video" ? "🎬" : "🖼"} ${esc(f.name)}</span>
+        <span class="meta">${(f.size/1048576).toFixed(1)}MB</span></div>`;
+    html += "</div>";
+    if (!d.folders.length && !d.files.length)
+      html += '<p class="hint">이 폴더에는 영상·사진이 없습니다.</p>';
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = '<div class="banner err">폴더를 읽지 못했습니다.</div>';
+  }
+}
+
+// ── 장면 목록 ──────────────────────────────────────────────
+function addScene(p, name, kind) { scenes.push({ image: p, name, kind, caption: "" }); drawScenes(); }
+function delScene(i) { scenes.splice(i, 1); drawScenes(); }
+function moveScene(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= scenes.length) return;
+  [scenes[i], scenes[j]] = [scenes[j], scenes[i]];
+  drawScenes();
+}
+function setCaption(i, v) { scenes[i].caption = v; }
+
+function drawScenes() {
+  const box = document.getElementById("scenes");
+  document.getElementById("sceneCount").textContent = scenes.length ? `(${scenes.length}장면)` : "";
+  if (!scenes.length) { box.innerHTML = '<div class="empty">위에서 파일을 눌러 담아주세요.</div>'; return; }
+  box.innerHTML = scenes.map((s, i) => `
+    <div class="scene">
+      <div class="no">${i + 1}</div>
+      <div>
+        <div class="fname"><span class="tag">${s.kind === "video" ? "영상" : "사진"}</span>${esc(s.name)}</div>
+        <input type="text" value="${esc(s.caption)}" placeholder="이 장면에 넣을 자막 — *강조할 말*"
+               oninput="setCaption(${i}, this.value)" />
+      </div>
+      <div class="tools">
+        <button class="tiny" onclick="moveScene(${i},-1)" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="tiny" onclick="moveScene(${i},1)" ${i === scenes.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="tiny" onclick="delScene(${i})">✕</button>
+      </div>
+    </div>`).join("");
+}
+
+// ── 칩 선택 ────────────────────────────────────────────────
+function chipValue(id) {
+  const on = document.querySelector(`#${id} .chip.on`);
+  return on ? on.dataset.v : "";
+}
+for (const id of ["lenChips", "voiceChips", "introChips"]) {
+  document.getElementById(id).addEventListener("click", (e) => {
+    if (!e.target.classList.contains("chip")) return;
+    for (const c of e.target.parentElement.children) c.classList.remove("on");
+    e.target.classList.add("on");
+  });
+}
+
+// ── 만들기 ─────────────────────────────────────────────────
+async function runRender() {
+  if (!scenes.length) { alert("장면을 먼저 담아주세요."); return; }
+  const body = {
+    scenes: scenes.map(s => ({ image: s.image, caption: s.caption })),
+    effect: document.getElementById("effect").value,
+    hook: document.getElementById("hook").value.trim(),
+    seconds: chipValue("lenChips") || null,
+    voice: chipValue("voiceChips"),
+    intro: chipValue("introChips") ? true : false,
+  };
+  await startJob("/render", body, "goBtn", "영상 만들기");
+}
+
+async function runCaption() {
+  const v = document.getElementById("capVideo").value.trim();
+  if (!v) { alert("영상 파일 경로를 넣어주세요."); return; }
+  await startJob("/caption", { video: v }, "capBtn", "자막 넣기");
+}
+
+async function startJob(endpoint, body, btnId, btnLabel) {
+  const btn = document.getElementById(btnId);
+  const card = document.getElementById("resultCard");
+  const banner = document.getElementById("resultBanner");
+  const log = document.getElementById("log");
+  const player = document.getElementById("player");
+
+  btn.disabled = true; btn.textContent = "만드는 중…";
+  card.style.display = "block";
+  banner.innerHTML = '<div class="banner info">시작했습니다…</div>';
+  log.textContent = ""; player.innerHTML = "";
+  if (polling) clearInterval(polling);
+
+  let jobId;
+  try {
+    const r = await fetch(API + endpoint, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || "요청이 거절됐습니다.");
+    jobId = d.jobId;
+  } catch (e) {
+    banner.innerHTML = '<div class="banner err">' + esc(e.message) + "</div>";
+    btn.disabled = false; btn.textContent = btnLabel;
+    return;
+  }
+
+  polling = setInterval(async () => {
+    try {
+      const r = await fetch(API + "/job/" + jobId);
+      const d = await r.json();
+      if (!d.ok) return;
+      log.textContent = (d.progress || []).join("\n");
+      log.scrollTop = log.scrollHeight;
+
+      if (d.status === "running") {
+        banner.innerHTML = `<div class="banner info">만드는 중… ${d.elapsed}초 경과</div>`;
+        return;
+      }
+      clearInterval(polling); polling = null;
+      btn.disabled = false; btn.textContent = btnLabel;
+
+      if (d.status === "done" && d.result) {
+        const res = d.result;
+        banner.innerHTML = '<div class="banner ok"><b>완성됐습니다</b>' +
+          (res.duration ? ` — ${res.duration}초` : "") +
+          (res.label ? ` · ${esc(res.label)}` : "") +
+          (res.voice ? ` · ${esc(res.voice)}` : "") +
+          `<br><span style="font-size:12.5px;">저장 위치: ${esc(res.path || "")}</span></div>`;
+        player.innerHTML = `<video src="${res.playUrl}" controls autoplay muted playsinline></video>`;
+      } else {
+        const msg = (d.result && d.result.error) || "만들지 못했습니다.";
+        banner.innerHTML = '<div class="banner err"><b>실패</b><br>' + esc(msg) + "</div>";
+      }
+    } catch (e) { /* 다음 차례에 다시 물어봅니다 */ }
+  }, 1500);
+}
+
+// ── 잡동사니 ───────────────────────────────────────────────
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function js(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
+
+checkStatus();
+loadEffects();
+</script>
+</body>
+</html>

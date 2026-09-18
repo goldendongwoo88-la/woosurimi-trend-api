@@ -804,7 +804,12 @@ def main():
     try:
         result = render(scenes, a.out, effect=a.effect, template=a.template, hook=a.hook,
                         target_seconds=a.seconds, intro=a.intro, bgm=a.bgm, voice=a.voice,
-                        verbose=not a.json)
+                        # 진행 문구는 _log()가 stderr로 보내므로 --json이어도 켜둡니다.
+                        # stdout은 결과 JSON 한 줄만 남아 깨끗하고, 부르는 쪽(작업실 화면)은
+                        # stderr를 읽어서 "장면 3/8 완료" 같은 진행 상황을 보여줄 수 있습니다.
+                        # 예전엔 여기가 verbose=not a.json 이라 --json으로 부르면 몇 분 동안
+                        # 아무 소식이 없어서, 멈춘 건지 도는 건지 알 수가 없었습니다.
+                        verbose=True)
     except Exception as e:
         if a.json:
             print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
