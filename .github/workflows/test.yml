@@ -13,9 +13,18 @@
 name: 테스트
 
 on:
+  # ⚠️ push 를 모든 브랜치로 열어두면 PR 올린 브랜치에서 같은 검사가 두 번 돕니다
+  # (push 한 번 + pull_request 한 번). 실제로 처음 붙였을 때 그렇게 돌았습니다.
+  # 브랜치는 PR 에서 검사하고, main 은 push 에서 검사합니다.
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+
+# 같은 브랜치에 연달아 푸시하면 앞선 검사는 취소합니다. 어차피 최신 것만 의미가 있고,
+# 러너를 붙잡고 있을 이유가 없습니다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
