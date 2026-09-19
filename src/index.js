@@ -432,9 +432,9 @@ app.get("/api/entertainment/ranking", async (req, res) => {
 app.post("/api/shortform/plan", async (req, res) => {
   const { url, source } = req.body || {};
   if (!url) {
-    return res.status(400).json({ error: "missing_url", message: "블로그 글, 쇼핑 커넥트, 또는 여행 커넥트 URL을 보내주세요." });
+    return res.status(400).json({ error: "missing_url", message: "블로그 글, 뉴스, 쇼핑 커넥트, 또는 여행 커넥트 URL을 보내주세요." });
   }
-  const normalizedSource = ["shopping", "travel"].includes(source) ? source : "blog";
+  const normalizedSource = ["shopping", "travel", "news"].includes(source) ? source : "blog";
 
   try {
     const plan = await planShortform(url, normalizedSource);
@@ -463,7 +463,7 @@ app.post("/api/shortform/plan-from-photos", uploadPhotos.array("photos", 12), as
   if (!topic) {
     return res.status(400).json({ error: "missing_topic", message: "영상 주제를 한 줄로 입력해 주세요." });
   }
-  const source = ["shopping", "travel"].includes(req.body.source) ? req.body.source : "blog";
+  const source = ["shopping", "travel", "news"].includes(req.body.source) ? req.body.source : "blog";
 
   let captions = [];
   if (req.body.captions) {

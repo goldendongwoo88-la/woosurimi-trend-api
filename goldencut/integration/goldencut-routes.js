@@ -26,7 +26,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 // 엔진 파이썬 파일들이 있는 폴더. 이 파일이 goldencut/integration/ 안에 있으니 한 단계 위입니다.
-const { ENGINE_DIR, WORK_DIR, PYTHON, runEngine } = require("./engine");
+const { ENGINE_DIR, WORK_DIR, PYTHON, runEngine, listEffects } = require("./engine");
 // 폴더 열어보기를 이 경로 아래로만 제한하고 싶을 때 씁니다(비워두면 제한 없음 = 내 PC 전체).
 const BROWSE_ROOT = process.env.GOLDENCUT_ROOT || "";
 
@@ -49,8 +49,13 @@ const VIDEO_EXT = new Set([".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"]);
  */
 function localOnly(req, res, next) {
   if (process.env.GOLDENCUT_ALLOW_REMOTE === "1") return next();
-  const ip = (req.ip || req.socket.remoteAddress || "").replace(/^::ffff:/, "");
-  if (ip === "127.0.0.1" || ip === "::1" || ip === "localhost" || ip === "") return next();
+  // ⚠️ req.ip 를 쓰지 않습니다. express 에 trust proxy 가 켜져 있으면 req.ip 는
+  // X-Forwarded-For 헤더값이 되는데, 그건 **보내는 쪽이 마음대로 적을 수 있습니다.**
+  // 남이 `X-Forwarded-For: 127.0.0.1` 만 붙이면 그대로 통과합니다.
+  // 실제로 연결된 소켓 주소는 속일 수 없으니 그것만 봅니다.
+  const ip = String(req.socket?.remoteAddress || "").replace(/^::ffff:/, "");
+  // ⚠️ 빈 값(주소를 못 읽은 경우)은 통과시키지 않습니다. 모르면 막는 쪽입니다.
+  if (ip === "127.0.0.1" || ip === "::1") return next();
   return res.status(403).json({
     ok: false,
     error: "골든컷은 내 컴퓨터에서만 쓸 수 있습니다. (외부 접속 차단)",
@@ -137,7 +142,10 @@ module.exports = function mountGoldenCut(app, options = {}) {
     const dir = String(req.query.dir || "").trim();
     if (!dir) return res.status(400).json({ ok: false, error: "폴더 경로를 넣어주세요." });
     const abs = path.resolve(dir);
-    if (BROWSE_ROOT && !abs.startsWith(path.resolve(BROWSE_ROOT))) {
+    // ⚠️ 단순 startsWith 로 비교하면 GOLDENCUT_ROOT=/data 일 때 /data-백업 도 통과합니다.
+    // 경로 구분자까지 붙여서 비교하거나 정확히 같은 폴더여야 합니다.
+    const root = path.resolve(BROWSE_ROOT || ".");
+    if (BROWSE_ROOT && abs !== root && !abs.startsWith(root + path.sep)) {
       return res.status(403).json({ ok: false, error: `${BROWSE_ROOT} 아래 폴더만 열 수 있습니다.` });
     }
     let entries;
@@ -276,9 +284,27 @@ module.exports = function mountGoldenCut(app, options = {}) {
 
   // ── 9. 스타일 프리셋 10종 ─────────────────────────────────
   // 화면효과+자막디자인+배경음악+목소리+길이를 한 묶음으로 미리 짜둔 것입니다.
-  app.get(`${base}/styles`, localOnly, (req, res) => {
-    const { STYLES, CATEGORIES } = require("./styles");
-    res.json({ ok: true, categories: CATEGORIES, styles: STYLES });
+  //
+  // ⚠️ 프리셋 값이 엔진에 실제로 있는 id인지 여기서 같이 확인해서 돌려줍니다.
+  // 확인을 안 하면 오타 난 효과 id가 렌더 단계에서야 터지고, 그땐 어느 프리셋이
+  // 잘못됐는지 알기 어렵습니다. 못 맞춘 게 있으면 problems 에 담아 **숨기지 않고** 냅니다.
+  app.get(`${base}/styles`, localOnly, async (req, res) => {
+    const { STYLES, CATEGORIES, validateStyles } = require("./styles");
+    let problems = [];
+    let checked = true;
+    try {
+      const effects = await listEffects();
+      const effectIds = effects.map((e) => e.id).filter(Boolean);
+      // 자막 템플릿은 엔진이 --list 로 안 내주므로 확인 목록에서 뺍니다(빈 배열 = 건너뜀).
+      const { TRACKS } = require("../../src/bgmLibrary");
+      const bgmIds = (TRACKS || []).map((t) => t.id).filter(Boolean);
+      problems = validateStyles(effectIds, [], bgmIds);
+      if (!effectIds.length) checked = false;
+    } catch (e) {
+      checked = false;
+      problems = [`프리셋 확인을 못 했습니다: ${e.message}`];
+    }
+    res.json({ ok: true, categories: CATEGORIES, styles: STYLES, problems, checked });
   });
 
   // ── 10. 링크 하나로 추천 영상 6개 ─────────────────────────

@@ -744,11 +744,22 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
         # 바로 실패시킵니다 — 짧아진 영상을 "성공"이라고 내주면 그대로 올라갑니다.
         vdur = probe_video_duration(out_path)
         if vdur and total and vdur < total * 0.85:
+            # ⚠️ 원인을 단정하지 않습니다. 장면 하나하나를 실제로 재서 **어디가** 짧은지
+            # 알려줍니다. 짧은 장면이 있으면 그 장면(원본이 슬롯보다 짧은 영상일 수도
+            # 있습니다)이 원인이고, 전부 멀쩡한데 합친 게 짧으면 이어붙이기가 원인입니다.
+            short = []
+            for idx, (seg, want) in enumerate(zip(segments, durations)):
+                got = probe_video_duration(seg)
+                if got and want and got < want * 0.95:
+                    short.append("장면 %d: 그림 %.2f초 / 계획 %.2f초" % (idx + 1, got, want))
+            if short:
+                why = ("짧은 장면이 있습니다 (원본 영상이 슬롯보다 짧거나, 사진 입력에\n"
+                       "  -framerate 가 빠졌을 때 이렇게 됩니다):\n    " + "\n    ".join(short))
+            else:
+                why = ("장면은 전부 계획대로인데 합친 뒤가 짧습니다 — 이어붙이기"
+                       "(xfade offset) 쪽 문제입니다.")
             raise RuntimeError(
-                "영상이 잘렸습니다 — 그림 %.2f초 / 목표 %.2f초.\n"
-                "  장면은 다 만들어졌지만 이어붙이는 과정에서 짧아졌습니다.\n"
-                "  (ffmpeg 버전에 따라 사진 입력 프레임레이트 문제일 수 있습니다)"
-                % (vdur, total))
+                "영상이 잘렸습니다 — 그림 %.2f초 / 목표 %.2f초.\n  %s" % (vdur, total, why))
         if verbose:
             _log("완성: %s (%.2f초, 그림 %.2f초)" % (out_path, actual, vdur or actual))
         return {"path": out_path, "duration": actual, "effect": effect,
