@@ -28,6 +28,11 @@ CASES = [
     (False, "no-silent-failure.py", "git log --oneline -n 5",           "-n 은 log 것"),
     (False, "no-silent-failure.py", "grep -n foo a.txt && git commit -m x", "-n 은 grep 것"),
     (False, "no-silent-failure.py", f"git commit -F - <<'MSG'\n설명: {M} 를 쓰지 말자\nMSG", "글 속 설명"),
+    # 아래 4건은 2026-09-19 자체 점검에서 훅이 조용히 꺼져 있던 것을 잡은 자리입니다.
+    (True,  "no-silent-failure.py", f"python3 -c \"print('<<EOF')\"\nnpm test {M}", "가짜 heredoc 뒤 위반"),
+    (True,  "no-silent-failure.py", f"npm test && echo done {M}",        "체인 끝에서 덮음"),
+    (False, "no-silent-failure.py", f"rm -rf tmp {M} && npm test",       "덮는 건 정리 명령 쪽"),
+    (False, "no-silent-failure.py", "git commit -m \"grep -n 지원 추가\"", "커밋 메시지 속 -n"),
 
     (True,  "video-guard.py", "ffprobe -show_entries format=duration f.mp4", "컨테이너 길이"),
     (True,  "video-guard.py", "ffmpeg -loop 1 -t 2 -i a.jpg o.mp4",          "framerate 없음"),
@@ -36,6 +41,15 @@ CASES = [
     (False, "video-guard.py", "ffmpeg -loop 1 -framerate 30 -t 2 -i a.jpg o.mp4", "framerate 있음"),
     (False, "video-guard.py", "git status",                                   "무관한 명령"),
     (False, "video-guard.py", "git commit -F - <<'MSG'\nformat=duration 쓰지 말 것 (ffprobe)\nMSG", "글 속 설명"),
+    (True,  "video-guard.py",
+     "ffprobe -select_streams v:0 a.mp4 && ffprobe -show_entries format=duration b.mp4",
+     "한 줄 안 두 번째 호출"),
+    (True,  "video-guard.py",
+     "ffmpeg -loop 1 -framerate 30 -t 2 -i a.jpg -loop 1 -t 2 -i b.jpg o.mp4",
+     "두 번째 사진에 framerate 없음"),
+    (False, "video-guard.py",
+     "ffmpeg -framerate 30 -loop 1 -t 2 -i a.jpg o.mp4",
+     "framerate 가 앞에 있음"),
 ]
 
 fails = 0
