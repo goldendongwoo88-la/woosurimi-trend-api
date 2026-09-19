@@ -248,6 +248,9 @@ module.exports = function mountGoldenCut(app, options = {}) {
       imagesDownloaded: job.imagesDownloaded ?? null,
       imagesFailed: job.imagesFailed ?? null,
       voiceNote: job.voiceNote || "",
+      // ⚠️ 낮춰서 만든 영상이 몇 개인지. 화면은 이걸 **결과 위에** 보여줘야 합니다.
+      // 각 영상의 무엇을 낮췄는지는 videos[i].downgraded 에 한 줄로 들어 있습니다.
+      downgradedCount: job.downgradedCount || 0,
     });
   });
 

@@ -103,7 +103,9 @@ async function downloadImages(urls, destDir, pageUrl, onProgress) {
  * 없으니(자막만으로도 충분히 쓸 수 있습니다), 이럴 땐 조용히 '자막만'으로 낮춰서 만들고
  * 화면에 왜 목소리가 없는지 한 줄로 알려줍니다.
  */
-async function probeVoiceReady() {
+const VOICE_ENV = { golden: "VOICEBOX_PROFILE_GOLDEN", chasurimi: "VOICEBOX_PROFILE_CHASURIMI" };
+
+async function probeVoiceReady(voices = []) {
   // ⚠️ goldencut_voice.py --check 는 결과를 **stdout**에 씁니다. runEngine의 onProgress는
   // stderr만 주기 때문에, 그걸로 판단하면 화면이 늘 "정상"이라고 거짓말을 합니다
   //(실제로 Voicebox를 꺼둔 채 "목소리: 정상"이라고 나왔습니다). 그래서 직접 읽습니다.
@@ -121,8 +123,21 @@ async function probeVoiceReady() {
     c.on("error", () => resolve("연결 실패"));
     c.on("close", () => resolve(all));
   });
-  if (/연결 실패|Connection refused|프로필 ID를 못 찾/.test(text)) {
-    return { ready: false, why: "Voicebox가 꺼져 있거나 목소리 ID가 설정되지 않았습니다." };
+  // ⚠️ "실패 문구가 안 보이면 정상"으로 판단하면 안 됩니다. 출력이 비었거나 우리가
+  // 모르는 문구로 실패하면 그대로 "정상"이 되어, 또 거짓 보고가 나갑니다.
+  // **붙었다는 말이 실제로 있을 때만** 정상으로 봅니다.
+  if (!/✅\s*연결됨/.test(text)) {
+    return { ready: false, why: "Voicebox에 붙지 못했습니다(앱이 꺼져 있을 수 있습니다)." };
+  }
+
+  // ⚠️ --check 는 '붙었는지'만 봅니다. 목소리 프로필 ID가 환경변수에 없으면 붙어 있어도
+  // 더빙은 실패합니다. 그걸 여기서 같이 봐야 화면이 "목소리: 정상"이라고 거짓말하지 않습니다.
+  const missing = [...new Set(voices)]
+    .filter((v) => v && v !== "none")
+    .filter((v) => !(process.env[VOICE_ENV[v] || ""] || process.env.VOICEBOX_PROFILE_ID));
+  if (missing.length) {
+    const names = missing.map((v) => VOICE_ENV[v] || v).join(", ");
+    return { ready: false, why: `Voicebox는 켜져 있지만 목소리 ID가 없습니다(${names}).` };
   }
   return { ready: true, why: "" };
 }
@@ -130,11 +145,18 @@ async function probeVoiceReady() {
 /** 스타일 하나로 영상 한 개를 만듭니다. */
 async function renderOne({ style, scenesPath, outPath, hookText, onProgress }) {
   const { getTrackPath } = require("../../src/bgmLibrary");
+  // ⚠️ 배경음악이 없으면 없는 채로 만들되, **없었다는 사실을 돌려줍니다.**
+  // 조용히 삼키면 화면에는 "핫딜 속보형(배경음악 있음)"이라고 뜨는데 실제로는 없습니다.
   let bgmPath = null;
+  let bgmMissing = "";
   try {
     const p = getTrackPath(style.bgm);
     if (p && fs.existsSync(p)) bgmPath = p;
-  } catch { /* 배경음악 없이 진행 */ }
+    else bgmMissing = `배경음악 '${style.bgm}' 파일이 없습니다`;
+  } catch (e) {
+    bgmMissing = `배경음악 '${style.bgm}'을 찾지 못했습니다 (${e.message})`;
+  }
+  if (bgmMissing && onProgress) onProgress(`${bgmMissing} — 배경음악 없이 만듭니다`);
 
   const args = [
     "--scenes-json", scenesPath,
@@ -150,7 +172,7 @@ async function renderOne({ style, scenesPath, outPath, hookText, onProgress }) {
   if (bgmPath) args.push("--bgm", bgmPath);
 
   const first = await runEngine("goldencut_effects.py", args, { onProgress });
-  if (first && first.ok) return first;
+  if (first && first.ok) return { ...first, bgmMissing };
 
   // 안전망: 더빙 때문에 실패했으면 자막만으로 한 번 더 만듭니다. 목소리가 없다고
   // 영상을 통째로 못 내주는 건 손해가 너무 큽니다(앞의 probeVoiceReady가 놓친 경우용).
@@ -161,7 +183,7 @@ async function renderOne({ style, scenesPath, outPath, hookText, onProgress }) {
     const retry = args.slice();
     retry[retry.indexOf("--voice") + 1] = "none";
     const second = await runEngine("goldencut_effects.py", retry, { onProgress });
-    if (second && second.ok) return { ...second, voiceDowngraded: true };
+    if (second && second.ok) return { ...second, bgmMissing, voiceDowngraded: true };
     return second;
   }
   return first;
@@ -223,7 +245,7 @@ async function buildFromUrl(job, { url, source, styleIds }) {
     : rankStyles(hay, src, 6);
 
   // 목소리를 쓸 수 있는지 한 번만 확인합니다(6번 따로 확인하면 그만큼 느려집니다).
-  const voice = await probeVoiceReady();
+  const voice = await probeVoiceReady(styles.map((s) => s.voice));
   job.voiceReady = voice.ready;
   job.voiceNote = voice.ready ? "" : `${voice.why} 목소리 없이 자막만으로 만듭니다.`;
   const useVoice = (s) => (voice.ready ? s.voice : "none");
@@ -254,6 +276,13 @@ async function buildFromUrl(job, { url, source, styleIds }) {
       v.path = result.path;
       v.duration = result.duration;
       v.playUrl = `${job.base}/video/${job.id}/${style.id}`;
+      // ⚠️ 낮춰서 만들었으면 **결과보다 먼저** 그 사실이 보여야 합니다(CLAUDE.md §2).
+      // 여기서 안 옮기면 화면에는 계획한 목소리·배경음악이 그대로 떠서 거짓말이 됩니다.
+      const lowered = [];
+      if (result.voiceDowngraded) { v.voice = "none"; lowered.push("목소리 없이 자막만"); }
+      if (result.bgmMissing) { v.bgm = null; lowered.push(result.bgmMissing); }
+      v.downgraded = lowered.length ? lowered.join(" · ") : "";
+      if (v.downgraded) job.downgradedCount = (job.downgradedCount || 0) + 1;
       job.doneCount = (job.doneCount || 0) + 1;
     } else {
       v.status = "실패";
