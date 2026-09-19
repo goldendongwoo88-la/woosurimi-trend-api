@@ -33,6 +33,11 @@ CASES = [
     (True,  "no-silent-failure.py", f"npm test && echo done {M}",        "체인 끝에서 덮음"),
     (False, "no-silent-failure.py", f"rm -rf tmp {M} && npm test",       "덮는 건 정리 명령 쪽"),
     (False, "no-silent-failure.py", "git commit -m \"grep -n 지원 추가\"", "커밋 메시지 속 -n"),
+    (True,  "no-silent-failure.py", "npm test ; true",                   "세미콜론 뒤 true"),
+    (False, "no-silent-failure.py", "npm test ; echo 끝",                "세미콜론 뒤 echo는 정상"),
+    (False, "no-silent-failure.py", f"git commit -m \"{M} 금지 규칙\"",    "커밋 메시지 속 설명"),
+    # ⚠️ 따옴표 안이라고 다 봐주면 안 됩니다. 이건 진짜로 실행됩니다.
+    (True,  "no-silent-failure.py", f"bash -c \"npm test {M}\"",         "bash -c 안의 위반"),
 
     (True,  "video-guard.py", "ffprobe -show_entries format=duration f.mp4", "컨테이너 길이"),
     (True,  "video-guard.py", "ffmpeg -loop 1 -t 2 -i a.jpg o.mp4",          "framerate 없음"),
@@ -50,6 +55,10 @@ CASES = [
     (False, "video-guard.py",
      "ffmpeg -framerate 30 -loop 1 -t 2 -i a.jpg o.mp4",
      "framerate 가 앞에 있음"),
+    (False, "video-guard.py",
+     "ffmpeg -loop 1 -framerate 30 -t 2 -i a.jpg -loop 1 -framerate 30 -t 2 -i b.jpg o.mp4",
+     "두 입력 모두 있음"),
+    (False, "video-guard.py", "git commit -m \"format=duration 쓰지 말 것\"", "커밋 메시지 속 설명"),
 ]
 
 fails = 0

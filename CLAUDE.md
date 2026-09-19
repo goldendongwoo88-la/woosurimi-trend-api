@@ -54,7 +54,8 @@ ffprobe -v error -select_streams v:0 -show_entries stream=duration,nb_frames -of
 검증 명령에 붙인 `|| true`, 그리고 `git commit --no-verify`.
 나머지는 훅이 못 잡습니다 — 그건 지키는 수밖에 없습니다.
 
-훅을 고쳤으면 `python3 .claude/hooks/selftest.py` 로 26건이 그대로 통과하는지 확인하세요.
+훅을 고쳤으면 `python3 .claude/hooks/selftest.py` 가 **전부 통과**하는지 확인하세요.
+(건수는 늘어납니다 — 구멍을 하나 찾을 때마다 그 명령을 그대로 케이스로 박아둡니다.)
 훅은 heredoc 본문(커밋 메시지·파일 내용)을 검사 대상에서 빼므로, 금지 패턴을 **설명으로**
 적는 것은 막히지 않습니다. 막는 것은 실제로 실행될 명령뿐입니다.
 

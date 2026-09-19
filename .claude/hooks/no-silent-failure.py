@@ -30,7 +30,10 @@ VERIFY = re.compile(
 )
 
 # 실패를 삼켜서 성공처럼 보이게 만드는 오른쪽 짝: `|| true`, `|| :`, `|| echo ...`
-MASK_RHS = re.compile(r"^\s*(true|:|echo\b.*?)\s*$", re.S)
+#
+# ⚠️ 양옆의 따옴표를 허용합니다. `bash -c "npm test || true"` 를 쪼개면 오른쪽이
+# `true"` 로 남는데, 이걸 못 알아보면 따옴표 하나로 훅이 통째로 우회됩니다.
+MASK_RHS = re.compile(r"^[\s'\"]*(true|:|echo\b.*?)[\s'\"]*$", re.S)
 
 # `;` 뒤에 그냥 붙여서 종료코드를 0으로 만드는 꼬리: `npm test; true`
 # (여기서는 echo 를 포함하지 않습니다 — `npm test; echo 끝` 은 흔하고 멀쩡합니다.)
