@@ -125,6 +125,12 @@ app.use("/bgm", express.static(path.join(__dirname, "..", "assets", "bgm"))); //
 // 라우트가 많아 index.js가 더 길어지지 않게 별도 파일로 뺐습니다.
 require("./saasRoutes")(app);
 
+// ── 골든컷 자동컷·자동캡션 (2026-09-17) ──────────────────
+// 작업실 화면이 goldencut/*.py 엔진을 부를 수 있게 이어줍니다. 화면은 /goldencut.html.
+// ⚠️ 내 컴퓨터(localhost)에서 온 요청만 받습니다 — 이 서버는 Render에도 올라가는데,
+//    거기서 내 PC 파일 경로를 열어주는 기능이 열려 있으면 안 되기 때문입니다.
+require("../goldencut/integration/goldencut-routes")(app);
+
 // ── 메이트 벤치마킹 (2026-08-28) ─────────────────────────
 // 지금 뜨는 연예 소재 — 네이트 랭킹·뉴스1·구글트렌드. 제목·링크만, AI 0원.
 const hotIssues = require("./hotIssues");
@@ -426,9 +432,9 @@ app.get("/api/entertainment/ranking", async (req, res) => {
 app.post("/api/shortform/plan", async (req, res) => {
   const { url, source } = req.body || {};
   if (!url) {
-    return res.status(400).json({ error: "missing_url", message: "블로그 글, 쇼핑 커넥트, 또는 여행 커넥트 URL을 보내주세요." });
+    return res.status(400).json({ error: "missing_url", message: "블로그 글, 뉴스, 쇼핑 커넥트, 또는 여행 커넥트 URL을 보내주세요." });
   }
-  const normalizedSource = ["shopping", "travel"].includes(source) ? source : "blog";
+  const normalizedSource = ["shopping", "travel", "news"].includes(source) ? source : "blog";
 
   try {
     const plan = await planShortform(url, normalizedSource);
@@ -457,7 +463,7 @@ app.post("/api/shortform/plan-from-photos", uploadPhotos.array("photos", 12), as
   if (!topic) {
     return res.status(400).json({ error: "missing_topic", message: "영상 주제를 한 줄로 입력해 주세요." });
   }
-  const source = ["shopping", "travel"].includes(req.body.source) ? req.body.source : "blog";
+  const source = ["shopping", "travel", "news"].includes(req.body.source) ? req.body.source : "blog";
 
   let captions = [];
   if (req.body.captions) {

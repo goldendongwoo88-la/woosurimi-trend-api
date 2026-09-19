@@ -47,6 +47,11 @@ import subprocess
 import sys
 import tempfile
 
+
+def _log(msg):
+    """진행 상황은 stderr로 — stdout은 --json 결과 전용으로 비워둡니다."""
+    print(msg, file=sys.stderr)
+
 # ───────────────────────────────────────────────────────────────
 # 기본 규격
 # ───────────────────────────────────────────────────────────────
@@ -202,6 +207,24 @@ def run(args, timeout=300):
         tail = p.stderr.decode("utf-8", "ignore").strip().splitlines()[-8:]
         raise RuntimeError("ffmpeg 실패:\n  " + "\n  ".join(tail))
     return p
+
+
+def probe_video_duration(path):
+    """**영상 스트림**의 길이만 잽니다.
+
+    ⚠️ probe_duration(컨테이너 길이)은 영상과 소리 중 긴 쪽을 돌려줍니다. 그래서 그림이
+    잘려나가도 소리가 멀쩡하면 정상으로 보입니다. 실제로 -loop 1에 -framerate를 빠뜨려
+    모든 사진 장면의 그림이 5/6로 짧아진 적이 있는데, 컨테이너 길이만 보다가 한참
+    못 잡았습니다. 그래서 그림 길이는 따로 잽니다.
+    """
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=duration", "-of", "default=nw=1:nk=1", path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30).stdout
+        return float(out.decode().strip())
+    except Exception:
+        return None
 
 
 def probe_duration(path):
@@ -442,7 +465,13 @@ def render_scene(image, caption, duration, out_path, index, effect, template,
         # 영상은 이미 움직입니다. 거기에 켄번즈까지 겹치면 어지럽고 인코딩만 느려집니다.
         animate = False
     elif image:
-        source_in = ["-loop", "1", "-t", str(duration), "-i", image]
+        # ⚠️ -framerate를 반드시 같이 줘야 합니다. -loop 1로 사진을 읽을 때 ffmpeg는
+        # 기본 25fps로 디코딩하는데, 출력은 30fps라서 프레임 수가 모자랍니다. 그러면
+        # 같은 장면의 "소리는 2.5초, 그림은 2.08초"가 되어 25/30 = 5/6로 짧아집니다.
+        # 한 장면만 보면 살짝 짧은 정도지만, 이어붙일 때 xfade offset은 의도한 길이로
+        # 계산되므로 실제 그림 길이를 넘어서고, 결국 영상이 마지막 장면 하나로 무너집니다.
+        # (컨테이너 길이는 긴 쪽인 '소리'를 따라가서 겉보기엔 정상으로 보였습니다.)
+        source_in = ["-loop", "1", "-framerate", str(FPS), "-t", str(duration), "-i", image]
     else:
         source_in = None
 
@@ -585,9 +614,20 @@ def concat_xfade(segments, durations, out_path, effect, workdir):
         offset = max(cum - t, 0)
         last = i == len(segments) - 1
         step = out_path if last else os.path.join(workdir, "x%d.mp4" % i)
+        # ⚠️ settb/asettb로 타임베이스를 맞춘 뒤에 xfade를 겁니다.
+        #
+        # 사진에서 만든 장면과 영상 클립에서 만든 장면은 타임베이스가 다릅니다(영상은 원본
+        # 것을 물려받습니다). 그대로 xfade에 넣으면 이렇게 통째로 실패합니다:
+        #   "First input link main timebase (1/12288) do not match ... (1/15360)"
+        # 실제로 영상+사진을 섞은 렌더에서 터졌던 오류라, 양쪽을 같은 기준으로 맞춰줍니다.
         run(["-y", "-i", cur, "-i", segments[i], "-filter_complex",
-             "[0:v][1:v]xfade=transition=%s:duration=%.3f:offset=%.3f[v];"
-             "[0:a][1:a]acrossfade=d=%.3f[a]" % (transition_at(effect, i - 1), t, offset, t),
+             "[0:v]settb=AVTB,fps=%d,format=yuv420p[v0];"
+             "[1:v]settb=AVTB,fps=%d,format=yuv420p[v1];"
+             "[0:a]asettb=AVTB,aresample=async=1:first_pts=0[a0];"
+             "[1:a]asettb=AVTB,aresample=async=1:first_pts=0[a1];"
+             "[v0][v1]xfade=transition=%s:duration=%.3f:offset=%.3f[v];"
+             "[a0][a1]acrossfade=d=%.3f[a]"
+             % (FPS, FPS, transition_at(effect, i - 1), t, offset, t),
              "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast"]
             + ([] if last else ["-crf", "18"])
             + ["-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", step])
@@ -648,10 +688,10 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
             if not ok:
                 raise RuntimeError("더빙을 할 수 없습니다 — %s" % why)
             if verbose:
-                print("  더빙: %s" % voice_label)
+                _log("  더빙: %s" % voice_label)
             scenes, failed = narrate_scenes(scenes, workdir, profile_id, verbose=verbose)
             if failed and verbose:
-                print("  (%d개 장면은 더빙 실패 — 자막만 나갑니다)" % failed)
+                _log("  (%d개 장면은 더빙 실패 — 자막만 나갑니다)" % failed)
 
         segments, durations = [], []
 
@@ -666,7 +706,7 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
                              preset=preset, workdir=workdir)
                 segments.append(seg); durations.append(1.6)
                 if verbose:
-                    print("  인트로(흩뿌린 사진) 완료")
+                    _log("  인트로(흩뿌린 사진) 완료")
 
         for i, sc in enumerate(scenes):
             dur = max(base, min_duration_for(sc.get("caption", "")))
@@ -685,7 +725,7 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
                          preset=preset, workdir=workdir)
             segments.append(seg); durations.append(dur)
             if verbose:
-                print("  장면 %d/%d 완료 (%.1f초)" % (i + 1, len(scenes), dur))
+                _log("  장면 %d/%d 완료 (%.1f초)" % (i + 1, len(scenes), dur))
 
         joined = os.path.join(workdir, "joined.mp4")
         if eff["use_transition"] and len(segments) > 1:
@@ -700,8 +740,28 @@ def render(scenes, out_path, effect="clean-zoom", template="bold-black", hook=""
             shutil.copyfile(joined, out_path)
 
         actual = probe_duration(out_path) or total
+        # 그림이 의도한 길이대로 들어갔는지 확인합니다. 어긋나면 조용히 넘기지 않고
+        # 바로 실패시킵니다 — 짧아진 영상을 "성공"이라고 내주면 그대로 올라갑니다.
+        vdur = probe_video_duration(out_path)
+        if vdur and total and vdur < total * 0.85:
+            # ⚠️ 원인을 단정하지 않습니다. 장면 하나하나를 실제로 재서 **어디가** 짧은지
+            # 알려줍니다. 짧은 장면이 있으면 그 장면(원본이 슬롯보다 짧은 영상일 수도
+            # 있습니다)이 원인이고, 전부 멀쩡한데 합친 게 짧으면 이어붙이기가 원인입니다.
+            short = []
+            for idx, (seg, want) in enumerate(zip(segments, durations)):
+                got = probe_video_duration(seg)
+                if got and want and got < want * 0.95:
+                    short.append("장면 %d: 그림 %.2f초 / 계획 %.2f초" % (idx + 1, got, want))
+            if short:
+                why = ("짧은 장면이 있습니다 (원본 영상이 슬롯보다 짧거나, 사진 입력에\n"
+                       "  -framerate 가 빠졌을 때 이렇게 됩니다):\n    " + "\n    ".join(short))
+            else:
+                why = ("장면은 전부 계획대로인데 합친 뒤가 짧습니다 — 이어붙이기"
+                       "(xfade offset) 쪽 문제입니다.")
+            raise RuntimeError(
+                "영상이 잘렸습니다 — 그림 %.2f초 / 목표 %.2f초.\n  %s" % (vdur, total, why))
         if verbose:
-            print("완성: %s (%.2f초)" % (out_path, actual))
+            _log("완성: %s (%.2f초, 그림 %.2f초)" % (out_path, actual, vdur or actual))
         return {"path": out_path, "duration": actual, "effect": effect,
                 "label": eff["label"], "scenes": len(scenes), "voice": voice_label}
     finally:
@@ -760,13 +820,24 @@ def main():
     ap.add_argument("--bgm")
     ap.add_argument("--voice", default=None,
                     help="더빙 목소리: golden / chasurimi / none (또는 Voicebox 프로필 ID)")
+    # ⚠️ 다른 프로그램(작업실 등)이 이 스크립트를 불러 쓸 때를 위한 출력 모드입니다.
+    # 사람이 읽는 진행 문구는 stderr로 보내고, stdout에는 결과 JSON 한 줄만 남깁니다.
+    # 그래야 호출한 쪽이 stdout만 파싱하면 됩니다.
+    ap.add_argument("--json", action="store_true", help="결과를 JSON 한 줄로 출력(프로그램 연동용)")
     ap.add_argument("--list", action="store_true", help="효과팩 목록만 보기")
     a = ap.parse_args()
 
     if a.list:
-        for k, v in EFFECTS.items():
-            print("%-16s %-14s 액자=%-10s 컷%.1f초 전환=%s"
-                  % (k, v["label"], v["frame"], v["pace"], "/".join(v["transitions"])))
+        if a.json:
+            print(json.dumps([
+                {"id": k, "label": v["label"], "frame": v["frame"],
+                 "pace": v["pace"], "transitions": v["transitions"]}
+                for k, v in EFFECTS.items()
+            ], ensure_ascii=False))
+        else:
+            for k, v in EFFECTS.items():
+                print("%-16s %-14s 액자=%-10s 컷%.1f초 전환=%s"
+                      % (k, v["label"], v["frame"], v["pace"], "/".join(v["transitions"])))
         return 0
     if a.selftest:
         return 0 if selftest(a.out_dir) else 1
@@ -774,8 +845,22 @@ def main():
         ap.error("--scenes-json 또는 --selftest 가 필요합니다.")
     with open(a.scenes_json, encoding="utf-8") as f:
         scenes = json.load(f)
-    render(scenes, a.out, effect=a.effect, template=a.template, hook=a.hook,
-           target_seconds=a.seconds, intro=a.intro, bgm=a.bgm, voice=a.voice)
+    try:
+        result = render(scenes, a.out, effect=a.effect, template=a.template, hook=a.hook,
+                        target_seconds=a.seconds, intro=a.intro, bgm=a.bgm, voice=a.voice,
+                        # 진행 문구는 _log()가 stderr로 보내므로 --json이어도 켜둡니다.
+                        # stdout은 결과 JSON 한 줄만 남아 깨끗하고, 부르는 쪽(작업실 화면)은
+                        # stderr를 읽어서 "장면 3/8 완료" 같은 진행 상황을 보여줄 수 있습니다.
+                        # 예전엔 여기가 verbose=not a.json 이라 --json으로 부르면 몇 분 동안
+                        # 아무 소식이 없어서, 멈춘 건지 도는 건지 알 수가 없었습니다.
+                        verbose=True)
+    except Exception as e:
+        if a.json:
+            print(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False))
+            return 1
+        raise
+    if a.json:
+        print(json.dumps({"ok": True, **result}, ensure_ascii=False))
     return 0
 
 

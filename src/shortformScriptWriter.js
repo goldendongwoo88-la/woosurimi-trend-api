@@ -188,7 +188,11 @@ const SYSTEM_PROMPT = `당신은 한국어 이슈/정보 숏폼(유튜브 쇼츠
 
 async function callClaudeForScript({ title, bodyText, sceneCount, source }) {
   const sourceHint =
-    source === "shopping" ? "상품 소개" : source === "travel" ? "여행지 소개" : "정보/후기";
+    source === "shopping" ? "상품 소개"
+    : source === "travel" ? "여행지 소개"
+    // 뉴스는 기사 내용을 넘어선 단정·추측을 쓰면 안 되는 소재라 성격을 따로 알려줍니다.
+    : source === "news" ? "뉴스 소식 전달 (기사에 있는 사실만, 단정·추측 금지)"
+    : "정보/후기";
   const userPrompt = `아래 블로그 원문을 숏폼 대본으로 다시 써주세요.
 
 [콘텐츠 성격] ${sourceHint}

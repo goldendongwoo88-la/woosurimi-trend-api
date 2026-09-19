@@ -127,24 +127,24 @@ def transcribe(video, language="ko", whisper_url=None, model_size="large-v3", ve
 
         try:
             if verbose:
-                print("  받아쓰기: faster-whisper(로컬) 시도 중...")
+                print("  받아쓰기: faster-whisper(로컬) 시도 중...", file=sys.stderr)
             return transcribe_faster_whisper(wav, language, model_size), "faster-whisper(로컬)"
         except ImportError:
             if verbose:
-                print("  faster-whisper 패키지가 없습니다 → 다음 방법으로")
+                print("  faster-whisper 패키지가 없습니다 → 다음 방법으로", file=sys.stderr)
         except Exception as e:
             if verbose:
-                print("  faster-whisper 실패(%s) → 다음 방법으로" % e)
+                print("  faster-whisper 실패(%s) → 다음 방법으로" % e, file=sys.stderr)
 
         url = whisper_url or os.environ.get("FASTER_WHISPER_URL")
         if url:
             try:
                 if verbose:
-                    print("  받아쓰기: whisper 서버(%s) 시도 중..." % url)
+                    print("  받아쓰기: whisper 서버(%s) 시도 중..." % url, file=sys.stderr)
                 return transcribe_webservice(wav, url, language), "whisper-asr-webservice"
             except Exception as e:
                 if verbose:
-                    print("  whisper 서버 실패: %s" % e)
+                    print("  whisper 서버 실패: %s" % e, file=sys.stderr)
 
         raise RuntimeError(
             "받아쓸 방법이 없습니다.\n"
@@ -286,14 +286,14 @@ def caption_video(video, out_path, template="bold-black", karaoke=True, language
         cues, how = transcribe(video, language, whisper_url, model_size, verbose)
 
     if verbose:
-        print("  자막 %d줄 (%s)" % (len(cues), how))
+        print("  자막 %d줄 (%s)" % (len(cues), how), file=sys.stderr)
     if not cues:
         raise RuntimeError("자막으로 만들 말소리를 찾지 못했습니다.")
 
     if srt_out:
         export_srt(cues, srt_out)
         if verbose:
-            print("  자막 파일로 저장: %s (고친 뒤 --srt 로 다시 넣으세요)" % srt_out)
+            print("  자막 파일로 저장: %s (고친 뒤 --srt 로 다시 넣으세요)" % srt_out, file=sys.stderr)
 
     tmp = tempfile.mkdtemp(prefix="gc-ass-")
     try:
@@ -307,7 +307,8 @@ def caption_video(video, out_path, template="bold-black", karaoke=True, language
     dur = probe_duration(out_path)
     if verbose:
         print("완성: %s (%.2f초, 자막 %d줄, 단어강조 %s)"
-              % (out_path, dur or 0, len(cues), "켜짐" if karaoke else "꺼짐"))
+              % (out_path, dur or 0, len(cues), "켜짐" if karaoke else "꺼짐"),
+              file=sys.stderr)
     return {"path": out_path, "cues": len(cues), "how": how, "karaoke": karaoke}
 
 
@@ -334,7 +335,7 @@ def main():
     else:
         cues, how = transcribe(a.video, a.language, a.whisper_url, a.model)
         export_srt(cues, a.srt_out)
-        print("자막 %d줄 저장: %s (%s)" % (len(cues), a.srt_out, how))
+        print("자막 %d줄 저장: %s (%s)" % (len(cues), a.srt_out, how), file=sys.stderr)
     return 0
 
 

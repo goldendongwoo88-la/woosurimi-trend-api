@@ -23,6 +23,7 @@ Voicebox 연동 규격 (이 저장소 src/voiceProvider.js와 똑같이 맞췄�
 
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 
@@ -221,11 +222,12 @@ def narrate_scenes(scenes, workdir, profile_id=None, base_url=None, engine=None,
             synthesize(text, dest, profile_id, base_url, engine)
             sc["narration"] = dest
             if verbose:
-                print("  더빙 %d/%d 완료" % (i + 1, len(scenes)))
+                print("  더빙 %d/%d 완료" % (i + 1, len(scenes)), file=sys.stderr)
         except Exception as e:
             failed += 1
             if verbose:
-                print("  더빙 %d/%d 실패(자막만 나갑니다): %s" % (i + 1, len(scenes), e))
+                print("  더빙 %d/%d 실패(자막만 나갑니다): %s" % (i + 1, len(scenes), e),
+                      file=sys.stderr)
         out.append(sc)
     return out, failed
 

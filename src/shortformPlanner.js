@@ -98,21 +98,26 @@ const HOOK_BY_SOURCE = {
   shopping: (title) => (title ? `"${title}" 이거 실화야?!` : "이 상품 실화야?!"),
   travel: (title) => (title ? `"${title}" — 여기 실화냐?!` : "요즘 다들 여기 간대요"),
   blog: (title) => (title ? `"${title}" — 요즘 이거 아세요?` : "요즘 화제인 이 이야기, 아세요?"),
+  // 뉴스는 과장된 "실화야?!" 톤을 쓰지 않습니다. 기사 내용을 단정적으로 부풀리면
+  // 명예훼손 위험이 생기고, 속보는 담담한 톤이 오히려 더 잘 먹힙니다.
+  news: (title) => (title ? `"${title}" 무슨 일이지?` : "지금 이 소식, 무슨 일이지?"),
 };
 // 마무리 멘트도 참고 영상 톤(낭독체·짧은 문장 조각)에 맞춰 짧게 씁니다.
 const CTA_BY_SOURCE = {
   shopping: "링크는 설명란에 있음",
   travel: "코스는 원문에 다 있음",
   blog: "자세한 건 원문에 있음",
+  news: "자세한 내용은 기사 원문에",
 };
 const HASHTAG_EXTRA_BY_SOURCE = {
   shopping: ["추천템", "득템"],
   travel: ["여행스타그램", "여행코스"],
   blog: [],
+  news: ["이슈", "뉴스"],
 };
 
 function normalizeSource(source) {
-  return ["shopping", "travel"].includes(source) ? source : "blog";
+  return ["shopping", "travel", "news"].includes(source) ? source : "blog";
 }
 
 /**

@@ -1,0 +1,51 @@
+# 저장소 차원의 자동 검사.
+#
+# 왜 있나: 2026-09-18까지 이 저장소에는 자동 CI가 없었습니다. 테스트 190건이 있는데
+# 아무도 안 돌렸고, 손으로 돌린 게 전부였습니다. 영상이 조용히 잘리는 결함이 한참
+# 안 잡힌 것도 같은 뿌리입니다 — 검사가 사람 손에 달려 있으면 결국 빠집니다.
+#
+# 훅(.claude/hooks/)은 Claude Code 세션 안에서만 걸립니다. 여기 CI는 누가 어떻게
+# 올리든 걸립니다.
+#
+# 비밀값을 쓰지 않습니다. 테스트는 .env 없이 돌도록 되어 있고, 실제로 .env를 치운
+# 상태에서 190건 전부 통과하는 것을 확인했습니다.
+
+name: 테스트
+
+on:
+  # ⚠️ push 를 모든 브랜치로 열어두면 PR 올린 브랜치에서 같은 검사가 두 번 돕니다
+  # (push 한 번 + pull_request 한 번). 실제로 처음 붙였을 때 그렇게 돌았습니다.
+  # 브랜치는 PR 에서 검사하고, main 은 push 에서 검사합니다.
+  push:
+    branches: [main]
+  pull_request:
+
+# 같은 브랜치에 연달아 푸시하면 앞선 검사는 취소합니다. 어차피 최신 것만 의미가 있고,
+# 러너를 붙잡고 있을 이유가 없습니다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 블로그 테스트 + 훅 자체 검사
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 블로그 테스트 (190건)
+        run: npm run test:blog
+
+      # 훅이 "막아야 할 것을 막고, 멀쩡한 것은 통과시키는지" 확인합니다.
+      # 훅을 고치다가 오탐이 늘면 여기서 걸립니다.
+      - name: 훅 자체 검사 (26건)
+        run: python3 .claude/hooks/selftest.py
